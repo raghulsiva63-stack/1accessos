@@ -50,6 +50,11 @@ export type WorkspaceVault = {
   workspaceId: string;
   keyVersion: number;
   key: Uint8Array;
+  name: string;
+  suite: "personal" | "family" | "professional" | "team";
+  kind: "vault" | "project" | "client" | "shared";
+  role: "owner" | "manager" | "editor" | "viewer";
+  keyRotationRequired: boolean;
 };
 
 type ItemRow = {
@@ -88,49 +93,89 @@ async function sha256(value: string) {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
 }
 
-export async function openWorkspaceVault(identityId: string, accountRootKey: Uint8Array): Promise<WorkspaceVault> {
+export function workspaceNameAad(tenantId: string, workspaceId: string) {
+  return `1accessos:workspace-name:v1:${tenantId}:${workspaceId}`;
+}
+
+export async function listWorkspaceVaults(identityId: string, accountRootKey: Uint8Array): Promise<WorkspaceVault[]> {
   if (!supabase) throw new Error("Supabase is not configured.");
 
-  const { data: membership, error: membershipError } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("workspace_memberships")
-    .select("tenant_id,workspace_id")
+    .select("tenant_id,workspace_id,role,created_at")
     .eq("identity_id", identityId)
     .eq("status", "active")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .single();
+    .order("created_at", { ascending: true });
   if (membershipError) throw membershipError;
+  if (!memberships?.length) throw new Error("No active workspace is available.");
 
-  const { data: envelope, error: envelopeError } = await supabase
+  const workspaceIds = memberships.map((membership) => membership.workspace_id);
+  const [{ data: workspaceRows, error: workspaceError }, { data: envelopes, error: envelopeError }] = await Promise.all([
+    supabase.from("workspaces")
+      .select("id,tenant_id,kind,suite,encrypted_name,name_nonce,name_aad_hash,current_key_version,key_rotation_required,status")
+      .in("id", workspaceIds)
+      .eq("status", "active"),
+    supabase
     .from("key_envelopes")
-    .select("key_version,nonce,wrapped_key")
-    .eq("tenant_id", membership.tenant_id)
-    .eq("workspace_id", membership.workspace_id)
+    .select("tenant_id,workspace_id,key_version,nonce,wrapped_key")
     .eq("recipient_identity_id", identityId)
     .eq("key_kind", "workspace")
     .is("revoked_at", null)
     .order("key_version", { ascending: false })
-    .limit(1)
-    .single();
+  ]);
+  if (workspaceError) throw workspaceError;
   if (envelopeError) throw envelopeError;
 
-  const key = await unwrapKey(
-    accountRootKey,
-    {
+  const rows = new Map((workspaceRows ?? []).map((workspace) => [workspace.id, workspace]));
+  const opened: WorkspaceVault[] = [];
+  for (const membership of memberships) {
+    const workspace = rows.get(membership.workspace_id);
+    const envelope = envelopes?.find((candidate) =>
+      candidate.workspace_id === membership.workspace_id
+      && candidate.tenant_id === membership.tenant_id
+      && candidate.key_version === workspace?.current_key_version
+    );
+    if (!workspace || !envelope) continue;
+    const key = await unwrapKey(accountRootKey, {
       algorithm: "AES-256-GCM",
       nonce: toBase64Url(bytea(envelope.nonce)),
       ciphertext: toBase64Url(bytea(envelope.wrapped_key)),
-    },
-    "1accessos:workspace:v1",
-  );
+    }, "1accessos:workspace:v1");
+    let name = workspace.suite === "personal" ? "Personal vault" : `${workspace.suite[0].toUpperCase()}${workspace.suite.slice(1)} workspace`;
+    if (workspace.encrypted_name && workspace.name_nonce && workspace.name_aad_hash) {
+      const aad = workspaceNameAad(workspace.tenant_id, workspace.id);
+      if (toBase64Url(bytea(workspace.name_aad_hash)) !== toBase64Url(await sha256(aad))) {
+        key.fill(0);
+        throw new Error("Workspace name authentication metadata is invalid.");
+      }
+      const plaintext = await unwrapKey(key, {
+        algorithm: "AES-256-GCM",
+        nonce: toBase64Url(bytea(workspace.name_nonce)),
+        ciphertext: toBase64Url(bytea(workspace.encrypted_name)),
+      }, aad);
+      name = new TextDecoder().decode(plaintext);
+      plaintext.fill(0);
+    }
+    opened.push({
+      identityId,
+      tenantId: membership.tenant_id,
+      workspaceId: membership.workspace_id,
+      keyVersion: envelope.key_version,
+      key,
+      name,
+      suite: workspace.suite as WorkspaceVault["suite"],
+      kind: workspace.kind as WorkspaceVault["kind"],
+      role: membership.role as WorkspaceVault["role"],
+      keyRotationRequired: workspace.key_rotation_required,
+    });
+  }
+  if (!opened.length) throw new Error("No decryptable workspace key is available for this account.");
+  return opened;
+}
 
-  return {
-    identityId,
-    tenantId: membership.tenant_id,
-    workspaceId: membership.workspace_id,
-    keyVersion: envelope.key_version,
-    key,
-  };
+export async function openWorkspaceVault(identityId: string, accountRootKey: Uint8Array): Promise<WorkspaceVault> {
+  const workspaces = await listWorkspaceVaults(identityId, accountRootKey);
+  return workspaces[0];
 }
 
 export async function listVaultItems(vault: WorkspaceVault, options: { trash?: boolean } = {}): Promise<VaultItem[]> {
@@ -180,13 +225,15 @@ export async function listVaultItems(vault: WorkspaceVault, options: { trash?: b
       },
       aad,
     );
-    return {
-      id: item.id,
-      contentType: item.content_type,
-      revision: revision.revision,
-      deletedAt: item.deleted_at,
-      payload: JSON.parse(new TextDecoder().decode(plaintext)) as VaultPayload,
-    };
+    try {
+      return {
+        id: item.id,
+        contentType: item.content_type,
+        revision: revision.revision,
+        deletedAt: item.deleted_at,
+        payload: JSON.parse(new TextDecoder().decode(plaintext)) as VaultPayload,
+      };
+    } finally { plaintext.fill(0); }
   }));
 }
 
@@ -280,10 +327,12 @@ export async function listVaultItemHistory(vault: WorkspaceVault, item: VaultIte
       nonce: toBase64Url(bytea(revision.nonce)),
       ciphertext: toBase64Url(bytea(revision.ciphertext)),
     }, aad);
-    return {
-      revision: revision.revision,
-      createdAt: revision.created_at,
-      payload: JSON.parse(new TextDecoder().decode(plaintext)) as VaultPayload,
-    };
+    try {
+      return {
+        revision: revision.revision,
+        createdAt: revision.created_at,
+        payload: JSON.parse(new TextDecoder().decode(plaintext)) as VaultPayload,
+      };
+    } finally { plaintext.fill(0); }
   }));
 }

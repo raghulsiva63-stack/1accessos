@@ -5,8 +5,8 @@ recovery vault. This repository contains the hosted web client, Chromium
 extension, Tauri desktop shell, shared cryptography reference, Supabase
 migrations/tests, and the ciphertext-only API contract.
 
-> **Release status:** Phase 0 engineering controls and the Phase 1 product build
-> are implemented in the development environment. Production use remains blocked
+> **Release status:** Phase 0 engineering controls, the Phase 1 product build,
+> and the Phase 2 collaboration implementation are present in the development environment. Production use remains blocked
 > until the independent cryptographic review, external penetration test, final
 > Auth configuration, and signed release gates are complete.
 
@@ -26,6 +26,7 @@ migrations/tests, and the ciphertext-only API contract.
 - `apps/web` — responsive Next.js static client for Netlify.
 - `apps/extension` — Manifest V3 Chrome/Edge explicit save-and-fill client.
 - `apps/desktop` — Tauri 2 wrapper around the same static web client.
+- `apps/cli` — ciphertext-only Phase 2 workspace, Mission, request, and grant client.
 - `packages/crypto` — Node reference implementation and compatibility tests.
 
 ## Development checks
@@ -37,6 +38,7 @@ npm --prefix apps/web test
 npm --prefix apps/web run lint
 npm --prefix apps/extension ci
 npm --prefix apps/extension test
+npm --prefix apps/cli test
 ```
 
 Only synthetic credentials may be used in development and automated tests.

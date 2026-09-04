@@ -21,10 +21,21 @@ test("fill path requires the extension sender and an exact page origin", () => {
 });
 
 test("service worker keeps vault state in memory and rejects origin substitution", () => {
-  assert.match(background, /let vault: VaultContext \| null = null/);
+  assert.match(background, /let vaults: VaultContext\[\] = \[\]/);
+  assert.match(background, /let accountRoot: Uint8Array \| null = null/);
   assert.match(background, /request\.origin !== origin/);
-  assert.match(background, /vault\?\.key\.fill\(0\)/);
+  assert.match(background, /context\.key\.fill\(0\)/);
+  assert.match(background, /accountRoot\?\.fill\(0\)/);
   assert.match(background, /60_000/);
   assert.match(background, /ignoredOrigins/);
   assert.doesNotMatch(background, /console\.log/);
+});
+
+test("shared workspaces and fill-only capsules stay origin-bound and are consumed at fill time", () => {
+  assert.match(background, /workspace_memberships/);
+  assert.match(background, /access_capsules/);
+  assert.match(background, /capsule-recipient:v1/);
+  assert.match(background, /capsule-payload:v1/);
+  assert.match(background, /consume_access_capsule/);
+  assert.match(background, /safeOrigin\(item\.url\) === origin/);
 });

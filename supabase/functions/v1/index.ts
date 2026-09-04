@@ -54,6 +54,9 @@ function hasPlaintextKeys(value: unknown): boolean {
 Deno.serve(async (request) => {
   const requestId = crypto.randomUUID();
   if (request.method === "OPTIONS") return response(request, requestId, 204);
+  const url = new URL(request.url);
+  const path = pathAfterFunction(url);
+  if (request.method === "GET" && path === "/health") return response(request, requestId, 200, { status: "ok" });
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) return failure(request, requestId, 401, "authentication_required", "A valid bearer token is required.");
 
@@ -64,13 +67,108 @@ Deno.serve(async (request) => {
   );
   const { data: userData, error: userError } = await client.auth.getUser();
   if (userError || !userData.user) return failure(request, requestId, 401, "invalid_token", "The bearer token is invalid or expired.");
-
-  const url = new URL(request.url);
-  const path = pathAfterFunction(url);
+  let identityId: string | null = null;
+  async function currentIdentityId() {
+    if (identityId) return identityId;
+    const { data, error } = await client.from("identities").select("id").eq("user_id", userData.user.id).single();
+    if (error || !data) throw error ?? new Error("identity unavailable");
+    identityId = data.id;
+    return identityId;
+  }
 
   try {
     if (request.method === "GET" && path === "/item-types") {
       return response(request, requestId, 200, { items: itemTypes.map((id) => ({ id, schema_version: 1 })) });
+    }
+    if (request.method === "GET" && path === "/workspaces") {
+      const currentIdentity = await currentIdentityId();
+      const { data: memberships, error: membershipError } = await client.from("workspace_memberships")
+        .select("tenant_id,workspace_id,role,status")
+        .eq("identity_id", currentIdentity)
+        .eq("status", "active");
+      if (membershipError) throw membershipError;
+      if (!memberships?.length) return response(request, requestId, 200, { workspaces: [] });
+      const { data, error } = await client.from("workspaces")
+        .select("id,tenant_id,kind,suite,status,current_key_version,key_rotation_required,encrypted_name,name_nonce,name_aad_hash,created_at,updated_at")
+        .in("id", memberships.map((membership) => membership.workspace_id))
+        .eq("status", "active")
+        .order("created_at");
+      if (error) throw error;
+      const roles = new Map(memberships.map((membership) => [membership.workspace_id, membership.role]));
+      return response(request, requestId, 200, { workspaces: (data ?? []).map((workspace) => ({ ...workspace, caller_role: roles.get(workspace.id) })) });
+    }
+    const membersMatch = path.match(/^\/workspaces\/([0-9a-f-]{36})\/members$/iu);
+    if (membersMatch && request.method === "GET") {
+      const { data, error } = await client.from("workspace_memberships")
+        .select("identity_id,tenant_id,workspace_id,role,status,created_at,updated_at")
+        .eq("workspace_id", membersMatch[1])
+        .order("created_at");
+      if (error) throw error;
+      return response(request, requestId, 200, { members: data ?? [] });
+    }
+    if (request.method === "GET" && path === "/missions") {
+      const workspaceId = url.searchParams.get("workspace_id");
+      if (!workspaceId) return failure(request, requestId, 422, "workspace_required", "workspace_id is required.");
+      const { data, error } = await client.from("missions")
+        .select("id,tenant_id,workspace_id,created_by,definition_nonce,encrypted_definition,definition_aad_hash,status,created_at,updated_at,mission_items(item_id,sort_order)")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "active")
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return response(request, requestId, 200, { missions: data ?? [] });
+    }
+    if (request.method === "GET" && path === "/access-requests") {
+      const workspaceId = url.searchParams.get("workspace_id");
+      if (!workspaceId) return failure(request, requestId, 422, "workspace_required", "workspace_id is required.");
+      const { data, error } = await client.from("access_requests")
+        .select("id,tenant_id,workspace_id,item_id,requester_identity_id,requested_scope,purpose_nonce,encrypted_purpose,purpose_aad_hash,requested_duration_minutes,status,expires_at,decided_at,created_at,updated_at")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return response(request, requestId, 200, { requests: data ?? [] });
+    }
+    if (request.method === "POST" && path === "/access-requests") {
+      const body = await request.json();
+      if (hasPlaintextKeys(body)) return failure(request, requestId, 422, "plaintext_rejected", "Only ciphertext envelopes are accepted.");
+      const required = ["id", "tenant_id", "workspace_id", "requested_scope", "purpose_nonce", "encrypted_purpose", "purpose_aad_hash", "requested_duration_minutes", "expires_at"];
+      if (required.some((key) => !(key in body))) return failure(request, requestId, 422, "invalid_envelope", "The encrypted access request is incomplete.");
+      const currentIdentity = await currentIdentityId();
+      const { data, error } = await client.from("access_requests").insert({
+        id: body.id,
+        tenant_id: body.tenant_id,
+        workspace_id: body.workspace_id,
+        item_id: body.item_id ?? null,
+        requester_identity_id: currentIdentity,
+        requested_scope: body.requested_scope,
+        purpose_nonce: body.purpose_nonce,
+        encrypted_purpose: body.encrypted_purpose,
+        purpose_aad_hash: body.purpose_aad_hash,
+        requested_duration_minutes: body.requested_duration_minutes,
+        status: "pending",
+        expires_at: body.expires_at,
+      }).select("id,status,created_at").single();
+      if (error) throw error;
+      return response(request, requestId, 201, data);
+    }
+    const decisionMatch = path.match(/^\/access-requests\/([0-9a-f-]{36})\/decision$/iu);
+    if (decisionMatch && request.method === "POST") {
+      const body = await request.json();
+      if (!body || !["approved", "denied"].includes(body.decision)) return failure(request, requestId, 422, "invalid_decision", "decision must be approved or denied.");
+      const { data, error } = await client.rpc("decide_access_request", { p_request_id: decisionMatch[1], p_decision: body.decision });
+      if (error) throw error;
+      return response(request, requestId, 200, { approval_id: data, decision: body.decision });
+    }
+    if (request.method === "GET" && path === "/access-grants") {
+      const workspaceId = url.searchParams.get("workspace_id");
+      if (!workspaceId) return failure(request, requestId, 422, "workspace_required", "workspace_id is required.");
+      const { data, error } = await client.from("access_grants")
+        .select("id,tenant_id,workspace_id,item_id,subject_identity_id,scope,source_request_id,starts_at,expires_at,status,created_by,created_at,revoked_at")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return response(request, requestId, 200, { grants: data ?? [] });
     }
     if (request.method === "GET" && path === "/vault-items") {
       const workspaceId = url.searchParams.get("workspace_id");

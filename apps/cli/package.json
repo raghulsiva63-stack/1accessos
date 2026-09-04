@@ -1,0 +1,16 @@
+{
+  "name": "@passkey-x/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "passkey-x": "./src/index.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/index.mjs"
+  },
+  "engines": {
+    "node": ">=24.7.0"
+  }
+}

@@ -33,6 +33,11 @@ jobs:
         run: node scripts/check-phase0.mjs
       - name: Run Phase 1 static product and security checks
         run: node scripts/check-phase1.mjs
+      - name: Run Phase 2 collaboration and authorization checks
+        run: node scripts/check-phase2.mjs
+      - name: Test ciphertext-only CLI
+        working-directory: apps/cli
+        run: npm test
       - name: Install web application dependencies
         working-directory: apps/web
         run: npm ci

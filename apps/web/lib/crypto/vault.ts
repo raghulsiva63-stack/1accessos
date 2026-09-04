@@ -237,7 +237,9 @@ export async function openEncryptedExport(file: EncryptedExport, password: strin
   const key = await deriveMasterKey(password, fromBase64Url(file.salt), file.kdf);
   try {
     const plaintext = await unwrapKey(key, file.envelope, "1accessos:export:v1");
-    return JSON.parse(new TextDecoder().decode(plaintext)) as unknown;
+    try {
+      return JSON.parse(new TextDecoder().decode(plaintext)) as unknown;
+    } finally { plaintext.fill(0); }
   } finally {
     key.fill(0);
   }

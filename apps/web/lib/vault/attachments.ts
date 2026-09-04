@@ -81,7 +81,9 @@ export async function listEncryptedAttachments(vault: WorkspaceVault, itemId: st
     const context = metadataAad(vault, itemId, attachment.id);
     if (toBase64Url(bytea(attachment.metadata_aad_hash)) !== toBase64Url(await sha256(context))) throw new Error("Attachment metadata authentication failed.");
     const plaintext = await unwrapKey(vault.key, { algorithm: "AES-256-GCM", nonce: toBase64Url(bytea(attachment.metadata_nonce)), ciphertext: toBase64Url(bytea(attachment.encrypted_metadata)) }, context);
-    const metadata = JSON.parse(new TextDecoder().decode(plaintext)) as { name: string; mimeType: string; size: number };
+    let metadata: { name: string; mimeType: string; size: number };
+    try { metadata = JSON.parse(new TextDecoder().decode(plaintext)) as { name: string; mimeType: string; size: number }; }
+    finally { plaintext.fill(0); }
     const version = byAttachment.get(attachment.id);
     if (!version?.nonce || !version.aad_hash) throw new Error("Attachment ciphertext record is incomplete.");
     return { id: attachment.id, itemId, ...metadata, storagePath: version.storage_path, nonce: toBase64Url(bytea(version.nonce)), aadHash: toBase64Url(bytea(version.aad_hash)) };

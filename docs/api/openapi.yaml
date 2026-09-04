@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: Passkey-X API
-  version: 0.2.0
+  version: 0.3.0
   description: Ciphertext-only API contract for Passkey-X by Vlightsoft. Plaintext vault secrets are prohibited.
 servers:
-  - url: https://api.example.invalid/v1
+  - url: https://egqgzkirazabocqwdlfp.supabase.co/functions/v1/v1
+    description: Development API
 security:
   - bearerAuth: []
 paths:
@@ -22,6 +23,117 @@ paths:
                 required: [status]
                 properties:
                   status: { const: ok }
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      responses:
+        '200':
+          description: Active workspace ciphertext and caller membership
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workspaces]
+                properties:
+                  workspaces:
+                    type: array
+                    items: { $ref: '#/components/schemas/Workspace' }
+        '401': { $ref: '#/components/responses/Error' }
+  /workspaces/{workspace_id}/members:
+    parameters:
+      - $ref: '#/components/parameters/WorkspacePathId'
+    get:
+      operationId: listWorkspaceMembers
+      responses:
+        '200':
+          description: Members visible under workspace RLS
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: '#/components/schemas/WorkspaceMember' }
+        '403': { $ref: '#/components/responses/Error' }
+  /missions:
+    get:
+      operationId: listMissions
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Encrypted Mission definitions and their permitted item identifiers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [missions]
+                properties:
+                  missions:
+                    type: array
+                    items: { $ref: '#/components/schemas/Mission' }
+  /access-requests:
+    get:
+      operationId: listAccessRequests
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Requests visible under requester or manager RLS
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items: { $ref: '#/components/schemas/AccessRequest' }
+    post:
+      operationId: createAccessRequest
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccessRequest' }
+      responses:
+        '201': { description: Encrypted request created }
+        '422': { $ref: '#/components/responses/Error' }
+  /access-requests/{request_id}/decision:
+    parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: decideAccessRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approved, denied] }
+      responses:
+        '200': { description: Approval decision recorded atomically }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /access-grants:
+    get:
+      operationId: listAccessGrants
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Active and historical timeboxed grants visible under RLS
+        '403': { $ref: '#/components/responses/Error' }
   /vault-items:
     get:
       operationId: listVaultItems
@@ -160,6 +272,11 @@ components:
       scheme: bearer
       bearerFormat: JWT-or-PAT
   parameters:
+    WorkspacePathId:
+      name: workspace_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     WorkspaceId:
       name: workspace_id
       in: query
@@ -176,6 +293,69 @@ components:
       required: true
       schema: { type: string, minLength: 16, maxLength: 128 }
   schemas:
+    Workspace:
+      type: object
+      additionalProperties: true
+      required: [id, tenant_id, suite, status, current_key_version, encrypted_name]
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        suite: { type: string, enum: [personal, family, professional, team] }
+        status: { type: string, enum: [active, archived, closed] }
+        current_key_version: { type: integer, minimum: 1 }
+        key_rotation_required: { type: boolean }
+        caller_role: { type: string, enum: [owner, manager, editor, viewer] }
+        encrypted_name: { type: string, description: PostgreSQL bytea encoding }
+        name_nonce: { type: [string, 'null'], description: PostgreSQL bytea encoding }
+        name_aad_hash: { type: [string, 'null'], description: PostgreSQL bytea encoding }
+    WorkspaceMember:
+      type: object
+      additionalProperties: false
+      required: [identity_id, tenant_id, workspace_id, role, status]
+      properties:
+        identity_id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        role: { type: string, enum: [owner, manager, editor, viewer] }
+        status: { type: string, enum: [invited, active, suspended, revoked] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Mission:
+      type: object
+      additionalProperties: true
+      required: [id, tenant_id, workspace_id, definition_nonce, encrypted_definition, definition_aad_hash, status]
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        definition_nonce: { type: string, description: PostgreSQL bytea encoding }
+        encrypted_definition: { type: string, description: PostgreSQL bytea encoding }
+        definition_aad_hash: { type: string, description: PostgreSQL bytea encoding }
+        status: { type: string, enum: [active, archived] }
+    AccessRequest:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_id, workspace_id, requester_identity_id, requested_scope, purpose_nonce, encrypted_purpose, purpose_aad_hash, requested_duration_minutes, status, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        item_id: { type: [string, 'null'], format: uuid }
+        requester_identity_id: { type: string, format: uuid }
+        requested_scope: { type: string, enum: [use, reveal, edit, manage] }
+        purpose_nonce: { type: string, description: PostgreSQL bytea encoding }
+        encrypted_purpose: { type: string, description: PostgreSQL bytea encoding }
+        purpose_aad_hash: { type: string, description: PostgreSQL bytea encoding }
+        requested_duration_minutes: { type: integer, minimum: 5, maximum: 10080 }
+        status: { type: string, enum: [pending, approved, denied, cancelled, expired] }
+        expires_at: { type: string, format: date-time }
+    CreateAccessRequest:
+      allOf:
+        - $ref: '#/components/schemas/AccessRequest'
+        - type: object
+          properties:
+            requester_identity_id: { readOnly: true }
+            status: { readOnly: true }
     EncryptedRevision:
       type: object
       additionalProperties: false
