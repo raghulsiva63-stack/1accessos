@@ -20,3 +20,4 @@ for (const required of ['threat-model.md', 'crypto-envelope.md', 'phase-0-gates.
 }
 
 console.log(`Phase 0 static checks passed for ${tables.length} RLS-enabled tables.`);
+

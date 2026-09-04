@@ -1,4 +1,4 @@
-# 1accessos Phase 0 Threat Model
+# Passkey-X Phase 0 Threat Model
 
 Status: Draft for implementation validation  
 Date: 2026-09-04

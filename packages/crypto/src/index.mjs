@@ -125,3 +125,4 @@ export function encodeJson(value) {
 export function decodeJson(value) {
   return JSON.parse(decoder.decode(value));
 }
+

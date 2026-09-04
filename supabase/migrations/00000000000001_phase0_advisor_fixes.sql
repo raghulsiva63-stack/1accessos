@@ -29,3 +29,4 @@ create index workspace_memberships_workspace_fk_idx on public.workspace_membersh
 create index workspaces_created_by_fk_idx on public.workspaces(created_by);
 
 commit;
+

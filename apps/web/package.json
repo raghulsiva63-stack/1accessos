@@ -1,5 +1,5 @@
 {
-  "name": "oneaccessos",
+  "name": "passkey-x-web",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -18,10 +18,10 @@
     "clsx": "2.1.1",
     "hash-wasm": "4.12.0",
     "lucide-react": "1.31.0",
-    "next": "16.2.6",
+    "next": "16.3.4",
     "radix-ui": "1.6.7",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
@@ -30,7 +30,7 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.3.4",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
     "vite": "8.0.13"

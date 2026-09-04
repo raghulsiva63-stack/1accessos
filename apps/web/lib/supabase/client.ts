@@ -7,3 +7,4 @@ export const isSupabaseConfigured = Boolean(url && publishableKey);
 export const supabase = isSupabaseConfigured
   ? createClient<Database>(url!, publishableKey!, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: typeof window === "undefined" ? undefined : window.sessionStorage } })
   : null;
+

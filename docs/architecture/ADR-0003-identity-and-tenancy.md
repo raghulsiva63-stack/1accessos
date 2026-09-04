@@ -24,3 +24,4 @@ Every account receives a personal tenant and personal workspace. Organization te
 - Workspace: `owner`, `manager`, `editor`, `viewer`
 
 Roles are catalog keys constrained at the database boundary in Phase 0 and may evolve into policy records later.
+

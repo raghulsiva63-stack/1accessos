@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Passkey-X</title>
+    <link rel="stylesheet" href="/src/popup.css" />
+  </head>
+  <body>
+    <main>
+      <header><img src="/icons/icon-128.png" alt="" /><div><strong>Passkey-X</strong><span>by Vlightsoft</span></div><button id="lock" hidden>Lock</button></header>
+      <section id="signed-out">
+        <p class="kicker">Private browser access</p>
+        <h1>Unlock your vault</h1>
+        <form id="login-form">
+          <label>Email<input id="email" type="email" autocomplete="email" required /></label>
+          <label>Login password<input id="login-password" type="password" autocomplete="current-password" required /></label>
+          <label>Vault password<input id="vault-password" type="password" autocomplete="current-password" required minlength="12" /></label>
+          <button>Sign in and unlock</button>
+        </form>
+      </section>
+      <section id="unlocked" hidden>
+        <div class="page"><span id="origin">Current page</span><small>Explicit fill only</small></div>
+        <div id="candidate" hidden><p>Passkey-X detected a submitted login.</p><div class="candidate-actions"><button id="save">Encrypt and save</button><button id="never" class="secondary">Never for this site</button></div></div>
+        <div id="matches"></div>
+        <div id="empty" hidden><strong>No matching login</strong><span>Open the website sign-in form, or save the detected login after submitting it.</span></div>
+      </section>
+      <p id="message" role="status"></p>
+      <footer>Submitted candidates expire after 60 seconds. Vault secrets are cleared when locked or the service worker stops.</footer>
+    </main>
+    <script type="module" src="/src/popup.ts"></script>
+  </body>
+</html>

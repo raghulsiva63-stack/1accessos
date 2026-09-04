@@ -16,3 +16,4 @@ Each accepted mutation receives a monotonically increasing change sequence. Clie
 ## Conflict behavior
 
 The server never merges vault plaintext. A conflicting encrypted revision is retained as a conflict record and resolved by an authorized client after local decryption.
+

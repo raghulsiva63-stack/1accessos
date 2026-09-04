@@ -5,7 +5,7 @@
 
 ## Decision
 
-Trusted 1accessos clients encrypt and decrypt vault content locally. Supabase and the REST API receive only versioned ciphertext envelopes plus the minimum control metadata required for authorization, synchronization, and abuse prevention.
+Trusted Passkey-X clients encrypt and decrypt vault content locally. Supabase and the REST API receive only versioned ciphertext envelopes plus the minimum control metadata required for authorization, synchronization, and abuse prevention.
 
 Supabase authentication proves the account identity but does not derive, receive, or recover the vault master key.
 

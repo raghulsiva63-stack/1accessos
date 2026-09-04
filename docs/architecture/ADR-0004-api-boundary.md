@@ -18,3 +18,4 @@ The API validates the Supabase JWT or a hashed scoped personal access token, res
 - Lists use opaque cursors, not unbounded offsets.
 - Webhooks contain identifiers and event metadata only, never vault ciphertext or plaintext.
 - API errors use stable codes and do not reveal authorization internals.
+

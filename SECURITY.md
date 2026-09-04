@@ -1,6 +1,6 @@
 # Security Policy
 
-1accessos is in pre-release security design. Do not use it for real credentials until a production release is explicitly approved.
+Passkey-X is in pre-release security review. Do not use it for real credentials until a production release is explicitly approved.
 
 ## Reporting
 

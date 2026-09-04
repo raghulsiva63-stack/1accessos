@@ -57,3 +57,4 @@ Argon2id parameters are stored with the wrapped account-root-key record. Initial
 ## Recovery
 
 The client generates a high-entropy recovery secret and displays/downloads it once. A recovery wrapping key derived from that secret unwraps the account root key. The server stores only the wrapped account root key and KDF metadata. Losing both the master password and recovery key makes recovery impossible by design.
+

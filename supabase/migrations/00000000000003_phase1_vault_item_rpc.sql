@@ -168,3 +168,4 @@ comment on function public.update_vault_item(uuid,bigint,bytea,bytea,bytea)
   is 'Atomically appends an encrypted revision using optimistic concurrency under caller RLS.';
 
 commit;
+

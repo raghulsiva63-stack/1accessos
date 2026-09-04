@@ -11,7 +11,7 @@ The existing Supabase project is the development environment for Phase 0. A sepa
 
 ## Repository convention
 
-The product brand is `1accessos`. Package names and code identifiers use `oneaccessos` where an identifier cannot safely begin with a digit.
+The public product brand changed from `1accessos` to `Passkey-X` on 2026-09-04. See ADR-0005 for the compatibility boundary.
 
 ## Consequences
 

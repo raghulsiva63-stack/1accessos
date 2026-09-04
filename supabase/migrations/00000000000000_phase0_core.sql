@@ -363,3 +363,4 @@ comment on table public.vault_item_revisions is 'Immutable client-encrypted item
 comment on table public.key_envelopes is 'Client-generated wrapped keys only; never store unwrapped vault keys.';
 
 commit;
+

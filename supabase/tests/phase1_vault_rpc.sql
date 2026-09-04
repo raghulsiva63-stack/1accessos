@@ -17,6 +17,7 @@ insert into phase1_fixtures values (
     '{"algorithm":"ARGON2ID","memoryKib":65536,"iterations":3,"parallelism":1,"hashLength":32}'::jsonb,
     decode(repeat('02',12),'hex'), decode(repeat('03',48),'hex'),
     decode(repeat('04',12),'hex'), decode(repeat('05',48),'hex'),
+    decode(repeat('09',32),'hex'),
     decode(repeat('06',12),'hex'), decode(repeat('07',48),'hex'),
     decode(repeat('08',65),'hex')
   )
@@ -30,6 +31,7 @@ insert into phase1_fixtures values (
     '{"algorithm":"ARGON2ID","memoryKib":65536,"iterations":3,"parallelism":1,"hashLength":32}'::jsonb,
     decode(repeat('12',12),'hex'), decode(repeat('13',48),'hex'),
     decode(repeat('14',12),'hex'), decode(repeat('15',48),'hex'),
+    decode(repeat('19',32),'hex'),
     decode(repeat('16',12),'hex'), decode(repeat('17',48),'hex'),
     decode(repeat('18',65),'hex')
   )

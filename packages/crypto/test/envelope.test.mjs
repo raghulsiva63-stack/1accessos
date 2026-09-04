@@ -54,3 +54,4 @@ test('Argon2id derivation is deterministic and salt-bound', () => {
   assert.deepEqual(first, second);
   assert.notDeepEqual(first, other);
 });
+

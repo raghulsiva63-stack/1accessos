@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Passkey-X",
+  "version": "0.1.0",
+  "description": "Explicit, zero-knowledge save and fill for your Passkey-X personal vault.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Open Passkey-X",
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "permissions": ["activeTab", "storage"],
+  "commands": {
+    "fill-login": {
+      "suggested_key": {
+        "default": "Alt+Shift+X",
+        "mac": "Alt+Shift+X"
+      },
+      "description": "Fill the first matching Passkey-X login"
+    }
+  },
+  "host_permissions": [
+    "https://egqgzkirazabocqwdlfp.supabase.co/*"
+  ],
+  "icons": {
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
+  }
+}

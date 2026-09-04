@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: 1accessos API
-  version: 0.1.0
-  description: Ciphertext-only Phase 0 API contract. Plaintext vault secrets are prohibited.
+  title: Passkey-X API
+  version: 0.2.0
+  description: Ciphertext-only API contract for Passkey-X by Vlightsoft. Plaintext vault secrets are prohibited.
 servers:
   - url: https://api.example.invalid/v1
 security:

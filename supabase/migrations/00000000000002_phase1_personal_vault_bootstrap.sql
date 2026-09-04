@@ -72,3 +72,4 @@ revoke all on function public.bootstrap_personal_vault(bytea,jsonb,bytea,bytea,b
 grant execute on function public.bootstrap_personal_vault(bytea,jsonb,bytea,bytea,bytea,bytea,bytea,bytea,bytea) to authenticated;
 
 commit;
+

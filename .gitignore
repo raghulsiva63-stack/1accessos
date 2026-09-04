@@ -5,6 +5,9 @@ node_modules/
 .DS_Store
 coverage/
 dist/
+.next/
+out/
+target/
 .turbo/
 .supabase/
 supabase/.temp/
@@ -13,4 +16,4 @@ supabase/.temp/
 *.key
 *.p12
 *.pfx
-*recovery*
+passkey-x-recovery-key.json

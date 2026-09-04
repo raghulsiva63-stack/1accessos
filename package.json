@@ -1,13 +1,17 @@
 {
-  "name": "oneaccessos",
+  "name": "passkey-x",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "engines": { "node": ">=24.7.0" },
   "scripts": {
-    "test": "node --test",
+    "test": "node --test packages/*/test/*.test.mjs",
     "test:crypto": "node --test packages/crypto/test/*.test.mjs",
-    "check": "node --check packages/crypto/src/index.mjs && node --test"
+    "test:api": "node --test packages/api-client/test/*.test.mjs",
+    "test:extension": "npm --prefix apps/extension test",
+    "build:extension": "npm --prefix apps/extension run build",
+    "check:phase1": "node scripts/check-phase1.mjs",
+    "check": "node --check packages/crypto/src/index.mjs && node scripts/check-phase0.mjs && node scripts/check-phase1.mjs && npm test"
   },
   "workspaces": ["packages/*"]
 }

@@ -1,8 +1,10 @@
 # Phase 1 — Web Vault Checkpoint 01
 
+> Historical checkpoint. Superseded by `phase-1-exit-gates.md`.
+
 Date: 2026-09-04
 
-Status: implemented and verified in `1accessos-dev`. This is the first Phase 1 vertical slice, not the Phase 1 completion gate.
+Status: implemented and verified in the development Supabase project. This is the first Phase 1 vertical slice, not the Phase 1 completion gate.
 
 ## Working capabilities
 
@@ -46,9 +48,9 @@ Set both public Supabase variables in Netlify for Production and Deploy Preview 
 - Create/update/delete produce immutable revisions and three ordered sync changes.
 - Supabase performance advisor has no non-informational findings.
 
-The Supabase security advisor reports one reviewed warning: authenticated users can execute the `SECURITY DEFINER` bootstrap function. This is intentional because it creates the identity, tenant, memberships and key envelopes in one transaction. The function checks `auth.uid()`, rejects repeat initialization, validates encrypted input lengths, fixes an empty search path, and grants execution only to `authenticated`. Item CRUD functions are `SECURITY INVOKER` and remain subject to RLS.
-
-Advisor reference: https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
+This historical warning was removed by migration
+`00000000000006_invoker_bootstrap_and_recovery.sql`. Bootstrap and recovery
+functions now run as `SECURITY INVOKER` with narrowly granted columns and RLS.
 
 ## Remaining Phase 1 gates
 

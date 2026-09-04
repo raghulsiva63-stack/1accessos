@@ -7,7 +7,20 @@ import {
   wrapKey,
 } from "@/lib/crypto/vault";
 
-export type ItemKind = "login" | "api-key" | "secure-note" | "custom-secret";
+export type ItemKind =
+  | "login"
+  | "passkey"
+  | "secure-note"
+  | "identity"
+  | "payment-card"
+  | "recovery-codes"
+  | "wifi"
+  | "software-license"
+  | "api-key"
+  | "ssh-key"
+  | "database"
+  | "certificate"
+  | "custom-secret";
 
 export type VaultPayload = {
   version: 1;
@@ -16,6 +29,10 @@ export type VaultPayload = {
   secret?: string;
   url?: string;
   notes?: string;
+  tags?: string[];
+  favorite?: boolean;
+  archived?: boolean;
+  fields?: Record<string, string>;
   updatedAt: string;
 };
 
@@ -23,6 +40,7 @@ export type VaultItem = {
   id: string;
   contentType: ItemKind;
   revision: number;
+  deletedAt: string | null;
   payload: VaultPayload;
 };
 
@@ -39,6 +57,7 @@ type ItemRow = {
   content_type: ItemKind;
   schema_version: number;
   head_revision: number;
+  deleted_at: string | null;
 };
 
 type RevisionRow = {
@@ -114,18 +133,20 @@ export async function openWorkspaceVault(identityId: string, accountRootKey: Uin
   };
 }
 
-export async function listVaultItems(vault: WorkspaceVault): Promise<VaultItem[]> {
+export async function listVaultItems(vault: WorkspaceVault, options: { trash?: boolean } = {}): Promise<VaultItem[]> {
   if (!supabase) throw new Error("Supabase is not configured.");
   const { data: itemRows, error: itemError } = await supabase
     .from("vault_items")
-    .select("id,content_type,schema_version,head_revision")
+    .select("id,content_type,schema_version,head_revision,deleted_at")
     .eq("tenant_id", vault.tenantId)
     .eq("workspace_id", vault.workspaceId)
-    .is("deleted_at", null)
     .order("updated_at", { ascending: false });
+  const filteredRows = options.trash
+    ? itemRows?.filter((row) => row.deleted_at !== null)
+    : itemRows?.filter((row) => row.deleted_at === null);
   if (itemError) throw itemError;
 
-  const items = (itemRows ?? []) as ItemRow[];
+  const items = (filteredRows ?? []) as ItemRow[];
   if (items.length === 0) return [];
 
   const { data: revisionRows, error: revisionError } = await supabase
@@ -163,6 +184,7 @@ export async function listVaultItems(vault: WorkspaceVault): Promise<VaultItem[]
       id: item.id,
       contentType: item.content_type,
       revision: revision.revision,
+      deletedAt: item.deleted_at,
       payload: JSON.parse(new TextDecoder().decode(plaintext)) as VaultPayload,
     };
   }));
@@ -221,4 +243,47 @@ export async function deleteVaultItem(vault: WorkspaceVault, item: VaultItem) {
     p_expected_revision: item.revision,
   });
   if (error) throw error;
+}
+
+export async function restoreVaultItem(vault: WorkspaceVault, item: VaultItem) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("restore_vault_item", {
+    p_item_id: item.id,
+    p_expected_revision: item.revision,
+  });
+  if (error) throw error;
+}
+
+export type VaultHistoryEntry = {
+  revision: number;
+  createdAt: string;
+  payload: VaultPayload;
+};
+
+export async function listVaultItemHistory(vault: WorkspaceVault, item: VaultItem): Promise<VaultHistoryEntry[]> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data, error } = await supabase
+    .from("vault_item_revisions")
+    .select("revision,nonce,ciphertext,aad_hash,key_version,created_at")
+    .eq("tenant_id", vault.tenantId)
+    .eq("workspace_id", vault.workspaceId)
+    .eq("item_id", item.id)
+    .order("revision", { ascending: false });
+  if (error) throw error;
+  return Promise.all((data ?? []).map(async (revision) => {
+    if (revision.key_version !== vault.keyVersion) throw new Error("Unsupported workspace key version.");
+    const aad = aadFor(vault, item.id, revision.revision, item.contentType);
+    const expectedHash = toBase64Url(await sha256(aad));
+    if (toBase64Url(bytea(revision.aad_hash)) !== expectedHash) throw new Error("Revision authentication metadata is invalid.");
+    const plaintext = await unwrapKey(vault.key, {
+      algorithm: "AES-256-GCM",
+      nonce: toBase64Url(bytea(revision.nonce)),
+      ciphertext: toBase64Url(bytea(revision.ciphertext)),
+    }, aad);
+    return {
+      revision: revision.revision,
+      createdAt: revision.created_at,
+      payload: JSON.parse(new TextDecoder().decode(plaintext)) as VaultPayload,
+    };
+  }));
 }

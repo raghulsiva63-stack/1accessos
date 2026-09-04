@@ -1,4 +1,4 @@
-name: 1accessos verification
+name: Passkey-X verification
 
 on:
   push:
@@ -25,10 +25,14 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: Validate package manifest
         run: node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8'))"
-      - name: Run crypto and tamper tests
-        run: node --test packages/crypto/test/*.test.mjs
+      - name: Run crypto, API client, and tamper tests
+        run: npm test
+      - name: Audit root production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - name: Run Phase 0 static security checks
         run: node scripts/check-phase0.mjs
+      - name: Run Phase 1 static product and security checks
+        run: node scripts/check-phase1.mjs
       - name: Install web application dependencies
         working-directory: apps/web
         run: npm ci
@@ -38,6 +42,24 @@ jobs:
       - name: Build and test web application
         working-directory: apps/web
         run: npm test
+      - name: Audit web production dependencies
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high
+      - name: Install extension dependencies
+        working-directory: apps/extension
+        run: npm ci
+      - name: Build and test Chromium extension
+        working-directory: apps/extension
+        run: npm test
+      - name: Audit extension production dependencies
+        working-directory: apps/extension
+        run: npm audit --omit=dev --audit-level=high
+      - name: Validate desktop packaging configuration
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm exec --offline tauri -- --version
+          node -e "JSON.parse(require('node:fs').readFileSync('src-tauri/tauri.conf.json','utf8'))"
       - name: Reject common committed secrets
         shell: bash
         run: |

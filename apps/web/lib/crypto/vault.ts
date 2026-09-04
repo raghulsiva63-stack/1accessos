@@ -24,6 +24,9 @@ export const WEB_KDF_PROFILE: KdfProfile = {
   hashLength: 32,
 };
 
+export const CRYPTO_PROTOCOL_NAMESPACE = "1accessos";
+export const RECOVERY_KEY_PREFIX = "PX-RK1-";
+
 function asArrayBuffer(value: Uint8Array): ArrayBuffer {
   return Uint8Array.from(value).buffer;
 }
@@ -134,7 +137,29 @@ export async function unwrapKey(
 
 export function createRecoveryKey() {
   const secret = randomBytes(32);
-  return { secret, display: `1A-RK1-${toBase64Url(secret)}` };
+  return { secret, display: `${RECOVERY_KEY_PREFIX}${toBase64Url(secret)}` };
+}
+
+export function parseRecoveryKey(value: string) {
+  const normalized = value.trim();
+  const prefix = normalized.startsWith(RECOVERY_KEY_PREFIX)
+    ? RECOVERY_KEY_PREFIX
+    : normalized.startsWith("1A-RK1-")
+      ? "1A-RK1-"
+      : "";
+  if (!prefix) throw new Error("That is not a valid Passkey-X recovery key.");
+  const secret = fromBase64Url(normalized.slice(prefix.length));
+  if (secret.byteLength !== 32) throw new Error("That recovery key has an invalid length.");
+  return secret;
+}
+
+export async function recoveryVerifier(secret: Uint8Array) {
+  if (secret.byteLength !== 32) throw new Error("Recovery keys must contain 256 bits.");
+  const context = encoder.encode("1accessos:recovery-verifier:v1");
+  const input = new Uint8Array(context.byteLength + secret.byteLength);
+  input.set(context);
+  input.set(secret, context.byteLength);
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", asArrayBuffer(input)));
 }
 
 export async function createDeviceKeyPair() {
@@ -166,10 +191,54 @@ export async function saveProtectedDeviceKey(ciphertext: WrappedKey) {
 export function recoveryFile(recoveryKey: string) {
   return new Blob([
     JSON.stringify({
-      product: "1accessos",
+      product: "Passkey-X",
       version: 1,
       recovery_key: recoveryKey,
       warning: "Store offline. Anyone with this key may recover your vault.",
     }, null, 2),
   ], { type: "application/json" });
+}
+
+export type EncryptedExport = {
+  format: "passkey-x-export";
+  version: 1;
+  createdAt: string;
+  kdf: KdfProfile;
+  salt: string;
+  envelope: WrappedKey;
+};
+
+export async function createEncryptedExport(payload: unknown, password: string): Promise<EncryptedExport> {
+  const salt = randomBytes(16);
+  const key = await deriveMasterKey(password, salt);
+  try {
+    const envelope = await wrapKey(
+      key,
+      encoder.encode(JSON.stringify(payload)),
+      "1accessos:export:v1",
+    );
+    return {
+      format: "passkey-x-export",
+      version: 1,
+      createdAt: new Date().toISOString(),
+      kdf: WEB_KDF_PROFILE,
+      salt: toBase64Url(salt),
+      envelope,
+    };
+  } finally {
+    key.fill(0);
+  }
+}
+
+export async function openEncryptedExport(file: EncryptedExport, password: string) {
+  if (file.format !== "passkey-x-export" || file.version !== 1) {
+    throw new Error("Unsupported Passkey-X export format.");
+  }
+  const key = await deriveMasterKey(password, fromBase64Url(file.salt), file.kdf);
+  try {
+    const plaintext = await unwrapKey(key, file.envelope, "1accessos:export:v1");
+    return JSON.parse(new TextDecoder().decode(plaintext)) as unknown;
+  } finally {
+    key.fill(0);
+  }
 }

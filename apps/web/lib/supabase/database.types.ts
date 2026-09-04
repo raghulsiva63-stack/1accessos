@@ -22,6 +22,7 @@ export type Database = {
           master_nonce: string
           master_wrapped_root: string
           recovery_nonce: string
+          recovery_verifier: string | null
           recovery_wrapped_root: string
           salt: string
           updated_at: string
@@ -33,6 +34,7 @@ export type Database = {
           master_nonce: string
           master_wrapped_root: string
           recovery_nonce: string
+          recovery_verifier?: string | null
           recovery_wrapped_root: string
           salt: string
           updated_at?: string
@@ -44,6 +46,7 @@ export type Database = {
           master_nonce?: string
           master_wrapped_root?: string
           recovery_nonce?: string
+          recovery_verifier?: string | null
           recovery_wrapped_root?: string
           salt?: string
           updated_at?: string
@@ -51,6 +54,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "account_crypto_profiles_identity_id_fkey"
+            columns: ["identity_id"]
+            isOneToOne: true
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_entitlements: {
+        Row: {
+          ai_credits_remaining: number
+          automation_runs_remaining: number
+          identity_id: string
+          period_ends_at: string
+          period_started_at: string
+          plan_code: string
+          updated_at: string
+        }
+        Insert: {
+          ai_credits_remaining?: number
+          automation_runs_remaining?: number
+          identity_id: string
+          period_ends_at?: string
+          period_started_at?: string
+          plan_code?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_credits_remaining?: number
+          automation_runs_remaining?: number
+          identity_id?: string
+          period_ends_at?: string
+          period_started_at?: string
+          plan_code?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_entitlements_identity_id_fkey"
             columns: ["identity_id"]
             isOneToOne: true
             referencedRelation: "identities"
@@ -104,29 +145,35 @@ export type Database = {
       }
       attachment_versions: {
         Row: {
+          aad_hash: string | null
           attachment_id: string
           ciphertext_sha256: string
           ciphertext_size: number
           created_at: string
           key_version: number
+          nonce: string | null
           storage_path: string
           version: number
         }
         Insert: {
+          aad_hash?: string | null
           attachment_id: string
           ciphertext_sha256: string
           ciphertext_size: number
           created_at?: string
           key_version: number
+          nonce?: string | null
           storage_path: string
           version: number
         }
         Update: {
+          aad_hash?: string | null
           attachment_id?: string
           ciphertext_sha256?: string
           ciphertext_size?: number
           created_at?: string
           key_version?: number
+          nonce?: string | null
           storage_path?: string
           version?: number
         }
@@ -149,6 +196,8 @@ export type Database = {
           head_version: number
           id: string
           item_id: string
+          metadata_aad_hash: string | null
+          metadata_nonce: string | null
           tenant_id: string
           workspace_id: string
         }
@@ -160,6 +209,8 @@ export type Database = {
           head_version?: number
           id?: string
           item_id: string
+          metadata_aad_hash?: string | null
+          metadata_nonce?: string | null
           tenant_id: string
           workspace_id: string
         }
@@ -171,6 +222,8 @@ export type Database = {
           head_version?: number
           id?: string
           item_id?: string
+          metadata_aad_hash?: string | null
+          metadata_nonce?: string | null
           tenant_id?: string
           workspace_id?: string
         }
@@ -886,12 +939,31 @@ export type Database = {
           p_master_nonce: string
           p_master_wrapped_root: string
           p_recovery_nonce: string
+          p_recovery_verifier: string
           p_recovery_wrapped_root: string
           p_salt: string
           p_workspace_nonce: string
           p_workspace_wrapped_key: string
         }
         Returns: Json
+      }
+      create_attachment: {
+        Args: {
+          p_aad_hash: string
+          p_attachment_id: string
+          p_ciphertext_sha256: string
+          p_ciphertext_size: number
+          p_encrypted_metadata: string
+          p_item_id: string
+          p_key_version: number
+          p_metadata_aad_hash: string
+          p_metadata_nonce: string
+          p_nonce: string
+          p_storage_path: string
+          p_tenant_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
       }
       create_vault_item: {
         Args: {
@@ -908,6 +980,24 @@ export type Database = {
       }
       delete_vault_item: {
         Args: { p_expected_revision: number; p_item_id: string }
+        Returns: undefined
+      }
+      restore_vault_item: {
+        Args: { p_expected_revision: number; p_item_id: string }
+        Returns: undefined
+      }
+      rotate_master_with_recovery: {
+        Args: {
+          p_kdf_parameters: Json
+          p_master_nonce: string
+          p_master_wrapped_root: string
+          p_recovery_verifier: string
+          p_salt: string
+        }
+        Returns: undefined
+      }
+      set_recovery_verifier_once: {
+        Args: { p_verifier: string }
         Returns: undefined
       }
       update_vault_item: {
@@ -1052,4 +1142,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

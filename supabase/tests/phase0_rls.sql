@@ -48,3 +48,4 @@ exception when insufficient_privilege then
 end $$;
 
 rollback;
+

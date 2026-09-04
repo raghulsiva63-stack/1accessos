@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Passkey-X",
+  "version": "0.1.0",
+  "identifier": "com.vlightsoft.passkeyx",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../../web run dev",
+    "beforeBuildCommand": "npm --prefix ../../web run build",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../../web/out"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Passkey-X",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 860,
+        "minHeight": 620,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' customprotocol: asset:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; connect-src 'self' ipc: http://ipc.localhost https://egqgzkirazabocqwdlfp.supabase.co wss://egqgzkirazabocqwdlfp.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["../icons/icon.png"]
+  }
+}
