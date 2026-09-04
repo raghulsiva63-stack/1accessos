@@ -12,6 +12,7 @@ test("parses workspace and cursor without accepting positional secrets", () => {
 
 test("requires the access token through the environment", async () => {
   await assert.rejects(() => run(["workspaces"], {}, async () => { throw new Error("fetch should not run"); }), /PASSKEY_X_ACCESS_TOKEN/u);
+  await assert.rejects(() => run(["health"], {}, async () => { throw new Error("fetch should not run"); }), /PASSKEY_X_ACCESS_TOKEN/u);
 });
 
 test("sends a bearer token and renders JSON", async () => {

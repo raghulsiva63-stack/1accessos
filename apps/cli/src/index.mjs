@@ -66,7 +66,7 @@ export async function run(argv, environment = process.env, fetcher = fetch) {
   if (command === "help" || command === "--help" || command === "-h") return { exitCode: 0, output: usage() };
   if (!COMMANDS.has(command)) throw new Error(`Unknown command: ${command}\n\n${usage()}`);
   const token = environment.PASSKEY_X_ACCESS_TOKEN;
-  if (command !== "health" && !token) throw new Error("PASSKEY_X_ACCESS_TOKEN is required for authenticated commands.");
+  if (!token) throw new Error("PASSKEY_X_ACCESS_TOKEN is required for every API command.");
   const baseUrl = (environment.PASSKEY_X_API_URL || DEFAULT_API_URL).replace(/\/$/u, "");
   const result = await fetcher(`${baseUrl}${commandPath(command, options)}`, {
     headers: {

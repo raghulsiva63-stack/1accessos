@@ -36,7 +36,7 @@ assert.match(client, /#invite=/);
 assert.match(client, /#capsule=/);
 assert.match(page, /window\.history\.replaceState/);
 assert.match(client, /AES-256-GCM/);
-assert.doesNotMatch(client, /service.role|service_role/i);
+assert.doesNotMatch(client, /service[_. -]?role/i);
 for (const surface of ["Encrypted collaboration", "Access Capsule", "Mission Mode", "Access inbox", "Fill-only is not DRM"]) {
   assert.match(page, new RegExp(surface, "i"), `missing Phase 2 surface: ${surface}`);
 }
