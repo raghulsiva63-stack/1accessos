@@ -1,4 +1,4 @@
-name: Phase 0 security
+name: 1accessos verification
 
 on:
   push:
@@ -28,6 +28,15 @@ jobs:
         run: node --test packages/crypto/test/*.test.mjs
       - name: Run Phase 0 static security checks
         run: node scripts/check-phase0.mjs
+      - name: Install web application dependencies
+        working-directory: apps/web
+        run: npm ci
+      - name: Lint web application
+        working-directory: apps/web
+        run: npm run lint
+      - name: Build and test web application
+        working-directory: apps/web
+        run: npm test
       - name: Reject common committed secrets
         shell: bash
         run: |

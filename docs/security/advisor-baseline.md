@@ -2,7 +2,7 @@
 
 Date: 2026-09-04
 
-- Security errors and warnings must be zero.
+- Phase 0 security errors and warnings are zero. Phase 1 permits only the reviewed authenticated bootstrap-function warning documented in `docs/phase1/checkpoint-01.md`.
 - All application tables use RLS.
 - Server-owned public tables have explicit deny policies and no client grants.
 - Foreign-key coverage findings are fixed.
