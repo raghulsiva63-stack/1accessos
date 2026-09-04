@@ -6,7 +6,7 @@
 ## Decision
 
 Passkey-X uses `passkey-x.com` as the permanent WebAuthn relying-party ID and
-`https://app.passkey-x.com` as the primary application origin. Passkey
+`https://passkey-x.com` as the primary application origin. Passkey
 enrolment stays disabled until that origin resolves to the production Netlify
 application and the identical values are configured in Supabase Auth.
 
@@ -31,7 +31,7 @@ weakening the zero-knowledge boundary.
 
 ## Consequences
 
-- DNS and TLS for `app.passkey-x.com` must be complete before enrolment.
+- DNS and TLS for `passkey-x.com` must be complete before enrolment.
 - Changing the RP ID after enrolment is a breaking credential migration.
 - Preview deploys cannot enrol production passkeys unless explicitly added as
   valid origins; Phase 3 does not allow this.

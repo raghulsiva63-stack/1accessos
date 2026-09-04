@@ -17,7 +17,7 @@ business users, machines, workloads, and AI agents.
 ## First checkpoint
 
 - Canonical RP ID fixed as `passkey-x.com`.
-- Primary application origin fixed as `https://app.passkey-x.com`.
+- Primary application origin fixed as `https://passkey-x.com`.
 - Passkey API opt-in is wired through a disabled-by-default public flag.
 - Passwordless account sign-in is available only when the flag is enabled.
 - Signed-in users can list, register, rename, and revoke their own passkeys.
@@ -27,11 +27,11 @@ business users, machines, workloads, and AI agents.
 
 Passkey enrolment must not be enabled until all of these pass:
 
-- `app.passkey-x.com` resolves to the intended Netlify production site.
+- `passkey-x.com` resolves to the intended Netlify production site.
 - TLS is valid and HTTP redirects to HTTPS.
 - Supabase Site URL and redirect allowlist use the custom origin.
 - Supabase Auth RP ID is `passkey-x.com` and its origin is exactly
-  `https://app.passkey-x.com`.
+  `https://passkey-x.com`.
 - A disposable-account register/sign-in/revoke browser test passes.
 - Existing password login and recovery remain functional.
 

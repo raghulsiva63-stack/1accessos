@@ -17,7 +17,8 @@ assert.match(page, /auth\.passkey\.update\(/);
 assert.match(page, /auth\.passkey\.delete\(/);
 assert.match(page, /separate vault password/i);
 assert.match(decision, /passkey-x\.com/);
-assert.match(scope, /app\.passkey-x\.com/);
+assert.match(scope, /https:\/\/passkey-x\.com/);
+assert.doesNotMatch(`${decision}\n${scope}\n${page}`, /app\.passkey-x\.com/);
 
 const [major, minor] = manifest.dependencies["@supabase/supabase-js"].split(".").map(Number);
 assert.ok(major > 2 || (major === 2 && minor >= 105), "Supabase client lacks passkey support");
