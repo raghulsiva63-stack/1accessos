@@ -12,6 +12,7 @@ const attachmentRpc = await readFile("supabase/migrations/00000000000008_atomic_
 const manifest = JSON.parse(await readFile("apps/extension/public/manifest.json", "utf8"));
 const tauri = JSON.parse(await readFile("apps/desktop/src-tauri/tauri.conf.json", "utf8"));
 const api = await readFile("supabase/functions/v1/index.ts", "utf8");
+const netlify = await readFile("netlify.toml", "utf8");
 
 for (const kind of [
   "login", "passkey", "secure-note", "identity", "payment-card",
@@ -40,6 +41,9 @@ assert.equal(tauri.productName, "Passkey-X");
 assert.match(tauri.app.security.csp, /object-src 'none'/);
 assert.match(api, /Only ciphertext envelopes are accepted/);
 assert.doesNotMatch(api, /SUPABASE_SERVICE_ROLE_KEY/);
+assert.match(netlify, /Content-Security-Policy/);
+assert.match(netlify, /frame-ancestors 'none'/);
+assert.match(netlify, /X-Content-Type-Options = "nosniff"/);
 
 for (const asset of [
   "apps/web/public/brand/passkey-x-horizontal.png",
