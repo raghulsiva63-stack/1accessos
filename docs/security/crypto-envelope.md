@@ -25,7 +25,7 @@ Status: Phase 0 reference contract; independent review required before productio
 ```json
 {
   "envelope_version": 1,
-  "algorithm": "XCHACHA20-POLY1305",
+  "algorithm": "AES-256-GCM",
   "key_version": 1,
   "nonce": "base64url-no-padding",
   "ciphertext": "base64url-no-padding",
@@ -40,7 +40,7 @@ Status: Phase 0 reference contract; independent review required before productio
 }
 ```
 
-AAD is canonically encoded, not trusted from the stored JSON alone, and reconstructed from immutable database fields before decryption.
+Version 1 uses a 256-bit key, a fresh 96-bit nonce for every encryption, and a 128-bit authentication tag. AAD is canonically encoded, not trusted from the stored JSON alone, and reconstructed from immutable database fields before decryption. The algorithm field remains versioned so a reviewed future suite can be introduced without ambiguous decoding.
 
 ## KDF profile
 
