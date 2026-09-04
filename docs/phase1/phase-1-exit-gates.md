@@ -30,7 +30,8 @@ that cannot be self-certified by the development agent.
 - [ ] Independent cryptographic design and implementation review.
 - [ ] Independent web/extension penetration test.
 - [ ] Supabase leaked-password protection enabled in the Auth dashboard.
-- [ ] Final custom domain and exact Supabase Auth redirect allow-list.
+- [x] Final custom domain and exact Auth redirect allow-list confirmed for
+  `https://passkey-x.com`.
 - [ ] Full hosted-browser email-confirmation and authenticated vault E2E on that final origin.
 - [ ] Authorized billing provider for the Personal subscription.
 - [ ] Authorized hosted-AI provider if remote AI credits are sold; local-only mode is complete without it.

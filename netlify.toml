@@ -6,6 +6,17 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Passkeys are bound permanently to the production relying-party domain.
+# Keep non-production deploys disabled so preview URLs can never enrol credentials.
+[context.production.environment]
+  NEXT_PUBLIC_PASSKEYS_ENABLED = "true"
+
+[context.deploy-preview.environment]
+  NEXT_PUBLIC_PASSKEYS_ENABLED = "false"
+
+[context.branch-deploy.environment]
+  NEXT_PUBLIC_PASSKEYS_ENABLED = "false"
+
 [[headers]]
   for = "/*"
   [headers.values]
