@@ -1,0 +1,37 @@
+name: Phase 0 security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Use Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.7.0'
+          cache: npm
+      - name: Validate package manifest
+        run: node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8'))"
+      - name: Run crypto and tamper tests
+        run: node --test packages/crypto/test/*.test.mjs
+      - name: Run Phase 0 static security checks
+        run: node scripts/check-phase0.mjs
+      - name: Reject common committed secrets
+        shell: bash
+        run: |
+          if git grep -nEI '(sb_secret_|service_role|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16})' -- ':!*.md' ':!.github/workflows/*'; then
+            echo 'Potential committed secret detected.' >&2
+            exit 1
+          fi

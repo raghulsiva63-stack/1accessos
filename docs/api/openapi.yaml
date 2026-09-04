@@ -1,0 +1,249 @@
+openapi: 3.1.0
+info:
+  title: 1accessos API
+  version: 0.1.0
+  description: Ciphertext-only Phase 0 API contract. Plaintext vault secrets are prohibited.
+servers:
+  - url: https://api.example.invalid/v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      operationId: getHealth
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { const: ok }
+  /vault-items:
+    get:
+      operationId: listVaultItems
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Encrypted item heads
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/VaultItem' }
+                  next_cursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createVaultItem
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateVaultItem' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VaultItem' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /vault-items/{item_id}:
+    parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getVaultItem
+      responses:
+        '200':
+          description: Encrypted item and head revision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VaultItem' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateVaultItem
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string, pattern: '^"[1-9][0-9]*"$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EncryptedRevision' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VaultItem' }
+        '409': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteVaultItem
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Tombstone created }
+        '409': { $ref: '#/components/responses/Error' }
+  /sync/changes:
+    get:
+      operationId: getSyncChanges
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Ordered metadata-only changes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [changes, cursor]
+                properties:
+                  changes:
+                    type: array
+                    items: { $ref: '#/components/schemas/SyncChange' }
+                  cursor: { type: string }
+  /api-tokens:
+    post:
+      operationId: createApiToken
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scopes]
+              properties:
+                scopes:
+                  type: array
+                  items: { type: string }
+                expires_at: { type: [string, 'null'], format: date-time }
+      responses:
+        '201':
+          description: Token is returned once; only its hash is stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, token]
+                properties:
+                  id: { type: string, format: uuid }
+                  token: { type: string, writeOnly: true }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT-or-PAT
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: query
+      required: true
+      schema: { type: string, format: uuid }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 512 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+  schemas:
+    EncryptedRevision:
+      type: object
+      additionalProperties: false
+      required: [revision, envelope_version, algorithm, key_version, nonce, ciphertext, aad]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        envelope_version: { const: 1 }
+        algorithm: { const: AES-256-GCM }
+        key_version: { type: integer, minimum: 1 }
+        nonce: { type: string, pattern: '^[A-Za-z0-9_-]{16}$' }
+        ciphertext: { type: string, minLength: 22, pattern: '^[A-Za-z0-9_-]+$' }
+        aad:
+          $ref: '#/components/schemas/Aad'
+    Aad:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, workspace_id, item_id, revision, content_type, schema_version]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        item_id: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        content_type: { type: string, minLength: 3, maxLength: 128 }
+        schema_version: { type: integer, minimum: 1 }
+    CreateVaultItem:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_id, workspace_id, content_type, schema_version, revision]
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        content_type: { type: string, minLength: 3, maxLength: 128 }
+        schema_version: { type: integer, minimum: 1 }
+        revision: { $ref: '#/components/schemas/EncryptedRevision' }
+    VaultItem:
+      allOf:
+        - $ref: '#/components/schemas/CreateVaultItem'
+        - type: object
+          required: [head_revision, created_at, updated_at]
+          properties:
+            head_revision: { type: integer, minimum: 1 }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    SyncChange:
+      type: object
+      required: [sequence, entity_type, entity_id, operation, occurred_at]
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        entity_type: { enum: [item, attachment, membership, key_envelope] }
+        entity_id: { type: string, format: uuid }
+        operation: { enum: [create, update, delete, revoke] }
+        entity_version: { type: [integer, 'null'], minimum: 1 }
+        occurred_at: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            request_id: { type: string }
+  responses:
+    Error:
+      description: Safe structured error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

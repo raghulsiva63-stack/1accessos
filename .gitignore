@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage/
+dist/
+.turbo/
+.supabase/
+supabase/.temp/
+*.log
+*.pem
+*.key
+*.p12
+*.pfx
+*recovery*
