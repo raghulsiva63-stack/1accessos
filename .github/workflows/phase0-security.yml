@@ -22,6 +22,7 @@ jobs:
         with:
           node-version: '24.7.0'
           cache: npm
+          cache-dependency-path: apps/web/package-lock.json
       - name: Validate package manifest
         run: node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8'))"
       - name: Run crypto and tamper tests
