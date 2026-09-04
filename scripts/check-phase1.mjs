@@ -20,6 +20,7 @@ for (const kind of [
 ]) assert.match(itemModel, new RegExp(`[\"']${kind}[\"']`), `missing item type ${kind}`);
 
 assert.match(page, /Passkey-X/);
+assert.match(page, /vault password must be different from your login password/i);
 assert.doesNotMatch(page, /aria-label="1accessos"|Unable to open 1accessos/);
 assert.match(crypto, /PX-RK1-/);
 assert.match(crypto, /passkey-x-export/);
