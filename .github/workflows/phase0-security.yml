@@ -35,6 +35,8 @@ jobs:
         run: node scripts/check-phase1.mjs
       - name: Run Phase 2 collaboration and authorization checks
         run: node scripts/check-phase2.mjs
+      - name: Run Phase 3 passkey and relying-party checks
+        run: node scripts/check-phase3.mjs
       - name: Test ciphertext-only CLI
         working-directory: apps/cli
         run: npm test

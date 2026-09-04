@@ -325,6 +325,19 @@ button { -webkit-tap-highlight-color: transparent; }
 .file-action svg { width: 1rem; }
 .file-action input { display: none; }
 .settings-message { padding: .8rem 1rem; border: 1px solid #cce8d8; border-radius: .75rem; color: #286142; background: #f0faf4; font-size: .78rem; }
+.passkey-signin { margin-top: 1rem; display: grid; gap: .65rem; text-align: center; }
+.passkey-signin > span { display: flex; align-items: center; gap: .65rem; color: #8a94a8; font-size: .7rem; text-transform: uppercase; }
+.passkey-signin > span::before, .passkey-signin > span::after { content: ""; height: 1px; flex: 1; background: #e1e6ef; }
+.passkey-signin small { color: #737e94; font-size: .68rem; line-height: 1.45; }
+.passkey-readiness { border-color: #cfd9ff; background: linear-gradient(135deg, #f8faff, #f1f4ff); }
+.readiness-list { display: grid; gap: .65rem; }
+.readiness-list span { display: flex; align-items: center; gap: .5rem; color: #52617d; font-size: .78rem; }
+.readiness-list svg { width: 1rem; color: #3157d1; }
+.account-passkey-list { display: grid; gap: .65rem; }
+.account-passkey-list article { padding: .75rem; display: grid; grid-template-columns: 2.7rem minmax(0, 1fr) auto auto; align-items: center; gap: .7rem; border: 1px solid #e1e6ef; border-radius: .75rem; }
+.account-passkey-list article > div { display: grid; gap: .15rem; }
+.account-passkey-list strong { font-size: .82rem; }
+.account-passkey-list small { color: #747f96; font-size: .68rem; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; padding: 1rem; display: grid; place-items: center; background: #050b20a3; backdrop-filter: blur(7px); }
 .item-editor { width: min(100%, 580px); max-height: calc(100vh - 2rem); overflow-y: auto; box-shadow: 0 32px 100px #020714aa; }
@@ -396,6 +409,8 @@ button { -webkit-tap-highlight-color: transparent; }
   .settings-grid { grid-template-columns: 1fr; }
   .device-list [data-slot="card-content"] { grid-template-columns: 2.7rem minmax(0, 1fr); }
   .device-status, .device-list [data-slot="button"] { grid-column: 2; width: max-content; }
+  .account-passkey-list article { grid-template-columns: 2.7rem minmax(0, 1fr); }
+  .account-passkey-list article [data-slot="button"] { grid-column: 2; width: max-content; }
   .option-grid { grid-template-columns: 1fr; }
   .inline-fields { grid-template-columns: 1fr; }
   .request-list > article { flex-direction: column; }

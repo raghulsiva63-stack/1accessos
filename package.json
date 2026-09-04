@@ -13,7 +13,8 @@
     "build:extension": "npm --prefix apps/extension run build",
     "check:phase1": "node scripts/check-phase1.mjs",
     "check:phase2": "node scripts/check-phase2.mjs",
-    "check": "node --check packages/crypto/src/index.mjs && node scripts/check-phase0.mjs && node scripts/check-phase1.mjs && node scripts/check-phase2.mjs && npm test && npm run test:cli"
+    "check:phase3": "node scripts/check-phase3.mjs",
+    "check": "node --check packages/crypto/src/index.mjs && node scripts/check-phase0.mjs && node scripts/check-phase1.mjs && node scripts/check-phase2.mjs && node scripts/check-phase3.mjs && npm test && npm run test:cli"
   },
   "workspaces": ["packages/*"]
 }
