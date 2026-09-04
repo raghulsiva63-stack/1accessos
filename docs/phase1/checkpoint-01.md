@@ -29,6 +29,12 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
 
 No secret/service-role key belongs in the web build.
 
+## Netlify deployment
+
+The repository includes a root `netlify.toml` that sets `apps/web` as the build base and runs the standard Next.js production build. Netlify's maintained OpenNext adapter handles the Next.js deployment automatically; no legacy Next.js plugin is pinned.
+
+Set both public Supabase variables in Netlify for Production and Deploy Preview contexts. After the first deploy, set the Supabase Auth Site URL to the stable Netlify URL (or custom domain) and add the exact production URL plus the Netlify preview wildcard to the additional redirect allow-list.
+
 ## Verification evidence
 
 - Standard Next.js production build passes.
