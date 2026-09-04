@@ -9,5 +9,5 @@
     "test:crypto": "node --test packages/crypto/test/*.test.mjs",
     "check": "node --check packages/crypto/src/index.mjs && node --test"
   },
-  "workspaces": ["apps/*", "packages/*"]
+  "workspaces": ["packages/*"]
 }
