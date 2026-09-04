@@ -16,7 +16,7 @@ real production secrets.
 - [x] `/v1` exposes collaboration metadata and ciphertext without a service-role key.
 - [x] The CLI reads tokens only from the environment and never accepts vault plaintext.
 - [x] Synthetic recipient, outsider, bad-token, one-time-use, anonymous, and revocation tests roll back cleanly.
-- [ ] Final repository, web, extension, CLI, API, and live-advisor verification recorded below.
+- [x] Final repository, web, extension, CLI, API, and live-advisor verification recorded below.
 
 ## Production release gates
 
@@ -26,9 +26,25 @@ secrets:
 - [ ] Independent cryptographic design and implementation review.
 - [ ] External penetration test of the hosted web app, extension, API, and RLS.
 - [ ] Production Supabase project with final Auth, backup, SMTP, and domain configuration.
+- [ ] Supabase Auth leaked-password protection enabled for production accounts.
 - [ ] Signed Chrome/Edge extension release and verified store origin.
 - [ ] Operational incident response, key-rotation runbook, and recovery exercise.
 
 ## Verification record
 
-Pending final Phase 2 verification run.
+Verified on 2026-09-04:
+
+- Release code commit: `3c0ee7c11b8d3f10c45930dab16ab71e918514fb`.
+- GitHub Actions run `33905880452` completed successfully.
+- Netlify production deploy `6a9b10ec6a5b933acd74a318` is ready at
+  `https://passkey-x.netlify.app` with all four configured header rules applied.
+- Public browser readback confirmed the Passkey-X title, Vlightsoft branding,
+  account-login form, and no application-origin console errors.
+- The web and extension production builds, crypto/API/CLI tests, Phase 0/1/2
+  static checks, OpenAPI parsing, secret scan, and dependency audits passed.
+- Live collaboration/RLS rollback tests passed against `1accessos-dev`.
+- All 27 public tables have RLS enabled. The security advisor reports no
+  database/RLS exposure findings.
+- The remaining Auth leaked-password-protection warning is an operator setting
+  tracked as a production release gate; unused-index notices are informational
+  in the near-empty development database.
