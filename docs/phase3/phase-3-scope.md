@@ -37,3 +37,14 @@ Passkey enrolment must not be enabled until all of these pass:
 
 The experimental passkey API is not considered an independent vault recovery
 method and is not a substitute for cryptographic review.
+
+## Production activation
+
+- Activated on 2026-09-04 for the production Netlify build only.
+- Production origin: `https://passkey-x.com`.
+- Relying-party ID: `passkey-x.com`.
+- Supabase Auth configuration was confirmed by the project owner before the
+  client feature flag was enabled.
+- Netlify previews remain excluded from the allowed production origins.
+- A real authenticator ceremony on the production domain remains an explicit
+  rollout verification gate.
