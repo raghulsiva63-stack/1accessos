@@ -1,3 +1,4 @@
+import { authorizedExtensionMessage } from "./message-boundary";
 import { createClient } from "@supabase/supabase-js";
 import { argon2id } from "hash-wasm";
 
@@ -177,12 +178,15 @@ function matches(origin: string) { return credentials.filter((credential) => saf
 function lock() { for (const context of vaults) context.key.fill(0); vaults = []; accountRoot?.fill(0); accountRoot = null; for (const credential of credentials) credential.secret = ""; credentials = []; for (const tabId of candidates.keys()) forgetCandidate(tabId); void supabase.auth.signOut(); }
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+  if (!authorizedExtensionMessage(message, sender, chrome.runtime.id, chrome.runtime.getURL("popup.html"))) {
+    sendResponse({ ok: false, error: "Rejected untrusted extension request." });
+    return false;
+  }
   const request = message as Record<string, unknown>;
-  if (!request || typeof request.type !== "string") return false;
   void (async () => {
     try {
       if (request.type === "PX_CANDIDATE") {
-        if (!sender.tab?.id || !sender.tab.url) throw new Error("A top-level tab is required.");
+        if (sender.tab?.id === undefined || !sender.tab.url) throw new Error("A top-level tab is required.");
         const origin = safeOrigin(sender.tab.url);
         if (!origin || request.origin !== origin || typeof request.username !== "string" || typeof request.secret !== "string" || !request.secret) throw new Error("Rejected untrusted login candidate.");
         if (await isIgnored(origin)) { sendResponse({ ok: true, ignored: true }); return; }
@@ -204,7 +208,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
           if (error) throw new Error("That Access Capsule is no longer available.");
           credential.useCount = uses;
         }
-        await chrome.tabs.sendMessage(tabId, { type: "PX_FILL", origin, username: credential.username, secret: credential.secret });
+        await chrome.tabs.sendMessage(tabId, { type: "PX_FILL", origin, username: credential.username, secret: credential.secret }, { frameId: 0 });
         if (credential.source === "capsule" && credential.maxUses && (credential.useCount ?? 0) >= credential.maxUses) {
           credential.secret = "";
           credentials = credentials.filter((item) => item !== credential);
@@ -218,6 +222,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 
 chrome.runtime.onSuspend.addListener(lock);
 chrome.tabs.onRemoved.addListener(forgetCandidate);
+chrome.tabs.onUpdated.addListener((tabId, change) => {
+  const candidate = candidates.get(tabId);
+  if (change.url && candidate && safeOrigin(change.url) !== candidate.origin) forgetCandidate(tabId);
+});
 chrome.commands.onCommand.addListener((command) => {
   if (command !== "fill-login" || !vaults.length) return;
   void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
@@ -231,7 +239,7 @@ chrome.commands.onCommand.addListener((command) => {
       if (error) return;
       secret.useCount = uses;
     }
-    await chrome.tabs.sendMessage(tab.id, { type: "PX_FILL", origin, username: secret.username, secret: secret.secret });
+    await chrome.tabs.sendMessage(tab.id, { type: "PX_FILL", origin, username: secret.username, secret: secret.secret }, { frameId: 0 });
     if (secret.source === "capsule" && secret.maxUses && (secret.useCount ?? 0) >= secret.maxUses) {
       secret.secret = "";
       credentials = credentials.filter((item) => item !== secret);

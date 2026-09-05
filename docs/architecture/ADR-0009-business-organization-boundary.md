@@ -34,9 +34,41 @@ contract.
 - `auditor` reads authorized administrative and audit records without mutation.
 
 Assignments are explicit, tenant-bound, revocable and may carry tenant,
-department or team scope. Phase 5 initially exposes whole-tenant management in the
-UI; scoped assignments are persisted now so later enforcement can be introduced
-without changing the data model.
+department or team scope. Database policies resolve department descendants and
+team membership before every scoped mutation. The UI exposes only the assignments
+and targets the current administrator can use, but PostgreSQL remains the
+authorization boundary for direct API clients.
+
+## Invitation boundary
+
+Organization invitations store only the SHA-256 hashes of the verified recipient
+email and random 256-bit link token. The raw token stays in the URL fragment. The
+acceptance function checks the authenticated identity, verified email hash, token,
+status and expiry under a row lock before making the token unusable. It provisions
+directory membership only. It cannot add a workspace membership or issue a key
+envelope; encrypted vault access requires the separate Phase 2 invitation ceremony.
+
+Bulk CSV onboarding is parsed locally and is capped at 200 rows. Passkey-X returns
+the individual one-time links to the administrator for controlled delivery. It
+does not claim email delivery until branded SMTP and delivery monitoring are
+configured.
+
+## Policy and device boundary
+
+Effective policy resolution is deterministic: a team policy overrides its
+department policy, and a department policy overrides the tenant default. Device
+posture reports have an explicit source and verification status. A self-report can
+provide readiness information but cannot satisfy a strict approved-device policy.
+Only non-expired, verified and compliant MDM, IdP or attestation evidence can do
+so. This checkpoint does not globally block vault entry; that requires an
+independently reviewed device-bound session claim across every client.
+
+## Audit export boundary
+
+Tenant owners, tenant administrators and tenant-scoped security/auditor roles may
+export at most 1,000 ordered, hash-chained audit events per request. This is an
+evidence-download foundation, not automatic SIEM delivery, a retention guarantee
+or a legal hold.
 
 ## Lifecycle invariant
 
@@ -51,4 +83,3 @@ key material.
 Office controls require an active, trialing or past-due Stripe Business entitlement,
 or an explicit manual Business entitlement for controlled development. Browser
 state and redirect parameters never activate the feature.
-

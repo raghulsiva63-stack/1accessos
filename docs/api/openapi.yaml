@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Passkey-X API
-  version: 0.3.0
-  description: Ciphertext-only API contract for Passkey-X by Vlightsoft. Plaintext vault secrets are prohibited.
+  version: 0.4.0
+  description: Ciphertext-only vault and privacy-minimized SaaS metadata API contract for Passkey-X by Vlightsoft. Plaintext vault and connector secrets are prohibited.
 servers:
   - url: https://egqgzkirazabocqwdlfp.supabase.co/functions/v1/v1
     description: Development API
@@ -22,6 +22,79 @@ paths:
                 required: [status]
                 properties:
                   status: { const: ok }
+  /connectors/catalog:
+    get:
+      operationId: listConnectorCatalog
+      description: Lists Phase 5 target manifests with minimum scopes and honest maturity labels. A catalog row is not proof of a working production adapter.
+      responses:
+        '200':
+          description: Published connector contracts
+        '401': { $ref: '#/components/responses/Error' }
+  /connectors:
+    get:
+      operationId: listTenantConnectors
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Tenant connector health, granted scopes, and token-lifecycle metadata; credential references are excluded.
+        '403': { $ref: '#/components/responses/Error' }
+  /connectors/{connector_id}/reconcile:
+    parameters:
+      - name: connector_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: reconcileConnector
+      description: Requires a production-verified adapter and configured server runtime. Manifest-only connectors are rejected.
+      responses:
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /saas/dashboard:
+    get:
+      operationId: getSaasDashboard
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Privacy-minimized application, account, connector, recommendation, and savings aggregates.
+        '403': { $ref: '#/components/responses/Error' }
+  /saas/applications:
+    get:
+      operationId: listSaasApplications
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: SaaS and AI inventory without page, form, vault, credential, or raw-prompt content.
+        '403': { $ref: '#/components/responses/Error' }
+  /saas/recommendations:
+    get:
+      operationId: listSaasRecommendations
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Proposal-first license, renewal, ownership, drift, duplicate-tool, and budget findings.
+        '403': { $ref: '#/components/responses/Error' }
+  /saas/recommendations/refresh:
+    post:
+      operationId: refreshSaasRecommendations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant_id]
+              properties:
+                tenant_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Deterministic proposals refreshed; no connector mutation is executed.
+        '403': { $ref: '#/components/responses/Error' }
   /workspaces:
     get:
       operationId: listWorkspaces
@@ -271,6 +344,11 @@ components:
       scheme: bearer
       bearerFormat: JWT-or-PAT
   parameters:
+    TenantId:
+      name: tenant_id
+      in: query
+      required: true
+      schema: { type: string, format: uuid }
     WorkspacePathId:
       name: workspace_id
       in: path

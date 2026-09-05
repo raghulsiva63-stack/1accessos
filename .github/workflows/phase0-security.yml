@@ -43,6 +43,10 @@ jobs:
         run: node scripts/check-phase5.mjs
       - name: Run commercial catalog, navigation, and phase traceability checks
         run: node scripts/check-phase6.mjs
+      - name: Verify authentication transport boundaries
+        run: node scripts/check-auth-communications.mjs
+      - name: Test SMS signature verification and replay rejection
+        run: npm run test:auth
       - name: Test ciphertext-only CLI
         working-directory: apps/cli
         run: npm test

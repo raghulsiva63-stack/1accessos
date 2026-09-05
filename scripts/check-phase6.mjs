@@ -26,8 +26,10 @@ assert.match(publicSite, /Choose Team for one workgroup\. Choose Business for an
 assert.match(publicSite, /paid checkout remains safely disabled/iu);
 assert.doesNotMatch(page, /const BILLING_PLANS/u);
 assert.match(scope, /not.*declaration.*Phase 6/isu);
-assert.match(traceability, /SaaS\/AI Manager[\s\S]*Not complete/u);
-assert.match(traceability, /PAM[\s\S]*Not started/u);
+assert.match(traceability, /SaaS\/AI Manager[\s\S]*Engineering control-plane checkpoint complete/u);
+assert.match(traceability, /Privileged access \+ agent\/machine identity[\s\S]*Not started as a release/u);
+assert.match(traceability, /Revised Engineering Phase Plan v2\.2/u);
+assert.match(traceability, /0 of 9/u);
 assert.doesNotMatch(`${migration}\n${catalogClient}\n${publicSite}`, /(?:sk|rk)_(?:live|test)_/u);
 
 console.log("Commercial catalog, public navigation, office-package guidance, safe billing boundary, and traceability checks passed.");

@@ -2,12 +2,12 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
+import type { Factor, Session } from "@supabase/supabase-js";
 import {
   Archive, Bot, Braces, BriefcaseBusiness, Check, ChevronRight, CircleGauge, Clock3,
   Copy, CreditCard, Database, Download, Eye, EyeOff, FileKey, FileText, Fingerprint,
   FolderKanban, Heart, History, IdCard, Inbox, KeyRound, Laptop, LockKeyhole, LogOut,
-  MoreHorizontal, Paperclip, Pencil, Play, Plus, Radio, RefreshCw, Search, Send,
+  MoreHorizontal, Paperclip, Pencil, Play, Plus, Radio, RefreshCw, Search, Send, Smartphone,
   Settings, Share2, ShieldAlert, ShieldCheck, Sparkles, Star, Trash2, Upload,
   UserPlus, UserRound, Users, Vault, WandSparkles, Wifi, X,
 } from "lucide-react";
@@ -16,13 +16,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OrganizationView } from "@/components/organization-view";
+import { SaasAiManager } from "@/components/saas-ai-manager";
 import { PublicSite } from "@/components/public-site";
 import {
   createDeviceKeyPair, createEncryptedExport, createRecoveryKey, deriveMasterKey,
   fromBase64Url, parseRecoveryKey, randomBytes, recoveryFile, recoveryVerifier, saveProtectedDeviceKey,
   toBase64Url, toPostgresBytea, unwrapKey, WEB_KDF_PROFILE, wrapKey,
 } from "@/lib/crypto/vault";
-import { isSupabaseConfigured, passkeysEnabled, supabase } from "@/lib/supabase/client";
+import { isSupabaseConfigured, passkeysEnabled, phoneMfaEnabled, supabase } from "@/lib/supabase/client";
 import {
   createVaultItem, deleteVaultItem, type ItemKind, listVaultItemHistory,
   listVaultItems, listWorkspaceVaults, restoreVaultItem, type VaultHistoryEntry,
@@ -45,6 +46,10 @@ import {
   loadPublicPlanCatalog, loadTenantEntitlement, openCustomerPortal, type BillingCurrency,
   type BillingInterval, type BillingPrice, type PublicCatalogPlan, type TenantEntitlement,
 } from "@/lib/billing/client";
+import {
+  acceptOrganizationInvitation, parseOrganizationInvitationLink,
+  type OrganizationInvitationLink,
+} from "@/lib/organization/phase5";
 
 type CryptoProfile = {
   identity_id: string;
@@ -57,7 +62,7 @@ type CryptoProfile = {
   recovery_verifier: string | null;
 };
 
-type View = "home" | "vault" | "workspaces" | "organization" | "missions" | "sharing" | "inbox" | "security" | "account-security" | "generator" | "automations" | "devices" | "billing" | "settings";
+type View = "home" | "vault" | "workspaces" | "organization" | "saas-ai" | "missions" | "sharing" | "inbox" | "security" | "account-security" | "generator" | "automations" | "devices" | "billing" | "settings";
 type VaultFilter = ItemKind | "all" | "favorites" | "archive" | "trash";
 type DeviceRow = { id: string; status: "pending" | "trusted" | "revoked"; created_at: string; last_seen_at: string | null; revoked_at: string | null };
 type Entitlement = TenantEntitlement;
@@ -83,6 +88,7 @@ const NAV: { id: View; label: string; icon: typeof Vault }[] = [
   { id: "vault", label: "Vault", icon: Vault },
   { id: "workspaces", label: "Workspaces", icon: Users },
   { id: "organization", label: "Organization", icon: BriefcaseBusiness },
+  { id: "saas-ai", label: "SaaS & AI", icon: Sparkles },
   { id: "missions", label: "Missions", icon: FolderKanban },
   { id: "sharing", label: "Sharing", icon: Share2 },
   { id: "inbox", label: "Access inbox", icon: Inbox },
@@ -99,7 +105,7 @@ const NAV_SECTIONS: { label: string; views: View[] }[] = [
   { label: "Workspace", views: ["home", "vault", "workspaces"] },
   { label: "Access", views: ["missions", "sharing", "inbox"] },
   { label: "Protect", views: ["security", "account-security", "generator", "devices"] },
-  { label: "Manage", views: ["organization", "automations", "billing", "settings"] },
+  { label: "Manage", views: ["organization", "saas-ai", "automations", "billing", "settings"] },
 ];
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -121,6 +127,10 @@ function customerError(reason: unknown, fallback: string) {
   if (detail.includes("weak_password") || detail.includes("password should be")) return "Choose a stronger login password with at least 12 characters.";
   if (detail.includes("signup_disabled") || detail.includes("signups not allowed")) return "New account registration is temporarily unavailable.";
   if (detail.includes("rate") || detail.includes("too many")) return "Too many attempts. Wait a moment and try again.";
+  if (detail.includes("mfa_phone_enroll_not_enabled") || detail.includes("phone enroll") || detail.includes("sms provider")) return "SMS verification is not active for this environment yet.";
+  if (detail.includes("invalid phone") || detail.includes("phone format")) return "Enter a mobile number in international format, such as +14155550123.";
+  if (detail.includes("factor") && detail.includes("already")) return "This mobile verification method is already enrolled.";
+  if (detail.includes("challenge") || detail.includes("invalid otp") || detail.includes("otp expired")) return "That security code is invalid or expired. Request a new code.";
   if (detail.includes("notallowederror") || detail.includes("cancel") || detail.includes("webauthn")) return "Passkey verification was cancelled or could not be completed.";
   if (detail.includes("passkey") && (detail.includes("disabled") || detail.includes("not enabled"))) return "Passkey sign-in is temporarily unavailable. Use your login password.";
   if (detail.includes("billing_not_configured")) return "Secure billing is not active yet. Your current plan is unchanged.";
@@ -135,6 +145,7 @@ export default function Home() {
   const [profile, setProfile] = useState<CryptoProfile | null>(null);
   const [rootKey, setRootKey] = useState<Uint8Array | null>(null);
   const [accountRecovery, setAccountRecovery] = useState(false);
+  const [mfaState, setMfaState] = useState<"checking" | "required" | "satisfied">("checking");
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError] = useState("");
 
@@ -142,25 +153,90 @@ export default function Home() {
     if (!supabase) return;
     let active = true;
     supabase.auth.getSession().then(({ data }) => { if (active) { setSession(data.session); setLoading(false); } });
-    const { data } = supabase.auth.onAuthStateChange((event, next) => { setSession(next); setProfile(null); setError(""); if (event === "PASSWORD_RECOVERY") setAccountRecovery(true); if (!next) { setAccountRecovery(false); setRootKey((current) => { current?.fill(0); return null; }); } });
+    const { data } = supabase.auth.onAuthStateChange((event, next) => { setSession(next); setMfaState("checking"); setProfile(null); setError(""); if (event === "PASSWORD_RECOVERY") setAccountRecovery(true); if (!next) { setAccountRecovery(false); setRootKey((current) => { current?.fill(0); return null; }); } });
     return () => { active = false; data.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
     if (!supabase || !session) return;
     let active = true;
-    supabase.from("account_crypto_profiles").select("identity_id,salt,kdf_parameters,master_nonce,master_wrapped_root,recovery_nonce,recovery_wrapped_root,recovery_verifier").maybeSingle().then(({ data, error: profileError }) => { if (!active) return; if (profileError) setError(customerError(profileError, "Your secure vault profile could not be loaded. Try signing in again.")); setProfile(data as CryptoProfile | null); setLoading(false); });
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data, error: mfaError }) => {
+      if (!active) return;
+      if (mfaError) { setError(customerError(mfaError, "Your account security level could not be verified. Sign in again.")); return; }
+      setMfaState(data.nextLevel === "aal2" && data.currentLevel !== "aal2" ? "required" : "satisfied");
+    });
     return () => { active = false; };
   }, [session]);
+
+  useEffect(() => {
+    if (!supabase || !session || mfaState !== "satisfied") return;
+    let active = true;
+    supabase.from("account_crypto_profiles").select("identity_id,salt,kdf_parameters,master_nonce,master_wrapped_root,recovery_nonce,recovery_wrapped_root,recovery_verifier").maybeSingle().then(({ data, error: profileError }) => { if (!active) return; if (profileError) setError(customerError(profileError, "Your secure vault profile could not be loaded. Try signing in again.")); setProfile(data as CryptoProfile | null); setLoading(false); });
+    return () => { active = false; };
+  }, [session, mfaState]);
 
   if (loading) return <main className="center-screen"><div className="loading-ring" aria-label="Loading Passkey-X" /></main>;
   if (!isSupabaseConfigured) return <ConfigurationNotice />;
   if (accountRecovery && session) return <AccountPasswordReset email={session.user.email ?? "your account"} onComplete={() => { setAccountRecovery(false); void supabase?.auth.signOut(); }} />;
-  if (!session) return <AuthScreen />;
   if (error) return <FatalNotice message={error} />;
+  if (session && mfaState === "checking") return <main className="center-screen"><div className="loading-ring" aria-label="Checking account security" /></main>;
+  if (session && mfaState === "required") return <MfaChallenge onComplete={() => setMfaState("satisfied")} />;
+  if (!session) return <AuthScreen />;
   if (!profile) return <VaultSetup email={session.user.email ?? "your account"} onComplete={setProfile} />;
   if (!rootKey) return <UnlockScreen profile={profile} email={session.user.email ?? ""} onUnlock={setRootKey} onProfileChange={setProfile} />;
   return <VaultShell email={session.user.email ?? ""} profile={profile} rootKey={rootKey} onLock={() => { rootKey.fill(0); setRootKey(null); }} />;
+}
+
+function MfaChallenge({ onComplete }: { onComplete: () => void }) {
+  const [factors, setFactors] = useState<Factor<"phone", "verified">[]>([]);
+  const [factorId, setFactorId] = useState("");
+  const [challengeId, setChallengeId] = useState("");
+  const [code, setCode] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    supabase!.auth.mfa.listFactors().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setMessage(customerError(error, "Your verification methods could not be loaded."));
+      else {
+        setFactors(data.phone);
+        setFactorId(data.phone[0]?.id ?? "");
+      }
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, []);
+
+  async function sendCode() {
+    if (!factorId) { setMessage("No verified mobile factor is available. Contact Passkey-X support."); return; }
+    setBusy(true); setMessage(""); setCode("");
+    try {
+      const { data, error } = await supabase!.auth.mfa.challenge({ factorId, channel: "sms" });
+      if (error) throw error;
+      setChallengeId(data.id);
+      setMessage("A one-time security code was sent to your verified mobile number.");
+    } catch (reason) {
+      setMessage(customerError(reason, "The security code could not be sent. Try again shortly."));
+    } finally { setBusy(false); }
+  }
+
+  async function verify(event: React.FormEvent) {
+    event.preventDefault();
+    if (!challengeId) { setMessage("Send a security code first."); return; }
+    setBusy(true); setMessage("");
+    try {
+      const { error } = await supabase!.auth.mfa.verify({ factorId, challengeId, code: code.trim() });
+      if (error) throw error;
+      onComplete();
+    } catch (reason) {
+      setMessage(customerError(reason, "That security code is invalid or expired. Request a new code."));
+    } finally { setBusy(false); }
+  }
+
+  return <main className="center-screen setup-bg"><Card className="auth-card"><CardHeader><Brand /><div className="step-pill"><Smartphone /> Two-step verification</div><CardTitle>Verify it’s you</CardTitle><CardDescription>Complete account sign-in with a code sent to your verified mobile number. Your vault remains separately encrypted.</CardDescription></CardHeader><CardContent>{loading ? <div className="loading-ring" /> : <form className="form-stack" onSubmit={verify}>{factors.length > 1 && <div><Label htmlFor="mfa-factor">Mobile factor</Label><select id="mfa-factor" value={factorId} onChange={(event) => { setFactorId(event.target.value); setChallengeId(""); }}>{factors.map((factor, index) => <option key={factor.id} value={factor.id}>{factor.friendly_name ?? `Mobile ${index + 1}`}</option>)}</select></div>}<Button type="button" variant="outline" disabled={busy || !factorId} onClick={() => void sendCode()}><Send /> {challengeId ? "Send a new code" : "Send security code"}</Button>{challengeId && <div><Label htmlFor="mfa-code">Security code</Label><Input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" minLength={6} maxLength={10} pattern="[0-9]{6,10}" required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/gu, ""))} /></div>}{message && <p className="form-message neutral-message" role="status">{message}</p>}{challengeId && <Button size="lg" disabled={busy || code.length < 6}>{busy ? "Verifying…" : "Verify and continue"}</Button>}<Button type="button" variant="ghost" disabled={busy} onClick={() => void supabase?.auth.signOut()}>Use another account</Button></form>}<div className="privacy-note"><ShieldCheck /><span>SMS verifies the account session only. It cannot reset the vault password, decrypt vault data, or replace the recovery key.</span></div></CardContent></Card></main>;
 }
 
 function ConfigurationNotice() {
@@ -219,7 +295,9 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
   const [revealed, setRevealed] = useState(false);
   const [history, setHistory] = useState<VaultHistoryEntry[] | null>(null);
   const [pendingLink, setPendingLink] = useState<InviteLink | null>(() => typeof window === "undefined" ? null : parseCollaborationLink(window.location.hash));
+  const [pendingOrganizationInvite, setPendingOrganizationInvite] = useState<OrganizationInvitationLink | null>(() => typeof window === "undefined" ? null : parseOrganizationInvitationLink(window.location.hash));
   const [accepting, setAccepting] = useState(false);
+  const [notice, setNotice] = useState("");
   const [entitlement, setEntitlement] = useState<Entitlement>(FREE_ENTITLEMENT);
   const initials = useMemo(() => email.slice(0, 2).toUpperCase(), [email]);
 
@@ -270,12 +348,20 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
   }
 
   async function acceptPendingLink() {
-    if (!pendingLink) return;
+    if (!pendingLink && !pendingOrganizationInvite) return;
     setAccepting(true); setError("");
     try {
-      const workspaceId = pendingLink.kind === "invite"
-        ? await acceptWorkspaceInvite(pendingLink, rootKey)
-        : (await acceptAccessCapsule(pendingLink, rootKey), undefined);
+      if (pendingOrganizationInvite) {
+        await acceptOrganizationInvitation(pendingOrganizationInvite);
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+        setPendingOrganizationInvite(null);
+        setNotice("Organization membership accepted. Vault access arrives separately through an encrypted workspace invitation.");
+        setView("home");
+        return;
+      }
+      const workspaceId = pendingLink!.kind === "invite"
+        ? await acceptWorkspaceInvite(pendingLink!, rootKey)
+        : (await acceptAccessCapsule(pendingLink!, rootKey), undefined);
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       setPendingLink(null);
       if (workspaceId) { await reloadWorkspaces(workspaceId); setView("workspaces"); }
@@ -292,19 +378,21 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
   async function toggle(item: VaultItem, key: "favorite" | "archived") { if (!vault) return; await updateVaultItem(vault, item, { ...item.payload, [key]: !item.payload[key], updatedAt: new Date().toISOString() }); await refresh(vault); }
   async function showHistory(item: VaultItem) { if (vault) setHistory(await listVaultItemHistory(vault, item)); }
   function openVault(filterValue: VaultFilter = "all") { setFilter(filterValue); setView("vault"); setSelected(null); }
-  function lockVault() { workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); onLock(); }
-  async function signOut() { workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); await supabase!.auth.signOut(); }
+  function lockVault() { workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); onLock(); }
+  async function signOut() { workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); await supabase!.auth.signOut(); }
   const planLabel = entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1);
   return <main className="vault-app">
     <aside className="vault-sidebar"><Brand /><nav>{NAV_SECTIONS.map((section) => <div className="nav-section" key={section.label}><span className="nav-section-label">{section.label}</span>{section.views.map((viewId) => { const entry = NAV.find((candidate) => candidate.id === viewId)!; const Icon = entry.icon; return <button key={entry.id} className={`nav-item ${view === entry.id ? "active" : ""}`} onClick={() => { setView(entry.id); setSelected(null); }}><Icon /> {entry.label}{entry.id === "vault" && <span>{items.length}</span>}</button>; })}</div>)}</nav><div className="plan-chip"><Sparkles /><div><strong>{planLabel}</strong><span>{entitlement.ai_credits_remaining} private AI credits</span></div></div><div className="sidebar-account"><div className="avatar">{initials}</div><div><strong>{email.split("@")[0]}</strong><span>{vault?.name ?? "Opening workspace"}</span></div><MoreHorizontal /></div></aside>
     <section className="vault-content"><header><div><p className="eyebrow">Passkey-X / {vault?.suite ?? "Personal"}</p><h1>{view === "home" ? "Good to see you" : NAV.find((entry) => entry.id === view)?.label}</h1></div><div className="header-actions">{workspaces.length > 0 && <select className="workspace-switcher" aria-label="Current workspace" value={vault?.workspaceId ?? ""} onChange={(event) => void switchWorkspace(event.target.value)}>{workspaces.map((entry) => <option key={entry.workspaceId} value={entry.workspaceId}>{entry.name}</option>)}</select>}<Button variant="outline" onClick={lockVault}><LockKeyhole /> Lock</Button><Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void signOut()}><LogOut /></Button></div></header>
       {error && <div className="vault-error" role="alert">{error}<button aria-label="Dismiss" onClick={() => setError("")}><X /></button></div>}
-      {pendingLink && <div className="secure-link-banner"><span className="feature-icon">{pendingLink.kind === "invite" ? <UserPlus /> : <Share2 />}</span><div><strong>{pendingLink.kind === "invite" ? "Workspace invitation" : "Access Capsule"}</strong><p>This link is addressed to your verified email. Its 256-bit secret stayed in the URL fragment and was not sent to the server.</p></div><Button disabled={accepting} onClick={() => void acceptPendingLink()}>{accepting ? "Accepting…" : "Review and accept"}</Button></div>}
+      {notice && <div className="vault-notice" role="status">{notice}<button aria-label="Dismiss" onClick={() => setNotice("")}><X /></button></div>}
+      {(pendingLink || pendingOrganizationInvite) && <div className="secure-link-banner"><span className="feature-icon">{pendingLink?.kind === "capsule" ? <Share2 /> : <UserPlus />}</span><div><strong>{pendingOrganizationInvite ? "Organization invitation" : pendingLink?.kind === "invite" ? "Workspace invitation" : "Access Capsule"}</strong><p>{pendingOrganizationInvite ? "This one-time link adds your verified account to the organization directory. It does not grant vault access or deliver encryption keys." : "This link is addressed to your verified email. Its 256-bit secret stayed in the URL fragment and was not sent to the server."}</p></div><Button disabled={accepting} onClick={() => void acceptPendingLink()}>{accepting ? "Accepting…" : "Review and accept"}</Button></div>}
       {loading ? <div className="vault-loading"><div className="loading-ring" /><p>Decrypting your workspace on this device…</p></div> : <>
         {view === "home" && <Dashboard items={items} trash={trash} health={health} entitlement={entitlement} onOpenVault={openVault} onNew={() => { setEditor("new"); setView("vault"); }} />}
         {view === "vault" && vault && <VaultView vault={vault} items={visibleItems} allItems={items} trash={trash} filter={filter} query={query} selected={selected} revealed={revealed} onQuery={setQuery} onFilter={setFilter} onNew={() => setEditor("new")} onSelect={(item) => { setSelected(item); setRevealed(false); setHistory(null); }} onReveal={() => setRevealed(!revealed)} onClose={() => setSelected(null)} onEdit={(item) => setEditor(item)} onDelete={removeItem} onRestore={restoreItem} onToggle={toggle} onHistory={showHistory} />}
         {view === "workspaces" && vault && <WorkspacesView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} workspaces={workspaces} vault={vault} onSelect={switchWorkspace} onReload={reloadWorkspaces} />}
         {view === "organization" && vault && <OrganizationView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
+        {view === "saas-ai" && vault && <SaasAiManager key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
         {view === "missions" && vault && <MissionsView key={vault.workspaceId} vault={vault} items={items} />}
         {view === "sharing" && vault && <SharingView key={vault.workspaceId} vault={vault} items={items} />}
         {view === "inbox" && vault && <AccessInboxView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} vault={vault} items={items} />}
@@ -501,7 +589,91 @@ function AccountSecurityView() {
   async function register() { setBusy(true); setMessage(""); try { const { error } = await supabase!.auth.registerPasskey(); if (error) throw error; setMessage("Passkey registered. Your vault password remains separate."); await refresh(); } catch (reason) { setMessage(customerError(reason, "Passkey registration could not be completed. Try again.")); } finally { setBusy(false); } }
   async function rename(passkey: AccountPasskey) { const friendlyName = window.prompt("Passkey name", passkey.friendly_name ?? "My passkey")?.trim(); if (!friendlyName) return; setBusy(true); const { error } = await supabase!.auth.passkey.update({ passkeyId: passkey.id, friendlyName }); if (error) setMessage(customerError(error, "This passkey could not be renamed. Try again.")); else await refresh(); setBusy(false); }
   async function remove(passkey: AccountPasskey) { if (!window.confirm(`Remove ${passkey.friendly_name ?? "this passkey"}? It will no longer sign in to Passkey-X.`)) return; setBusy(true); const { error } = await supabase!.auth.passkey.delete({ passkeyId: passkey.id }); if (error) setMessage(customerError(error, "This passkey could not be removed. Try again.")); else { setMessage("Passkey removed."); await refresh(); } setBusy(false); }
-  return <div className="feature-page"><div className="feature-intro"><div><span className="status-pill"><Fingerprint /> Passwordless identity</span><h2>Passwordless account access</h2><p>Passkeys authenticate your Passkey-X account. They never replace or disclose the separate password that decrypts your vault.</p></div><Button disabled={!passkeysEnabled || busy} onClick={() => void register()}><Plus /> Add passkey</Button></div>{!passkeysEnabled && <Card className="passkey-readiness"><CardHeader><CardTitle>Passkeys are unavailable</CardTitle><CardDescription>Passwordless sign-in is not available in this environment. Continue using your login password; your encrypted vault is unaffected.</CardDescription></CardHeader></Card>}{passkeysEnabled && <Card><CardHeader><CardTitle>Your passkeys</CardTitle><CardDescription>Your public sign-in credential is stored securely. The private key remains on your authenticator and never leaves it.</CardDescription></CardHeader><CardContent>{loading ? <div className="loading-ring" /> : passkeys.length ? <div className="account-passkey-list">{passkeys.map((passkey) => <article key={passkey.id}><span className="device-icon"><Fingerprint /></span><div><strong>{passkey.friendly_name ?? "Passkey"}</strong><small>Added {new Date(passkey.created_at).toLocaleDateString()}{passkey.last_used_at ? ` · Last used ${new Date(passkey.last_used_at).toLocaleDateString()}` : ""}</small></div><Button variant="ghost" onClick={() => void rename(passkey)} disabled={busy}><Pencil /> Rename</Button><Button variant="outline" onClick={() => void remove(passkey)} disabled={busy}><Trash2 /> Remove</Button></article>)}</div> : <div className="small-empty"><Fingerprint /><strong>No passkeys registered</strong><span>Add one after signing in with your existing account method.</span></div>}</CardContent></Card>}{message && <p className="settings-message" role="status">{message}</p>}<div className="privacy-note"><ShieldCheck /><span>Passkey authentication establishes an account session only. Client-side Argon2id and AES-256-GCM vault encryption are unchanged.</span></div></div>;
+  return <div className="feature-page"><div className="feature-intro"><div><span className="status-pill"><Fingerprint /> Account protection</span><h2>Sign-in security</h2><p>Use phishing-resistant passkeys and optional mobile verification for your account. Neither method replaces or discloses the separate vault password.</p></div><Button disabled={!passkeysEnabled || busy} onClick={() => void register()}><Plus /> Add passkey</Button></div>{!passkeysEnabled && <Card className="passkey-readiness"><CardHeader><CardTitle>Passkeys are unavailable</CardTitle><CardDescription>Passwordless sign-in is not available in this environment. Continue using your login password; your encrypted vault is unaffected.</CardDescription></CardHeader></Card>}{passkeysEnabled && <Card><CardHeader><CardTitle>Your passkeys</CardTitle><CardDescription>Your public sign-in credential is stored securely. The private key remains on your authenticator and never leaves it.</CardDescription></CardHeader><CardContent>{loading ? <div className="loading-ring" /> : passkeys.length ? <div className="account-passkey-list">{passkeys.map((passkey) => <article key={passkey.id}><span className="device-icon"><Fingerprint /></span><div><strong>{passkey.friendly_name ?? "Passkey"}</strong><small>Added {new Date(passkey.created_at).toLocaleDateString()}{passkey.last_used_at ? ` · Last used ${new Date(passkey.last_used_at).toLocaleDateString()}` : ""}</small></div><Button variant="ghost" onClick={() => void rename(passkey)} disabled={busy}><Pencil /> Rename</Button><Button variant="outline" onClick={() => void remove(passkey)} disabled={busy}><Trash2 /> Remove</Button></article>)}</div> : <div className="small-empty"><Fingerprint /><strong>No passkeys registered</strong><span>Add one after signing in with your existing account method.</span></div>}</CardContent></Card>}<PhoneMfaCard />{message && <p className="settings-message" role="status">{message}</p>}<div className="privacy-note"><ShieldCheck /><span>Account authentication establishes a session only. Client-side Argon2id and AES-256-GCM vault encryption are unchanged.</span></div></div>;
+}
+
+function PhoneMfaCard() {
+  const [factors, setFactors] = useState<Factor<"phone", "verified">[]>([]);
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [pending, setPending] = useState<{ factorId: string; challengeId: string } | null>(null);
+  const [loading, setLoading] = useState(phoneMfaEnabled);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function refresh() {
+    if (!phoneMfaEnabled) return;
+    const { data, error } = await supabase!.auth.mfa.listFactors();
+    if (error) setMessage(customerError(error, "Mobile verification methods could not be loaded."));
+    else setFactors(data.phone);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    if (!phoneMfaEnabled) return;
+    let active = true;
+    supabase!.auth.mfa.listFactors().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setMessage(customerError(error, "Mobile verification methods could not be loaded."));
+      else setFactors(data.phone);
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, []);
+
+  async function enroll(event: React.FormEvent) {
+    event.preventDefault();
+    const normalized = phone.replace(/[\s()-]/gu, "");
+    if (!/^\+[1-9]\d{7,14}$/u.test(normalized)) { setMessage("Enter a mobile number in international format, such as +14155550123."); return; }
+    setBusy(true); setMessage(""); setCode("");
+    try {
+      const enrolled = await supabase!.auth.mfa.enroll({ factorType: "phone", phone: normalized, friendlyName: "Mobile" });
+      if (enrolled.error) throw enrolled.error;
+      const challenged = await supabase!.auth.mfa.challenge({ factorId: enrolled.data.id, channel: "sms" });
+      if (challenged.error) {
+        await supabase!.auth.mfa.unenroll({ factorId: enrolled.data.id });
+        throw challenged.error;
+      }
+      setPending({ factorId: enrolled.data.id, challengeId: challenged.data.id });
+      setMessage("A verification code was sent. Enter it to finish adding this mobile number.");
+    } catch (reason) {
+      setMessage(customerError(reason, "This mobile number could not be enrolled. Try again shortly."));
+    } finally { setBusy(false); }
+  }
+
+  async function verify(event: React.FormEvent) {
+    event.preventDefault();
+    if (!pending) return;
+    setBusy(true); setMessage("");
+    try {
+      const { error } = await supabase!.auth.mfa.verify({ factorId: pending.factorId, challengeId: pending.challengeId, code: code.trim() });
+      if (error) throw error;
+      setPending(null); setPhone(""); setCode(""); setMessage("Mobile two-step verification is now active.");
+      await refresh();
+    } catch (reason) {
+      setMessage(customerError(reason, "That verification code is invalid or expired. Start again for a new code."));
+    } finally { setBusy(false); }
+  }
+
+  async function cancelEnrollment() {
+    if (!pending) return;
+    setBusy(true);
+    await supabase!.auth.mfa.unenroll({ factorId: pending.factorId });
+    setPending(null); setCode(""); setMessage("Mobile enrollment cancelled."); setBusy(false);
+  }
+
+  async function remove(factor: Factor<"phone", "verified">) {
+    if (!window.confirm("Remove mobile two-step verification? Future sign-ins will no longer require codes from this number.")) return;
+    setBusy(true); setMessage("");
+    const { error } = await supabase!.auth.mfa.unenroll({ factorId: factor.id });
+    if (error) setMessage(customerError(error, "This mobile verification method could not be removed."));
+    else { setMessage("Mobile verification removed."); await refresh(); }
+    setBusy(false);
+  }
+
+  if (!phoneMfaEnabled) return <Card className="passkey-readiness"><CardHeader><span className="feature-icon"><Smartphone /></span><CardTitle>Mobile verification is being prepared</CardTitle><CardDescription>Phone numbers remain optional. SMS enrollment will become available only after the signed Supabase-to-Sent delivery path is activated and tested.</CardDescription></CardHeader></Card>;
+
+  return <Card><CardHeader><span className="feature-icon"><Smartphone /></span><CardTitle>Mobile two-step verification</CardTitle><CardDescription>Add a mobile number after sign-in. It will be used for a second account-verification step, never as the only way to recover or decrypt the vault.</CardDescription></CardHeader><CardContent>{loading ? <div className="loading-ring" /> : <div className="phone-mfa-stack">{factors.length > 0 && <div className="account-passkey-list">{factors.map((factor, index) => <article key={factor.id}><span className="device-icon"><Smartphone /></span><div><strong>{factor.friendly_name ?? `Mobile ${index + 1}`}</strong><small>Verified {new Date(factor.updated_at).toLocaleDateString()}</small></div><Button variant="outline" disabled={busy} onClick={() => void remove(factor)}>Remove</Button></article>)}</div>}{!pending ? <form className="form-stack" onSubmit={enroll}><div><Label htmlFor="mfa-phone">Mobile number</Label><Input id="mfa-phone" type="tel" autoComplete="tel" placeholder="+14155550123" required value={phone} onChange={(event) => setPhone(event.target.value)} /><p className="field-hint">Use international E.164 format. The number is managed by Supabase Auth and is not stored in your encrypted vault.</p></div><Button disabled={busy}><Send /> {busy ? "Sending…" : factors.length ? "Add another mobile" : "Send verification code"}</Button></form> : <form className="form-stack" onSubmit={verify}><div><Label htmlFor="mfa-enroll-code">Verification code</Label><Input id="mfa-enroll-code" inputMode="numeric" autoComplete="one-time-code" minLength={6} maxLength={10} pattern="[0-9]{6,10}" required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/gu, ""))} /></div><div className="inline-actions"><Button disabled={busy || code.length < 6}>{busy ? "Verifying…" : "Verify mobile"}</Button><Button type="button" variant="ghost" disabled={busy} onClick={() => void cancelEnrollment()}>Cancel</Button></div></form>}{message && <p className="form-message neutral-message" role="status">{message}</p>}</div>}</CardContent></Card>;
 }
 
 function DevicesView({ identityId }: { identityId: string }) {

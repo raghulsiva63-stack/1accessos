@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24.7.0" },
+  "engines": {
+    "node": ">=24.7.0"
+  },
   "scripts": {
     "test": "node --test packages/*/test/*.test.mjs",
     "test:crypto": "node --test packages/crypto/test/*.test.mjs",
@@ -17,7 +19,10 @@
     "check:phase4": "node scripts/check-phase4.mjs",
     "check:phase5": "node scripts/check-phase5.mjs",
     "check:phase6": "node scripts/check-phase6.mjs",
-    "check": "node --check packages/crypto/src/index.mjs && node scripts/check-phase0.mjs && node scripts/check-phase1.mjs && node scripts/check-phase2.mjs && node scripts/check-phase3.mjs && node scripts/check-phase4.mjs && node scripts/check-phase5.mjs && node scripts/check-phase6.mjs && npm test && npm run test:cli"
+    "check": "node --check packages/crypto/src/index.mjs && node scripts/check-phase0.mjs && node scripts/check-phase1.mjs && node scripts/check-phase2.mjs && node scripts/check-phase3.mjs && node scripts/check-phase4.mjs && node scripts/check-phase5.mjs && node scripts/check-phase6.mjs && node scripts/check-auth-communications.mjs && npm test && npm run test:cli && npm run test:auth",
+    "test:auth": "node --test tests/auth/*.test.mjs"
   },
-  "workspaces": ["packages/*"]
+  "workspaces": [
+    "packages/*"
+  ]
 }

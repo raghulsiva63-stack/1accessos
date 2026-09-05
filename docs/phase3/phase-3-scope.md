@@ -1,3 +1,5 @@
+> Historical internal checkpoint label. For current phase scope and acceptance use ADR-0010 and `docs/phase6/requirements-traceability.md`; this file does not establish revised-phase completion.
+
 # Phase 3 scope
 
 Phase 3 turns Passkey-X into a passwordless, policy-controlled platform for

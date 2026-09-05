@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "test": "npm run build && node --test tests/vault-crypto.test.mjs",
-    "lint": "eslint app lib components/ui/button.tsx components/ui/card.tsx components/ui/input.tsx components/ui/label.tsx tests/vault-crypto.test.mjs"
+    "lint": "eslint app lib components tests/vault-crypto.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.115.0",

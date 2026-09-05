@@ -10,14 +10,17 @@
 # Keep non-production deploys disabled so preview URLs can never enrol credentials.
 [context.production.environment]
   NEXT_PUBLIC_PASSKEYS_ENABLED = "true"
+  NEXT_PUBLIC_PHONE_MFA_ENABLED = "false"
   NEXT_PUBLIC_BILLING_ENABLED = "false"
 
 [context.deploy-preview.environment]
   NEXT_PUBLIC_PASSKEYS_ENABLED = "false"
+  NEXT_PUBLIC_PHONE_MFA_ENABLED = "false"
   NEXT_PUBLIC_BILLING_ENABLED = "false"
 
 [context.branch-deploy.environment]
   NEXT_PUBLIC_PASSKEYS_ENABLED = "false"
+  NEXT_PUBLIC_PHONE_MFA_ENABLED = "false"
   NEXT_PUBLIC_BILLING_ENABLED = "false"
 
 [[headers]]
