@@ -38,7 +38,7 @@ gates recorded in `docs/phase4/phase-4-exit-gates.md`.
   launch jurisdictions approved by qualified counsel.
 
 The billing provider, Stripe test account, plan set, INR/USD currency scope, and
-the three paid-tier test Product shells are confirmed. Exact Price amounts, tax
+the four paid-tier test Product shells are confirmed. Exact Price amounts, tax
 registrations, production infrastructure, and external assurance suppliers
 remain owner decisions.
 

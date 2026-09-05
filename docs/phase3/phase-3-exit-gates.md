@@ -27,7 +27,7 @@ so a deployed UI is never mistaken for a completed security release.
 
 These items remain outside the completed passkey checkpoint:
 
-- [ ] Organization groups, policy inheritance, and administrator controls.
+- [x] Organization groups, policy-inheritance data, and tenant-scoped administrator controls (Phase 5 foundation).
 - [ ] SAML SSO and directory lifecycle integration for paid environments.
 - [ ] Public-key machine, workload, and agent identities.
 - [ ] Approval-bound secret leases, rotation, rollback, and attribution.

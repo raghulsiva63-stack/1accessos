@@ -1,7 +1,7 @@
 import Stripe from "npm:stripe@22.4.0";
 import { createClient } from "npm:@supabase/supabase-js@2.115.0";
 
-export type BillingPlan = "personal" | "family" | "team";
+export type BillingPlan = "personal" | "family" | "team" | "business";
 export type BillingInterval = "month" | "year";
 export type BillingCurrency = "inr" | "usd";
 
@@ -12,7 +12,7 @@ export type PriceChoice = {
   priceId: string;
 };
 
-const PLANS: BillingPlan[] = ["personal", "family", "team"];
+const PLANS: BillingPlan[] = ["personal", "family", "team", "business"];
 const INTERVALS: BillingInterval[] = ["month", "year"];
 const CURRENCIES: BillingCurrency[] = ["inr", "usd"];
 

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OrganizationView } from "@/components/organization-view";
 import {
   createDeviceKeyPair, createEncryptedExport, createRecoveryKey, deriveMasterKey,
   fromBase64Url, parseRecoveryKey, randomBytes, recoveryFile, recoveryVerifier, saveProtectedDeviceKey,
@@ -55,7 +56,7 @@ type CryptoProfile = {
   recovery_verifier: string | null;
 };
 
-type View = "home" | "vault" | "workspaces" | "missions" | "sharing" | "inbox" | "security" | "account-security" | "generator" | "automations" | "devices" | "billing" | "settings";
+type View = "home" | "vault" | "workspaces" | "organization" | "missions" | "sharing" | "inbox" | "security" | "account-security" | "generator" | "automations" | "devices" | "billing" | "settings";
 type VaultFilter = ItemKind | "all" | "favorites" | "archive" | "trash";
 type DeviceRow = { id: string; status: "pending" | "trusted" | "revoked"; created_at: string; last_seen_at: string | null; revoked_at: string | null };
 type Entitlement = TenantEntitlement;
@@ -80,6 +81,7 @@ const NAV: { id: View; label: string; icon: typeof Vault }[] = [
   { id: "home", label: "Home", icon: CircleGauge },
   { id: "vault", label: "Vault", icon: Vault },
   { id: "workspaces", label: "Workspaces", icon: Users },
+  { id: "organization", label: "Organization", icon: BriefcaseBusiness },
   { id: "missions", label: "Missions", icon: FolderKanban },
   { id: "sharing", label: "Sharing", icon: Share2 },
   { id: "inbox", label: "Access inbox", icon: Inbox },
@@ -294,6 +296,7 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
         {view === "home" && <Dashboard items={items} trash={trash} health={health} entitlement={entitlement} onOpenVault={openVault} onNew={() => { setEditor("new"); setView("vault"); }} />}
         {view === "vault" && vault && <VaultView vault={vault} items={visibleItems} allItems={items} trash={trash} filter={filter} query={query} selected={selected} revealed={revealed} onQuery={setQuery} onFilter={setFilter} onNew={() => setEditor("new")} onSelect={(item) => { setSelected(item); setRevealed(false); setHistory(null); }} onReveal={() => setRevealed(!revealed)} onClose={() => setSelected(null)} onEdit={(item) => setEditor(item)} onDelete={removeItem} onRestore={restoreItem} onToggle={toggle} onHistory={showHistory} />}
         {view === "workspaces" && vault && <WorkspacesView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} workspaces={workspaces} vault={vault} onSelect={switchWorkspace} onReload={reloadWorkspaces} />}
+        {view === "organization" && vault && <OrganizationView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
         {view === "missions" && vault && <MissionsView key={vault.workspaceId} vault={vault} items={items} />}
         {view === "sharing" && vault && <SharingView key={vault.workspaceId} vault={vault} items={items} />}
         {view === "inbox" && vault && <AccessInboxView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} vault={vault} items={items} />}
@@ -373,10 +376,10 @@ function WorkspacesView({ identityId, rootKey, workspaces, vault, onSelect, onRe
 
   const canManage = vault.role === "owner" || vault.role === "manager";
   return <div className="feature-page phase2-page">
-    <div className="feature-intro"><div><span className="status-pill"><Users /> Encrypted collaboration</span><h2>One account, isolated workspaces</h2><p>Family, client and team workspace names and keys are encrypted in this browser. Invitations release a wrapped key only after the exact email is verified.</p></div><div className="credit-meter"><span>Workspaces</span><strong>{workspaces.length}</strong><small>active</small></div></div>
+    <div className="feature-intro"><div><span className="status-pill"><Users /> Encrypted collaboration</span><h2>One account, isolated workspaces</h2><p>Family, client, team and Business workspace names and keys are encrypted in this browser. Invitations release a wrapped key only after the exact email is verified.</p></div><div className="credit-meter"><span>Workspaces</span><strong>{workspaces.length}</strong><small>active</small></div></div>
     <div className="workspace-grid">
       <Card><CardHeader><CardTitle>Your workspaces</CardTitle><CardDescription>Switching changes which client-side key is active.</CardDescription></CardHeader><CardContent><div className="workspace-list">{workspaces.map((entry) => <button key={entry.workspaceId} className={entry.workspaceId === vault.workspaceId ? "active" : ""} onClick={() => void onSelect(entry.workspaceId)}><span className="feature-icon">{entry.suite === "professional" ? <BriefcaseBusiness /> : <Users />}</span><span><strong>{entry.name}</strong><small>{entry.suite} · {entry.role}</small></span>{entry.keyRotationRequired ? <ShieldAlert /> : <ChevronRight />}</button>)}</div></CardContent></Card>
-      <Card><CardHeader><CardTitle>Create a workspace</CardTitle><CardDescription>For a household, client engagement or small team.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={createWorkspace}><div><Label htmlFor="workspace-name">Encrypted name</Label><Input id="workspace-name" required minLength={2} value={name} onChange={(event) => setName(event.target.value)} placeholder="Client Aurora" /></div><div><Label htmlFor="workspace-suite">Suite</Label><select id="workspace-suite" value={suite} onChange={(event) => setSuite(event.target.value as WorkspaceSuite)}><option value="family">Family</option><option value="professional">Professional / client</option><option value="team">Team</option></select></div><Button disabled={busy}>{busy ? "Creating…" : "Create encrypted workspace"}</Button></form></CardContent></Card>
+      <Card><CardHeader><CardTitle>Create a workspace</CardTitle><CardDescription>For a household, client engagement, team or multi-department office.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={createWorkspace}><div><Label htmlFor="workspace-name">Encrypted name</Label><Input id="workspace-name" required minLength={2} value={name} onChange={(event) => setName(event.target.value)} placeholder="Client Aurora" /></div><div><Label htmlFor="workspace-suite">Suite</Label><select id="workspace-suite" value={suite} onChange={(event) => setSuite(event.target.value as WorkspaceSuite)}><option value="family">Family</option><option value="professional">Professional / client</option><option value="team">Team · one workgroup</option><option value="business">Business · departments and teams</option></select></div><Button disabled={busy}>{busy ? "Creating…" : "Create encrypted workspace"}</Button></form></CardContent></Card>
     </div>
     {vault.keyRotationRequired && <div className="rotation-warning"><ShieldAlert /><div><strong>Workspace key rotation required</strong><p>A member was revoked. Their server access and envelopes are disabled. Because a device may have retained a previously decrypted value, move sensitive credentials into a freshly keyed workspace before future use.</p></div></div>}
     {vault.suite !== "personal" && <div className="workspace-grid">
@@ -506,6 +509,7 @@ const BILLING_PLANS: { code: Entitlement["plan_code"]; name: string; description
   { code: "personal", name: "Personal", description: "More room for an individual digital life.", features: ["1 member", "5 workspaces", "Unlimited devices", "200 private AI credits"] },
   { code: "family", name: "Family", description: "Private sharing for a household.", features: ["Up to 6 members", "20 workspaces", "Unlimited devices", "500 private AI credits"] },
   { code: "team", name: "Team", description: "Workspace controls for growing teams.", features: ["Up to 50 members", "100 workspaces", "Unlimited devices", "2,000 private AI credits"] },
+  { code: "business", name: "Business", description: "Multi-department controls for an office.", features: ["Up to 500 members", "500 workspaces", "Departments, teams and groups", "Delegated admins and policy inheritance", "Employee lifecycle controls"] },
 ];
 
 function formatPrice(price: BillingPrice | undefined) {
@@ -539,7 +543,7 @@ function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault;
     return () => { active = false; };
   }, [canManage, vault.tenantId]);
 
-  async function checkout(plan: "personal" | "family" | "team") {
+  async function checkout(plan: "personal" | "family" | "team" | "business") {
     setBusy(plan); setMessage("");
     try { window.location.assign(await beginCheckout(vault.tenantId, plan, interval, currency)); }
     catch (reason) { setMessage(customerError(reason, "Checkout could not be started. Your current plan is unchanged.")); setBusy(""); }
@@ -560,9 +564,9 @@ function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault;
 
   return <div className="feature-page billing-page"><div className="feature-intro"><div><span className="status-pill"><CreditCard /> SaaS workspace billing</span><h2>Choose the right protection for this workspace</h2><p>Checkout and subscription management are hosted by Stripe. Passkey-X receives billing status only—never card details or vault contents.</p></div><div className="billing-status"><small>Current plan</small><strong>{entitlement.plan_code}</strong><span>{entitlement.subscription_status.replaceAll("_", " ")}</span></div></div>
     <div className="billing-toolbar"><div className="billing-segment" role="group" aria-label="Billing currency"><button className={currency === "inr" ? "active" : ""} onClick={() => setCurrency("inr")}>INR</button><button className={currency === "usd" ? "active" : ""} onClick={() => setCurrency("usd")}>USD</button></div><div className="billing-segment" role="group" aria-label="Billing interval"><button className={interval === "month" ? "active" : ""} onClick={() => setInterval("month")}>Monthly</button><button className={interval === "year" ? "active" : ""} onClick={() => setInterval("year")}>Annual</button></div>{entitlement.source === "stripe" && <Button variant="outline" disabled={!canManage || busy !== ""} onClick={() => void portal()}><CreditCard /> {busy === "portal" ? "Opening…" : "Manage billing"}</Button>}<Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}><RefreshCw /> Refresh</Button></div>
-    {!billingEnabled && <div className="billing-notice"><ShieldCheck /><div><strong>Test billing is safely disabled</strong><p>The subscription code is ready, but Checkout stays unavailable until all twelve Stripe test Price IDs and the signed webhook secret are installed in Supabase.</p></div></div>}
+    {!billingEnabled && <div className="billing-notice"><ShieldCheck /><div><strong>Test billing is safely disabled</strong><p>The subscription code is ready, but Checkout stays unavailable until all sixteen Stripe test Price IDs and the signed webhook secret are installed in Supabase.</p></div></div>}
     {!canManage && <div className="billing-notice"><ShieldAlert /><div><strong>Workspace owner access required</strong><p>Members can see the verified plan. Only an owner can start Checkout or open the Customer Portal.</p></div></div>}
-    <div className="pricing-grid">{BILLING_PLANS.map((plan) => { const price = prices.find((entry) => entry.plan === plan.code && entry.currency === currency && entry.interval === interval); const current = entitlement.plan_code === plan.code; return <Card key={plan.code} className={`pricing-card ${current ? "current" : ""} ${plan.code === "family" ? "featured" : ""}`}><CardHeader>{plan.code === "family" && <span className="popular-pill">Popular</span>}<CardTitle>{plan.name}</CardTitle><CardDescription>{plan.description}</CardDescription></CardHeader><CardContent><div className="plan-price">{plan.code === "free" ? <><strong>{currency === "inr" ? "₹0" : "$0"}</strong><span>forever</span></> : <><strong>{formatPrice(price)}</strong><span>per {interval}</span></>}</div><ul>{plan.features.map((feature) => <li key={feature}><Check /> {feature}</li>)}</ul>{plan.code === "free" ? <Button variant="outline" disabled>{current ? "Current plan" : "Included"}</Button> : <Button disabled={!billingEnabled || !canManage || !price || busy !== "" || current} onClick={() => void checkout(plan.code as "personal" | "family" | "team")}>{current ? "Current plan" : busy === plan.code ? "Opening secure Checkout…" : `Choose ${plan.name}`}</Button>}</CardContent></Card>; })}</div>
+    <div className="pricing-grid">{BILLING_PLANS.map((plan) => { const price = prices.find((entry) => entry.plan === plan.code && entry.currency === currency && entry.interval === interval); const current = entitlement.plan_code === plan.code; return <Card key={plan.code} className={`pricing-card ${current ? "current" : ""} ${plan.code === "business" ? "featured" : ""}`}><CardHeader>{plan.code === "business" && <span className="popular-pill">For offices</span>}<CardTitle>{plan.name}</CardTitle><CardDescription>{plan.description}</CardDescription></CardHeader><CardContent><div className="plan-price">{plan.code === "free" ? <><strong>{currency === "inr" ? "₹0" : "$0"}</strong><span>forever</span></> : <><strong>{formatPrice(price)}</strong><span>per {interval}</span></>}</div><ul>{plan.features.map((feature) => <li key={feature}><Check /> {feature}</li>)}</ul>{plan.code === "free" ? <Button variant="outline" disabled>{current ? "Current plan" : "Included"}</Button> : <Button disabled={!billingEnabled || !canManage || !price || busy !== "" || current} onClick={() => void checkout(plan.code as "personal" | "family" | "team" | "business")}>{current ? "Current plan" : busy === plan.code ? "Opening secure Checkout…" : `Choose ${plan.name}`}</Button>}</CardContent></Card>; })}</div>
     {message && <p className="settings-message" role="status">{message}</p>}<div className="privacy-note"><ShieldCheck /><span>Plan access changes only after a verified Stripe webhook updates the tenant entitlement. Redirect query parameters cannot unlock paid features.</span></div><p className="billing-footnote">Taxes are not calculated or collected until Vlightsoft confirms the required registrations and explicitly enables Stripe Tax.</p>
   </div>;
 }

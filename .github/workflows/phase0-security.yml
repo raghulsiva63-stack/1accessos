@@ -39,6 +39,8 @@ jobs:
         run: node scripts/check-phase3.mjs
       - name: Run Phase 4 tenant billing and webhook checks
         run: node scripts/check-phase4.mjs
+      - name: Run Phase 5 Business organization and lifecycle checks
+        run: node scripts/check-phase5.mjs
       - name: Test ciphertext-only CLI
         working-directory: apps/cli
         run: npm test

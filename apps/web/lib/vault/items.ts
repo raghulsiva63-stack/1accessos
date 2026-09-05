@@ -51,7 +51,7 @@ export type WorkspaceVault = {
   keyVersion: number;
   key: Uint8Array;
   name: string;
-  suite: "personal" | "family" | "professional" | "team";
+  suite: "personal" | "family" | "professional" | "team" | "business";
   kind: "vault" | "project" | "client" | "shared";
   role: "owner" | "manager" | "editor" | "viewer";
   keyRotationRequired: boolean;

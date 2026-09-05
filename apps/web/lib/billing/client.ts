@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 
-export type PlanCode = "free" | "personal" | "family" | "team";
+export type PlanCode = "free" | "personal" | "family" | "team" | "business";
 export type SubscriptionStatus = "none" | "trialing" | "active" | "past_due" | "unpaid" | "canceled" | "incomplete" | "incomplete_expired" | "paused";
 export type BillingInterval = "month" | "year";
 export type BillingCurrency = "inr" | "usd";

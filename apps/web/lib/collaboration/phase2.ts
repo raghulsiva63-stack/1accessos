@@ -12,7 +12,7 @@ import { workspaceNameAad, type VaultItem, type VaultPayload, type WorkspaceVaul
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-export type WorkspaceSuite = "family" | "professional" | "team";
+export type WorkspaceSuite = "family" | "professional" | "team" | "business";
 export type WorkspaceRole = "manager" | "editor" | "viewer";
 export type InviteLink = { id: string; token: Uint8Array; kind: "invite" | "capsule" };
 
