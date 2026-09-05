@@ -38,6 +38,11 @@ import {
   type SentCapsule, type WorkspaceInvite, type WorkspaceMember, type WorkspaceRole,
   type WorkspaceSuite,
 } from "@/lib/collaboration/phase2";
+import {
+  beginCheckout, billingEnabled, FREE_ENTITLEMENT, loadBillingCatalog,
+  loadTenantEntitlement, openCustomerPortal, type BillingCurrency,
+  type BillingInterval, type BillingPrice, type TenantEntitlement,
+} from "@/lib/billing/client";
 
 type CryptoProfile = {
   identity_id: string;
@@ -50,10 +55,10 @@ type CryptoProfile = {
   recovery_verifier: string | null;
 };
 
-type View = "home" | "vault" | "workspaces" | "missions" | "sharing" | "inbox" | "security" | "account-security" | "generator" | "automations" | "devices" | "settings";
+type View = "home" | "vault" | "workspaces" | "missions" | "sharing" | "inbox" | "security" | "account-security" | "generator" | "automations" | "devices" | "billing" | "settings";
 type VaultFilter = ItemKind | "all" | "favorites" | "archive" | "trash";
 type DeviceRow = { id: string; status: "pending" | "trusted" | "revoked"; created_at: string; last_seen_at: string | null; revoked_at: string | null };
-type Entitlement = { plan_code: "free" | "personal" | "family" | "professional" | "team"; ai_credits_remaining: number; automation_runs_remaining: number; phase2_preview_enabled?: boolean };
+type Entitlement = TenantEntitlement;
 
 const ITEM_TYPES: Record<ItemKind, { label: string; plural: string; icon: typeof KeyRound; secretLabel?: string; userLabel?: string }> = {
   login: { label: "Login", plural: "Logins", icon: UserRound, secretLabel: "Password" },
@@ -83,6 +88,7 @@ const NAV: { id: View; label: string; icon: typeof Vault }[] = [
   { id: "generator", label: "Generator", icon: WandSparkles },
   { id: "automations", label: "Automations", icon: Bot },
   { id: "devices", label: "Devices", icon: Laptop },
+  { id: "billing", label: "Plans & billing", icon: CreditCard },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -107,6 +113,10 @@ function customerError(reason: unknown, fallback: string) {
   if (detail.includes("rate") || detail.includes("too many")) return "Too many attempts. Wait a moment and try again.";
   if (detail.includes("notallowederror") || detail.includes("cancel") || detail.includes("webauthn")) return "Passkey verification was cancelled or could not be completed.";
   if (detail.includes("passkey") && (detail.includes("disabled") || detail.includes("not enabled"))) return "Passkey sign-in is temporarily unavailable. Use your login password.";
+  if (detail.includes("billing_not_configured")) return "Secure billing is not active yet. Your current plan is unchanged.";
+  if (detail.includes("subscription_exists")) return "This workspace already has a subscription. Use Manage billing to make changes.";
+  if (detail.includes("customer_missing")) return "No billing profile exists for this workspace yet.";
+  if (detail.includes("billing_unavailable")) return "Billing is temporarily unavailable. Your current plan is unchanged.";
   return fallback;
 }
 
@@ -200,7 +210,7 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
   const [history, setHistory] = useState<VaultHistoryEntry[] | null>(null);
   const [pendingLink, setPendingLink] = useState<InviteLink | null>(() => typeof window === "undefined" ? null : parseCollaborationLink(window.location.hash));
   const [accepting, setAccepting] = useState(false);
-  const [entitlement, setEntitlement] = useState<Entitlement>({ plan_code: "free", ai_credits_remaining: 20, automation_runs_remaining: 50 });
+  const [entitlement, setEntitlement] = useState<Entitlement>(FREE_ENTITLEMENT);
   const initials = useMemo(() => email.slice(0, 2).toUpperCase(), [email]);
 
   async function refresh(openVault: WorkspaceVault) {
@@ -208,6 +218,11 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
     setItems(active);
     setTrash(deleted);
     setSelected((current) => current ? [...active, ...deleted].find((item) => item.id === current.id) ?? null : null);
+  }
+
+  async function refreshEntitlement(openVault: WorkspaceVault) {
+    try { setEntitlement(await loadTenantEntitlement(openVault.tenantId)); }
+    catch { setEntitlement(FREE_ENTITLEMENT); }
   }
 
   async function reloadWorkspaces(preferredId?: string) {
@@ -218,7 +233,7 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
     });
     const chosen = next.find((entry) => entry.workspaceId === (preferredId ?? vault?.workspaceId)) ?? next[0];
     setVault(chosen);
-    await refresh(chosen);
+    await Promise.all([refresh(chosen), refreshEntitlement(chosen)]);
     return chosen;
   }
 
@@ -230,12 +245,9 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
       if (!active) { next.forEach((entry) => entry.key.fill(0)); return; }
       setWorkspaces(next);
       setVault(next[0]);
-      await refresh(next[0]);
+      await Promise.all([refresh(next[0]), refreshEntitlement(next[0])]);
     }).catch((reason) => { if (active) setError(customerError(reason, "Unable to open this workspace. Try again.")); })
       .finally(() => { if (active) setLoading(false); });
-    supabase!.from("account_entitlements")
-      .select("plan_code,ai_credits_remaining,automation_runs_remaining,phase2_preview_enabled")
-      .maybeSingle().then(({ data }) => { if (active && data) setEntitlement(data as Entitlement); });
     return () => { active = false; opened.forEach((entry) => entry.key.fill(0)); };
   }, [profile.identity_id, rootKey]);
 
@@ -243,7 +255,7 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
     const next = workspaces.find((entry) => entry.workspaceId === workspaceId);
     if (!next) return;
     setLoading(true); setSelected(null); setFilter("all"); setQuery(""); setVault(next);
-    try { await refresh(next); } catch (reason) { setError(customerError(reason, "Unable to switch workspaces. Try again.")); }
+    try { await Promise.all([refresh(next), refreshEntitlement(next)]); } catch (reason) { setError(customerError(reason, "Unable to switch workspaces. Try again.")); }
     finally { setLoading(false); }
   }
 
@@ -272,7 +284,7 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
   function openVault(filterValue: VaultFilter = "all") { setFilter(filterValue); setView("vault"); setSelected(null); }
   function lockVault() { workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); onLock(); }
   async function signOut() { workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); await supabase!.auth.signOut(); }
-  const planLabel = entitlement.phase2_preview_enabled ? "Teams preview" : entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1);
+  const planLabel = entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1);
   return <main className="vault-app">
     <aside className="vault-sidebar"><Brand /><nav>{NAV.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${view === id ? "active" : ""}`} onClick={() => { setView(id); setSelected(null); }}><Icon /> {label}{id === "vault" && <span>{items.length}</span>}</button>)}</nav><div className="plan-chip"><Sparkles /><div><strong>{planLabel}</strong><span>{entitlement.ai_credits_remaining} private AI credits</span></div></div><div className="sidebar-account"><div className="avatar">{initials}</div><div><strong>{email.split("@")[0]}</strong><span>{vault?.name ?? "Opening workspace"}</span></div><MoreHorizontal /></div></aside>
     <section className="vault-content"><header><div><p className="eyebrow">Passkey-X / {vault?.suite ?? "Personal"}</p><h1>{view === "home" ? "Good to see you" : NAV.find((entry) => entry.id === view)?.label}</h1></div><div className="header-actions">{workspaces.length > 0 && <select className="workspace-switcher" aria-label="Current workspace" value={vault?.workspaceId ?? ""} onChange={(event) => void switchWorkspace(event.target.value)}>{workspaces.map((entry) => <option key={entry.workspaceId} value={entry.workspaceId}>{entry.name}</option>)}</select>}<Button variant="outline" onClick={lockVault}><LockKeyhole /> Lock</Button><Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void signOut()}><LogOut /></Button></div></header>
@@ -290,6 +302,7 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
         {view === "generator" && <GeneratorView />}
         {view === "automations" && <AutomationsView entitlement={entitlement} />}
         {view === "devices" && <DevicesView identityId={profile.identity_id} />}
+        {view === "billing" && vault && <BillingView vault={vault} entitlement={entitlement} onRefresh={() => refreshEntitlement(vault)} />}
         {view === "settings" && vault && <SettingsView email={email} items={items} vault={vault} profile={profile} entitlement={entitlement} onImported={() => refresh(vault)} />}
       </>}
     </section>
@@ -300,11 +313,12 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
 
 function Dashboard({ items, trash, health, entitlement, onOpenVault, onNew }: { items: VaultItem[]; trash: VaultItem[]; health: ReturnType<typeof passwordHealth>; entitlement: Entitlement; onOpenVault: (filter?: VaultFilter) => void; onNew: () => void }) {
   const recent = items.slice(0, 4);
-  return <div className="dashboard"><section className="welcome-card"><div><span className="status-pill"><ShieldCheck /> Vault protected</span><h2>Your digital life, under your control.</h2><p>Every item is encrypted before it leaves this device. Search and security checks happen locally.</p><div className="welcome-actions"><Button onClick={onNew}><Plus /> Add secure item</Button><Button variant="outline" onClick={() => onOpenVault()}>Open vault <ChevronRight /></Button></div></div><Image src="/brand/passkey-x-mark.png" alt="" width={220} height={220} /></section><div className="metric-grid"><Metric icon={Vault} label="Protected items" value={items.length} detail={`${trash.length} in trash`} onClick={() => onOpenVault()} /><Metric icon={CircleGauge} label="Security score" value={`${health.score}%`} detail={`${health.findings.filter((finding) => finding.severity !== "good").length} findings`} /><Metric icon={Bot} label="Automation runs" value={entitlement.automation_runs_remaining} detail="remaining this month" /><Metric icon={Laptop} label="Device limit" value={entitlement.plan_code === "free" ? "2" : "∞"} detail={`${entitlement.plan_code} plan`} /></div><div className="dashboard-columns"><Card><CardHeader><div><CardTitle>Recently updated</CardTitle><CardDescription>Decrypted only on this device</CardDescription></div><Button variant="ghost" onClick={() => onOpenVault()}>View all</Button></CardHeader><CardContent>{recent.length ? <div className="recent-list">{recent.map((item) => { const Icon = ITEM_TYPES[item.contentType].icon; return <button key={item.id} onClick={() => onOpenVault(item.contentType)}><span className="item-kind-icon"><Icon /></span><span><strong>{item.payload.title}</strong><small>{ITEM_TYPES[item.contentType].label}</small></span><ChevronRight /></button>; })}</div> : <div className="small-empty"><Vault /><strong>Your vault is ready</strong><span>Add your first password, passkey, note, or credential.</span></div>}</CardContent></Card><SponsorCard /></div></div>;
+  return <div className="dashboard"><section className="welcome-card"><div><span className="status-pill"><ShieldCheck /> Vault protected</span><h2>Your digital life, under your control.</h2><p>Every item is encrypted before it leaves this device. Search and security checks happen locally.</p><div className="welcome-actions"><Button onClick={onNew}><Plus /> Add secure item</Button><Button variant="outline" onClick={() => onOpenVault()}>Open vault <ChevronRight /></Button></div></div><Image src="/brand/passkey-x-mark.png" alt="" width={220} height={220} /></section><div className="metric-grid"><Metric icon={Vault} label="Protected items" value={items.length} detail={`${trash.length} in trash`} onClick={() => onOpenVault()} /><Metric icon={CircleGauge} label="Security score" value={`${health.score}%`} detail={`${health.findings.filter((finding) => finding.severity !== "good").length} findings`} /><Metric icon={Bot} label="Automation runs" value={entitlement.automation_runs_remaining} detail="remaining this month" /><Metric icon={Laptop} label="Device limit" value={entitlement.max_devices ?? "∞"} detail={`${entitlement.plan_code} plan`} /></div><div className="dashboard-columns"><Card><CardHeader><div><CardTitle>Recently updated</CardTitle><CardDescription>Decrypted only on this device</CardDescription></div><Button variant="ghost" onClick={() => onOpenVault()}>View all</Button></CardHeader><CardContent>{recent.length ? <div className="recent-list">{recent.map((item) => { const Icon = ITEM_TYPES[item.contentType].icon; return <button key={item.id} onClick={() => onOpenVault(item.contentType)}><span className="item-kind-icon"><Icon /></span><span><strong>{item.payload.title}</strong><small>{ITEM_TYPES[item.contentType].label}</small></span><ChevronRight /></button>; })}</div> : <div className="small-empty"><Vault /><strong>Your vault is ready</strong><span>Add your first password, passkey, note, or credential.</span></div>}</CardContent></Card>{entitlement.plan_code === "free" ? <SponsorCard /> : <PlanSummaryCard entitlement={entitlement} />}</div></div>;
 }
 
 function Metric({ icon: Icon, label, value, detail, onClick }: { icon: typeof Vault; label: string; value: string | number; detail: string; onClick?: () => void }) { return <button className="metric-card" onClick={onClick}><span className="metric-icon"><Icon /></span><span><small>{label}</small><strong>{value}</strong><em>{detail}</em></span></button>; }
 function SponsorCard() { return <Card className="sponsor-card"><CardHeader><div className="sponsor-label">Passkey-X sponsor · privacy safe</div><CardTitle>Safer accounts start with MFA</CardTitle><CardDescription>This first-party educational card is not selected from vault contents. No third-party script or tracker runs here.</CardDescription></CardHeader><CardContent><Button variant="outline">Read the security guide</Button><p>Sponsored cards only appear on Home for Free accounts.</p></CardContent></Card>; }
+function PlanSummaryCard({ entitlement }: { entitlement: Entitlement }) { return <Card className="plan-summary-card"><CardHeader><div className="sponsor-label">Active workspace plan</div><CardTitle>{entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1)}</CardTitle><CardDescription>Entitlements are confirmed by signed server-side billing events, never by a browser redirect.</CardDescription></CardHeader><CardContent><div className="plan-summary-row"><ShieldCheck /><span>{entitlement.subscription_status.replaceAll("_", " ")}</span></div>{entitlement.valid_until && <p>Current period ends {new Date(entitlement.valid_until).toLocaleDateString()}.</p>}</CardContent></Card>; }
 
 function WorkspacesView({ identityId, rootKey, workspaces, vault, onSelect, onReload }: {
   identityId: string; rootKey: Uint8Array; workspaces: WorkspaceVault[]; vault: WorkspaceVault;
@@ -487,11 +501,77 @@ function DevicesView({ identityId }: { identityId: string }) {
   return <div className="feature-page"><div className="feature-intro"><div><span className="status-pill"><Laptop /> Trusted-device boundary</span><h2>Devices with vault access</h2><p>Free accounts support two active devices. Revocation is one-way and removes device-key eligibility.</p></div></div>{message && <p className="form-message" role="alert">{message}</p>}<div className="device-list">{loading ? <div className="loading-ring" /> : devices.map((device, index) => <Card key={device.id}><CardContent><span className="device-icon"><Laptop /></span><div><strong>{index === devices.length - 1 ? "Initial browser" : `Browser device ${devices.length - index}`}</strong><span>Added {new Date(device.created_at).toLocaleDateString()} · {device.status}</span><code>{device.id.slice(0, 8)}…{device.id.slice(-4)}</code></div><span className={`device-status ${device.status}`}>{device.status}</span>{device.status !== "revoked" && <Button variant="outline" onClick={() => revoke(device)}>Revoke</Button>}</CardContent></Card>)}</div><div className="privacy-note"><ShieldCheck /><span>Passkey-X stores only a public device key and encrypted labels. Private device key material stays protected in the client.</span></div></div>;
 }
 
+const BILLING_PLANS: { code: Entitlement["plan_code"]; name: string; description: string; features: string[] }[] = [
+  { code: "free", name: "Free", description: "A secure personal vault for getting started.", features: ["1 member", "1 workspace", "2 trusted devices", "20 private AI credits"] },
+  { code: "personal", name: "Personal", description: "More room for an individual digital life.", features: ["1 member", "5 workspaces", "Unlimited devices", "200 private AI credits"] },
+  { code: "family", name: "Family", description: "Private sharing for a household.", features: ["Up to 6 members", "20 workspaces", "Unlimited devices", "500 private AI credits"] },
+  { code: "team", name: "Team", description: "Workspace controls for growing teams.", features: ["Up to 50 members", "100 workspaces", "Unlimited devices", "2,000 private AI credits"] },
+];
+
+function formatPrice(price: BillingPrice | undefined) {
+  if (!price) return "Not configured";
+  return new Intl.NumberFormat(price.currency === "inr" ? "en-IN" : "en-US", {
+    style: "currency", currency: price.currency.toUpperCase(), maximumFractionDigits: 0,
+  }).format(price.unitAmount / 100);
+}
+
+function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault; entitlement: Entitlement; onRefresh: () => Promise<void> }) {
+  const [currency, setCurrency] = useState<BillingCurrency>("inr");
+  const [interval, setInterval] = useState<BillingInterval>("month");
+  const [prices, setPrices] = useState<BillingPrice[]>([]);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const result = new URLSearchParams(window.location.search).get("billing");
+    if (result === "success") return "Checkout completed. Your plan activates only after the signed Stripe webhook is verified.";
+    if (result === "cancelled") return "Checkout was cancelled. Your current plan is unchanged.";
+    if (result === "portal-return") return "Billing portal closed. Refresh to read the latest verified entitlement.";
+    return "";
+  });
+  const canManage = vault.role === "owner";
+
+  useEffect(() => {
+    let active = true;
+    if (!billingEnabled || !canManage) return () => { active = false; };
+    loadBillingCatalog(vault.tenantId)
+      .then((catalog) => { if (active) setPrices(catalog); })
+      .catch((reason) => { if (active) setMessage(customerError(reason, "Plan pricing could not be loaded. Your current plan is unchanged.")); });
+    return () => { active = false; };
+  }, [canManage, vault.tenantId]);
+
+  async function checkout(plan: "personal" | "family" | "team") {
+    setBusy(plan); setMessage("");
+    try { window.location.assign(await beginCheckout(vault.tenantId, plan, interval, currency)); }
+    catch (reason) { setMessage(customerError(reason, "Checkout could not be started. Your current plan is unchanged.")); setBusy(""); }
+  }
+
+  async function portal() {
+    setBusy("portal"); setMessage("");
+    try { window.location.assign(await openCustomerPortal(vault.tenantId)); }
+    catch (reason) { setMessage(customerError(reason, "The billing portal could not be opened. Try again shortly.")); setBusy(""); }
+  }
+
+  async function refresh() {
+    setBusy("refresh"); setMessage("");
+    try { await onRefresh(); setMessage("Verified workspace entitlement refreshed."); }
+    catch { setMessage("The entitlement could not be refreshed. Try again shortly."); }
+    finally { setBusy(""); }
+  }
+
+  return <div className="feature-page billing-page"><div className="feature-intro"><div><span className="status-pill"><CreditCard /> SaaS workspace billing</span><h2>Choose the right protection for this workspace</h2><p>Checkout and subscription management are hosted by Stripe. Passkey-X receives billing status only—never card details or vault contents.</p></div><div className="billing-status"><small>Current plan</small><strong>{entitlement.plan_code}</strong><span>{entitlement.subscription_status.replaceAll("_", " ")}</span></div></div>
+    <div className="billing-toolbar"><div className="billing-segment" role="group" aria-label="Billing currency"><button className={currency === "inr" ? "active" : ""} onClick={() => setCurrency("inr")}>INR</button><button className={currency === "usd" ? "active" : ""} onClick={() => setCurrency("usd")}>USD</button></div><div className="billing-segment" role="group" aria-label="Billing interval"><button className={interval === "month" ? "active" : ""} onClick={() => setInterval("month")}>Monthly</button><button className={interval === "year" ? "active" : ""} onClick={() => setInterval("year")}>Annual</button></div>{entitlement.source === "stripe" && <Button variant="outline" disabled={!canManage || busy !== ""} onClick={() => void portal()}><CreditCard /> {busy === "portal" ? "Opening…" : "Manage billing"}</Button>}<Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}><RefreshCw /> Refresh</Button></div>
+    {!billingEnabled && <div className="billing-notice"><ShieldCheck /><div><strong>Test billing is safely disabled</strong><p>The subscription code is ready, but Checkout stays unavailable until all twelve Stripe test Price IDs and the signed webhook secret are installed in Supabase.</p></div></div>}
+    {!canManage && <div className="billing-notice"><ShieldAlert /><div><strong>Workspace owner access required</strong><p>Members can see the verified plan. Only an owner can start Checkout or open the Customer Portal.</p></div></div>}
+    <div className="pricing-grid">{BILLING_PLANS.map((plan) => { const price = prices.find((entry) => entry.plan === plan.code && entry.currency === currency && entry.interval === interval); const current = entitlement.plan_code === plan.code; return <Card key={plan.code} className={`pricing-card ${current ? "current" : ""} ${plan.code === "family" ? "featured" : ""}`}><CardHeader>{plan.code === "family" && <span className="popular-pill">Popular</span>}<CardTitle>{plan.name}</CardTitle><CardDescription>{plan.description}</CardDescription></CardHeader><CardContent><div className="plan-price">{plan.code === "free" ? <><strong>{currency === "inr" ? "₹0" : "$0"}</strong><span>forever</span></> : <><strong>{formatPrice(price)}</strong><span>per {interval}</span></>}</div><ul>{plan.features.map((feature) => <li key={feature}><Check /> {feature}</li>)}</ul>{plan.code === "free" ? <Button variant="outline" disabled>{current ? "Current plan" : "Included"}</Button> : <Button disabled={!billingEnabled || !canManage || !price || busy !== "" || current} onClick={() => void checkout(plan.code as "personal" | "family" | "team")}>{current ? "Current plan" : busy === plan.code ? "Opening secure Checkout…" : `Choose ${plan.name}`}</Button>}</CardContent></Card>; })}</div>
+    {message && <p className="settings-message" role="status">{message}</p>}<div className="privacy-note"><ShieldCheck /><span>Plan access changes only after a verified Stripe webhook updates the tenant entitlement. Redirect query parameters cannot unlock paid features.</span></div><p className="billing-footnote">Taxes are not calculated or collected until Vlightsoft confirms the required registrations and explicitly enables Stripe Tax.</p>
+  </div>;
+}
+
 function SettingsView({ email, items, vault, profile, entitlement, onImported }: { email: string; items: VaultItem[]; vault: WorkspaceVault; profile: CryptoProfile; entitlement: Entitlement; onImported: () => Promise<void> | void }) {
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [exportPassword, setExportPassword] = useState(""); const [showExport, setShowExport] = useState(false);
   async function importCsv(file: File) { if (!window.confirm("Import this CSV? It is parsed locally and each record is encrypted before upload.")) return; setBusy(true); setMessage(""); try { const rows = parseLoginCsv(await file.text()); for (const row of rows) await createVaultItem(vault, "login", { version: 1, ...row, updatedAt: new Date().toISOString() }); await onImported(); setMessage(`${rows.length} encrypted login${rows.length === 1 ? "" : "s"} imported.`); } catch (reason) { setMessage(customerError(reason, "This file could not be imported. Check its format and try again.")); } finally { setBusy(false); } }
   async function exportVault(event: React.FormEvent) { event.preventDefault(); setBusy(true); setMessage(""); let master: Uint8Array | null = null; let verified: Uint8Array | null = null; try { master = await deriveMasterKey(exportPassword, bytea(profile.salt), { algorithm: "ARGON2ID", ...profile.kdf_parameters }); verified = await unwrapKey(master, { algorithm: "AES-256-GCM", nonce: toBase64Url(bytea(profile.master_nonce)), ciphertext: toBase64Url(bytea(profile.master_wrapped_root)) }, "1accessos:account-root:v1"); const data = await createEncryptedExport({ product: "Passkey-X", version: 1, items }, exportPassword); const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `passkey-x-export-${new Date().toISOString().slice(0, 10)}.pxvault`; anchor.click(); URL.revokeObjectURL(url); setExportPassword(""); setShowExport(false); setMessage("Encrypted export downloaded."); } catch { setMessage("Vault reauthentication failed; no export was created."); } finally { master?.fill(0); verified?.fill(0); setBusy(false); } }
-  return <div className="feature-page"><div className="settings-grid"><Card><CardHeader><CardTitle>Account</CardTitle><CardDescription>Signed in as {email}</CardDescription></CardHeader><CardContent><div className="setting-row"><span>Plan</span><strong>{entitlement.plan_code === "free" ? "Free" : "Personal"}</strong></div><div className="setting-row"><span>Encryption</span><strong>Argon2id + AES-256-GCM</strong></div><div className="setting-row"><span>Workspace</span><code>{vault.workspaceId.slice(0, 8)}…</code></div></CardContent></Card><Card><CardHeader><CardTitle>Import logins</CardTitle><CardDescription>Chrome-compatible or standard CSV. The source file is never uploaded.</CardDescription></CardHeader><CardContent><label className="file-action"><Upload /><span>{busy ? "Working…" : "Choose CSV file"}</span><input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCsv(file); event.target.value = ""; }} /></label></CardContent></Card><Card><CardHeader><CardTitle>Encrypted backup</CardTitle><CardDescription>Reauthenticate with your vault password before a portable encrypted export is created.</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={() => setShowExport(true)}><Download /> Export {items.length} items</Button></CardContent></Card><Card><CardHeader><CardTitle>Personal plan</CardTitle><CardDescription>Unlimited devices, more private AI credits, more automation runs, and no sponsor card.</CardDescription></CardHeader><CardContent><p className="field-hint">Plan upgrades are coming soon. Your current plan and encrypted vault continue unchanged.</p></CardContent></Card></div>{message && <p className="settings-message" role="status">{message}</p>}{showExport && <div className="modal-backdrop"><Card className="item-editor" role="dialog" aria-modal="true" aria-labelledby="export-title"><CardHeader><button className="modal-close" aria-label="Close" onClick={() => setShowExport(false)}><X /></button><CardTitle id="export-title">Confirm encrypted export</CardTitle><CardDescription>Enter your vault password. The export is encrypted locally with a fresh salt.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={exportVault}><div><Label htmlFor="export-password">Vault password</Label><Input id="export-password" type="password" autoComplete="current-password" required value={exportPassword} onChange={(event) => setExportPassword(event.target.value)} /></div><Button disabled={busy}>{busy ? "Encrypting…" : "Reauthenticate and download"}</Button></form></CardContent></Card></div>}</div>;
+  return <div className="feature-page"><div className="settings-grid"><Card><CardHeader><CardTitle>Account</CardTitle><CardDescription>Signed in as {email}</CardDescription></CardHeader><CardContent><div className="setting-row"><span>Plan</span><strong>{entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1)}</strong></div><div className="setting-row"><span>Billing status</span><strong>{entitlement.subscription_status.replaceAll("_", " ")}</strong></div><div className="setting-row"><span>Encryption</span><strong>Argon2id + AES-256-GCM</strong></div><div className="setting-row"><span>Workspace</span><code>{vault.workspaceId.slice(0, 8)}…</code></div></CardContent></Card><Card><CardHeader><CardTitle>Import logins</CardTitle><CardDescription>Chrome-compatible or standard CSV. The source file is never uploaded.</CardDescription></CardHeader><CardContent><label className="file-action"><Upload /><span>{busy ? "Working…" : "Choose CSV file"}</span><input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCsv(file); event.target.value = ""; }} /></label></CardContent></Card><Card><CardHeader><CardTitle>Encrypted backup</CardTitle><CardDescription>Reauthenticate with your vault password before a portable encrypted export is created.</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={() => setShowExport(true)}><Download /> Export {items.length} items</Button></CardContent></Card><Card><CardHeader><CardTitle>Workspace entitlement</CardTitle><CardDescription>Plan access is tenant-scoped and controlled by verified server-side billing events.</CardDescription></CardHeader><CardContent><p className="field-hint">Use Plans & billing to compare tiers or manage an active Stripe subscription. Billing never receives vault fields.</p></CardContent></Card></div>{message && <p className="settings-message" role="status">{message}</p>}{showExport && <div className="modal-backdrop"><Card className="item-editor" role="dialog" aria-modal="true" aria-labelledby="export-title"><CardHeader><button className="modal-close" aria-label="Close" onClick={() => setShowExport(false)}><X /></button><CardTitle id="export-title">Confirm encrypted export</CardTitle><CardDescription>Enter your vault password. The export is encrypted locally with a fresh salt.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={exportVault}><div><Label htmlFor="export-password">Vault password</Label><Input id="export-password" type="password" autoComplete="current-password" required value={exportPassword} onChange={(event) => setExportPassword(event.target.value)} /></div><Button disabled={busy}>{busy ? "Encrypting…" : "Reauthenticate and download"}</Button></form></CardContent></Card></div>}</div>;
 }
 
 function ItemEditor({ item, onClose, onSave }: { item?: VaultItem; onClose: () => void; onSave: (kind: ItemKind, payload: VaultPayload) => Promise<void> }) {

@@ -1,0 +1,7 @@
+[functions.billing]
+verify_jwt = true
+
+# Stripe sends no Supabase JWT. The handler authenticates every request using
+# Stripe's signed raw body before applying an idempotent database transaction.
+[functions.stripe-webhook]
+verify_jwt = false

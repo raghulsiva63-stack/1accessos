@@ -1144,6 +1144,56 @@ export type Database = {
           },
         ]
       }
+      tenant_entitlements: {
+        Row: {
+          ai_credits_remaining: number
+          automation_runs_remaining: number
+          max_devices: number | null
+          max_members: number
+          max_workspaces: number
+          plan_code: string
+          source: string
+          subscription_status: string
+          tenant_id: string
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          ai_credits_remaining?: number
+          automation_runs_remaining?: number
+          max_devices?: number | null
+          max_members?: number
+          max_workspaces?: number
+          plan_code?: string
+          source?: string
+          subscription_status?: string
+          tenant_id: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          ai_credits_remaining?: number
+          automation_runs_remaining?: number
+          max_devices?: number | null
+          max_members?: number
+          max_workspaces?: number
+          plan_code?: string
+          source?: string
+          subscription_status?: string
+          tenant_id?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_entitlements_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_memberships: {
         Row: {
           created_at: string

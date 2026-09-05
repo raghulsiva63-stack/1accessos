@@ -338,6 +338,39 @@ button { -webkit-tap-highlight-color: transparent; }
 .account-passkey-list article > div { display: grid; gap: .15rem; }
 .account-passkey-list strong { font-size: .82rem; }
 .account-passkey-list small { color: #747f96; font-size: .68rem; }
+.plan-summary-card { border-color: #d8dfff; background: linear-gradient(140deg, #fbfcff, #f0f4ff); }
+.plan-summary-row { display: flex; align-items: center; gap: .5rem; color: #22513c; font-size: .8rem; font-weight: 750; text-transform: capitalize; }
+.plan-summary-row svg { width: 1rem; color: #168052; }
+.plan-summary-card p { margin: .75rem 0 0; color: #6c7890; font-size: .73rem; }
+.billing-page { max-width: 1240px; }
+.billing-status { min-width: 170px; padding: .85rem 1rem; display: grid; gap: .1rem; border: 1px solid #d7def3; border-radius: .9rem; background: white; box-shadow: 0 8px 26px #1324500b; }
+.billing-status small { color: #7b8498; font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; }
+.billing-status strong { font-size: 1.35rem; text-transform: capitalize; letter-spacing: -.03em; }
+.billing-status span { color: #28734e; font-size: .7rem; font-weight: 750; text-transform: capitalize; }
+.billing-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.billing-segment { padding: .23rem; display: inline-flex; gap: .12rem; border: 1px solid #d8dfec; border-radius: .68rem; background: #edf1f7; }
+.billing-segment button { padding: .45rem .72rem; border: 0; border-radius: .48rem; color: #61708a; background: transparent; cursor: pointer; font-size: .73rem; font-weight: 750; }
+.billing-segment button.active { color: #173da9; background: white; box-shadow: 0 3px 10px #17264b14; }
+.billing-toolbar > [data-slot="button"]:first-of-type { margin-left: auto; }
+.billing-notice { padding: .95rem 1rem; display: flex; align-items: flex-start; gap: .7rem; border: 1px solid #ccd8ff; border-radius: .85rem; color: #20345e; background: #f2f5ff; }
+.billing-notice > svg { width: 1.1rem; flex: 0 0 auto; color: #315be2; }
+.billing-notice strong { display: block; font-size: .82rem; }
+.billing-notice p { margin: .22rem 0 0; color: #65718a; font-size: .73rem; line-height: 1.5; }
+.pricing-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; align-items: stretch; }
+.pricing-card { position: relative; overflow: hidden; }
+.pricing-card.current { border-color: #5f7eff; box-shadow: 0 0 0 2px #5f7eff1f, 0 16px 36px #1b367a12; }
+.pricing-card.featured { background: linear-gradient(160deg, #ffffff 35%, #f2f3ff); }
+.pricing-card [data-slot="card-header"] { min-height: 138px; }
+.pricing-card [data-slot="card-content"] { height: calc(100% - 138px); display: flex; flex-direction: column; }
+.popular-pill { position: absolute; top: .75rem; right: .75rem; padding: .24rem .48rem; border-radius: 999px; color: #fff; background: linear-gradient(90deg, #2457ff, #6548ec); font-size: .59rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+.plan-price { min-height: 58px; display: grid; align-content: center; }
+.plan-price strong { font-size: 1.55rem; letter-spacing: -.045em; }
+.plan-price span { color: #7a8498; font-size: .68rem; }
+.pricing-card ul { min-height: 144px; margin: .85rem 0 1rem; padding: 0; display: grid; align-content: start; gap: .55rem; list-style: none; }
+.pricing-card li { display: flex; align-items: flex-start; gap: .42rem; color: #4f5d75; font-size: .73rem; line-height: 1.4; }
+.pricing-card li svg { width: .9rem; flex: 0 0 auto; color: #198255; }
+.pricing-card [data-slot="button"] { width: 100%; margin-top: auto; }
+.billing-footnote { margin: -.25rem 0 0; color: #7a8498; font-size: .68rem; line-height: 1.5; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; padding: 1rem; display: grid; place-items: center; background: #050b20a3; backdrop-filter: blur(7px); }
 .item-editor { width: min(100%, 580px); max-height: calc(100vh - 2rem); overflow-y: auto; box-shadow: 0 32px 100px #020714aa; }
@@ -359,6 +392,7 @@ button { -webkit-tap-highlight-color: transparent; }
   .items-layout.with-detail { grid-template-columns: 1fr; }
   .item-detail { position: static; }
   .recipe-grid { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
   .auth-layout { grid-template-columns: 1fr; }
@@ -411,6 +445,8 @@ button { -webkit-tap-highlight-color: transparent; }
   .device-status, .device-list [data-slot="button"] { grid-column: 2; width: max-content; }
   .account-passkey-list article { grid-template-columns: 2.7rem minmax(0, 1fr); }
   .account-passkey-list article [data-slot="button"] { grid-column: 2; width: max-content; }
+  .pricing-grid { grid-template-columns: 1fr; }
+  .billing-toolbar > [data-slot="button"]:first-of-type { margin-left: 0; }
   .option-grid { grid-template-columns: 1fr; }
   .inline-fields { grid-template-columns: 1fr; }
   .request-list > article { flex-direction: column; }

@@ -2,9 +2,10 @@
 
 Date: 2026-09-04
 
-Phase 4 is the commercial SaaS and production-operations release. Planning can
-begin now; customer launch must wait for the Phase 3 and production-security
-gates recorded in `docs/phase3/phase-3-exit-gates.md`.
+Phase 4 is the commercial SaaS and production-operations release. The billing
+foundation was implemented and verified in development on 2026-09-05. Customer
+launch must still wait for the commercial activation and production-security
+gates recorded in `docs/phase4/phase-4-exit-gates.md`.
 
 ## Phase 4 implementation order
 
@@ -35,6 +36,11 @@ gates recorded in `docs/phase3/phase-3-exit-gates.md`.
 - Independent cryptography reviewer and penetration-testing supplier.
 - Privacy policy, terms, data-processing agreement, retention policy, and target
   launch jurisdictions approved by qualified counsel.
+
+The billing provider, Stripe test account, plan set, INR/USD currency scope, and
+the three paid-tier test Product shells are confirmed. Exact Price amounts, tax
+registrations, production infrastructure, and external assurance suppliers
+remain owner decisions.
 
 ## Non-negotiable release evidence
 

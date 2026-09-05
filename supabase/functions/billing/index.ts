@@ -1,0 +1,124 @@
+import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
+import {
+  adminSupabase, corsHeaders, expectedStripeLivemode, findPrice, json, priceChoices,
+  requireTenantManager, safeCode, stripeClient,
+} from "../_shared/billing.ts";
+
+const INTEGRATION_IDENTIFIER = "passkey_x_qrltmzpn";
+
+type BillingRequest = {
+  action?: "catalog" | "checkout" | "portal";
+  tenantId?: string;
+  plan?: string;
+  interval?: string;
+  currency?: string;
+};
+
+Deno.serve(async (request: Request) => {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
+  if (request.method !== "POST") return json(request, 405, { error: "method_not_allowed" });
+
+  try {
+    const body = await request.json() as BillingRequest;
+    if (!body.action) throw new Error("invalid_request");
+    const stripe = stripeClient();
+
+    if (body.action === "catalog") {
+      await requireTenantManager(request, body.tenantId ?? "");
+      const catalog = await Promise.all(priceChoices().map(async (choice) => {
+        const price = await stripe.prices.retrieve(choice.priceId);
+        if (!price.active || price.type !== "recurring" || !price.recurring || price.unit_amount === null) return null;
+        return {
+          plan: choice.plan,
+          interval: choice.interval,
+          currency: choice.currency,
+          unitAmount: price.unit_amount,
+        };
+      }));
+      return json(request, 200, { prices: catalog.filter(Boolean) });
+    }
+
+    const tenantId = body.tenantId ?? "";
+    const manager = await requireTenantManager(request, tenantId);
+    const admin = adminSupabase();
+    const { data: mapping, error: mappingError } = await admin.from("billing_customers")
+      .select("stripe_customer_id,livemode")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (mappingError) throw mappingError;
+    const expectedLivemode = expectedStripeLivemode();
+    if (mapping && mapping.livemode !== expectedLivemode) throw new Error("billing_unavailable");
+
+    if (body.action === "portal") {
+      if (!mapping?.stripe_customer_id) throw new Error("customer_missing");
+      const portal = await stripe.billingPortal.sessions.create({
+        customer: mapping.stripe_customer_id,
+        return_url: "https://passkey-x.com/?billing=portal-return",
+      });
+      return json(request, 200, { url: portal.url });
+    }
+
+    if (body.action !== "checkout") throw new Error("invalid_request");
+    const choice = findPrice(body.plan, body.interval, body.currency);
+    if (!choice) throw new Error("billing_not_configured");
+
+    const { data: existing, error: existingError } = await admin.from("billing_subscriptions")
+      .select("status")
+      .eq("tenant_id", tenantId)
+      .in("status", ["trialing", "active", "past_due", "unpaid", "incomplete", "paused"])
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) throw new Error("subscription_exists");
+
+    let customerId = mapping?.stripe_customer_id as string | undefined;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: manager.email ?? undefined,
+        metadata: { passkey_x_tenant_id: tenantId },
+      }, { idempotencyKey: `passkey-x-customer-${tenantId}` });
+      if (customer.livemode !== expectedLivemode) throw new Error("billing_unavailable");
+      customerId = customer.id;
+      const { error } = await admin.from("billing_customers").insert({
+        tenant_id: tenantId,
+        stripe_customer_id: customerId,
+        livemode: customer.livemode,
+      });
+      if (error?.code === "23505") {
+        const { data: raced } = await admin.from("billing_customers")
+          .select("stripe_customer_id")
+          .eq("tenant_id", tenantId)
+          .single();
+        customerId = raced?.stripe_customer_id;
+      } else if (error) throw error;
+    }
+    if (!customerId) throw new Error("customer_missing");
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: choice.priceId, quantity: 1 }],
+      allow_promotion_codes: true,
+      client_reference_id: tenantId,
+      success_url: "https://passkey-x.com/?billing=success&session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://passkey-x.com/?billing=cancelled",
+      integration_identifier: INTEGRATION_IDENTIFIER,
+      metadata: {
+        passkey_x_tenant_id: tenantId,
+        passkey_x_plan: choice.plan,
+      },
+      subscription_data: {
+        metadata: {
+          passkey_x_tenant_id: tenantId,
+          passkey_x_plan: choice.plan,
+        },
+      },
+    });
+    if (!session.url) throw new Error("billing_unavailable");
+    return json(request, 200, { url: session.url });
+  } catch (reason) {
+    const code = safeCode(reason);
+    const status = code === "unauthorized" ? 401 : code === "forbidden" ? 403 : code === "subscription_exists" ? 409 : code === "invalid_request" || code === "invalid_tenant" ? 400 : code === "billing_not_configured" ? 503 : 500;
+    console.error(JSON.stringify({ function: "billing", code }));
+    return json(request, status, { error: code });
+  }
+});
