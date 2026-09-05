@@ -1,3 +1,5 @@
+> Phase 7 kickoff and current evidence: [../phase7/kickoff.md](../phase7/kickoff.md).
+
 > Corrected 2026-09-05: enterprise work is Phase 7 under the revised appendix. Use `privileged-runtime-plan.md` for Phase 6. This draft is not an implementation authorization or release acceptance.
 
 # Phase 7 — Enterprise trust and ecosystem draft (historical file path)
