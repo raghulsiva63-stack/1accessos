@@ -915,6 +915,42 @@ export type Database = {
           },
         ]
       }
+      feature_catalog: {
+        Row: {
+          catalog_version: string
+          category: string
+          created_at: string
+          description: string
+          display_name: string
+          feature_key: string
+          security_class: string
+          sort_order: number
+          status: string
+        }
+        Insert: {
+          catalog_version: string
+          category: string
+          created_at?: string
+          description: string
+          display_name: string
+          feature_key: string
+          security_class: string
+          sort_order: number
+          status: string
+        }
+        Update: {
+          catalog_version?: string
+          category?: string
+          created_at?: string
+          description?: string
+          display_name?: string
+          feature_key?: string
+          security_class?: string
+          sort_order?: number
+          status?: string
+        }
+        Relationships: []
+      }
       idempotency_records: {
         Row: {
           created_at: string
@@ -1799,6 +1835,143 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_catalog: {
+        Row: {
+          audience: string
+          billing_model: string
+          catalog_version: string
+          commercial_status: string
+          created_at: string
+          display_name: string
+          is_featured: boolean
+          max_seats: number | null
+          min_seats: number | null
+          plan_code: string
+          sort_order: number
+          status: string
+          summary: string
+          trial_days: number
+        }
+        Insert: {
+          audience: string
+          billing_model: string
+          catalog_version: string
+          commercial_status?: string
+          created_at?: string
+          display_name: string
+          is_featured?: boolean
+          max_seats?: number | null
+          min_seats?: number | null
+          plan_code: string
+          sort_order: number
+          status: string
+          summary: string
+          trial_days?: number
+        }
+        Update: {
+          audience?: string
+          billing_model?: string
+          catalog_version?: string
+          commercial_status?: string
+          created_at?: string
+          display_name?: string
+          is_featured?: boolean
+          max_seats?: number | null
+          min_seats?: number | null
+          plan_code?: string
+          sort_order?: number
+          status?: string
+          summary?: string
+          trial_days?: number
+        }
+        Relationships: []
+      }
+      plan_entitlements: {
+        Row: {
+          catalog_version: string
+          created_at: string
+          display_order: number
+          display_text: string
+          entitlement_value: Json
+          feature_key: string
+          plan_code: string
+        }
+        Insert: {
+          catalog_version: string
+          created_at?: string
+          display_order: number
+          display_text: string
+          entitlement_value: Json
+          feature_key: string
+          plan_code: string
+        }
+        Update: {
+          catalog_version?: string
+          created_at?: string
+          display_order?: number
+          display_text?: string
+          entitlement_value?: Json
+          feature_key?: string
+          plan_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_entitlements_catalog_version_feature_key_fkey"
+            columns: ["catalog_version", "feature_key"]
+            isOneToOne: false
+            referencedRelation: "feature_catalog"
+            referencedColumns: ["catalog_version", "feature_key"]
+          },
+          {
+            foreignKeyName: "plan_entitlements_catalog_version_plan_code_fkey"
+            columns: ["catalog_version", "plan_code"]
+            isOneToOne: false
+            referencedRelation: "plan_catalog"
+            referencedColumns: ["catalog_version", "plan_code"]
+          },
+        ]
+      }
+      plan_prices: {
+        Row: {
+          billing_interval: string
+          catalog_version: string
+          created_at: string
+          currency: string
+          plan_code: string
+          price_scope: string
+          stripe_price_id: string | null
+          unit_amount_minor: number
+        }
+        Insert: {
+          billing_interval: string
+          catalog_version: string
+          created_at?: string
+          currency: string
+          plan_code: string
+          price_scope: string
+          stripe_price_id?: string | null
+          unit_amount_minor: number
+        }
+        Update: {
+          billing_interval?: string
+          catalog_version?: string
+          created_at?: string
+          currency?: string
+          plan_code?: string
+          price_scope?: string
+          stripe_price_id?: string | null
+          unit_amount_minor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_prices_catalog_version_plan_code_fkey"
+            columns: ["catalog_version", "plan_code"]
+            isOneToOne: false
+            referencedRelation: "plan_catalog"
+            referencedColumns: ["catalog_version", "plan_code"]
           },
         ]
       }

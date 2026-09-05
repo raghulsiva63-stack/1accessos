@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 
 export type PlanCode = "free" | "personal" | "family" | "team" | "business";
+export type PublicPlanCode = PlanCode | "professional" | "enterprise";
 export type SubscriptionStatus = "none" | "trialing" | "active" | "past_due" | "unpaid" | "canceled" | "incomplete" | "incomplete_expired" | "paused";
 export type BillingInterval = "month" | "year";
 export type BillingCurrency = "inr" | "usd";
@@ -22,6 +23,29 @@ export type BillingPrice = {
   interval: BillingInterval;
   currency: BillingCurrency;
   unitAmount: number;
+};
+
+export type PublicPlanPrice = {
+  currency: BillingCurrency;
+  interval: BillingInterval;
+  unitAmount: number;
+  scope: "plan" | "seat";
+};
+
+export type PublicCatalogPlan = {
+  catalogVersion: string;
+  code: PublicPlanCode;
+  name: string;
+  audience: string;
+  summary: string;
+  billingModel: "free" | "flat" | "per_seat" | "contract";
+  minSeats: number | null;
+  maxSeats: number | null;
+  trialDays: number;
+  featured: boolean;
+  commercialStatus: "proposed" | "active" | "retired";
+  features: string[];
+  prices: PublicPlanPrice[];
 };
 
 export const billingEnabled = process.env.NEXT_PUBLIC_BILLING_ENABLED === "true";
@@ -46,6 +70,57 @@ export async function loadTenantEntitlement(tenantId: string): Promise<TenantEnt
     .maybeSingle();
   if (error) throw error;
   return data ? data as TenantEntitlement : FREE_ENTITLEMENT;
+}
+
+export async function loadPublicPlanCatalog(): Promise<PublicCatalogPlan[]> {
+  if (!supabase) return [];
+  const { data: planRows, error: planError } = await supabase.from("plan_catalog")
+    .select("catalog_version,plan_code,display_name,audience,summary,billing_model,min_seats,max_seats,trial_days,is_featured,sort_order,commercial_status")
+    .eq("status", "published")
+    .order("catalog_version", { ascending: false })
+    .order("sort_order");
+  if (planError) throw planError;
+  const catalogVersion = planRows?.[0]?.catalog_version;
+  if (!catalogVersion) return [];
+
+  const [priceResult, entitlementResult] = await Promise.all([
+    supabase.from("plan_prices")
+      .select("plan_code,currency,billing_interval,unit_amount_minor,price_scope")
+      .eq("catalog_version", catalogVersion),
+    supabase.from("plan_entitlements")
+      .select("plan_code,display_text,display_order")
+      .eq("catalog_version", catalogVersion)
+      .order("display_order"),
+  ]);
+  if (priceResult.error) throw priceResult.error;
+  if (entitlementResult.error) throw entitlementResult.error;
+
+  return planRows
+    .filter((row) => row.catalog_version === catalogVersion)
+    .map((row) => ({
+      catalogVersion,
+      code: row.plan_code as PublicPlanCode,
+      name: row.display_name,
+      audience: row.audience,
+      summary: row.summary,
+      billingModel: row.billing_model as PublicCatalogPlan["billingModel"],
+      minSeats: row.min_seats,
+      maxSeats: row.max_seats,
+      trialDays: row.trial_days,
+      featured: row.is_featured,
+      commercialStatus: row.commercial_status as PublicCatalogPlan["commercialStatus"],
+      features: (entitlementResult.data ?? [])
+        .filter((entry) => entry.plan_code === row.plan_code)
+        .map((entry) => entry.display_text),
+      prices: (priceResult.data ?? [])
+        .filter((entry) => entry.plan_code === row.plan_code)
+        .map((entry) => ({
+          currency: entry.currency as BillingCurrency,
+          interval: entry.billing_interval as BillingInterval,
+          unitAmount: entry.unit_amount_minor,
+          scope: entry.price_scope as PublicPlanPrice["scope"],
+        })),
+    }));
 }
 
 async function invokeBilling<T>(body: Record<string, unknown>): Promise<T> {

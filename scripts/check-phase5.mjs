@@ -42,7 +42,7 @@ assert.match(organization,/manage_organization_member_lifecycle/u);
 assert.match(component,/Choose Business for a multi-department office/u);
 assert.match(component,/Departments, teams, groups and directory/u);
 assert.match(page,/OrganizationView/u);
-assert.match(page,/Up to 500 members/u);
+assert.match(component,/Up to 500 members and 500 workspaces/u);
 assert.match(shared,/"business"/u);
 assert.match(webhook,/"business"/u);
 assert.match(adr,/Supabase Auth remains the account authentication provider/u);

@@ -41,6 +41,8 @@ jobs:
         run: node scripts/check-phase4.mjs
       - name: Run Phase 5 Business organization and lifecycle checks
         run: node scripts/check-phase5.mjs
+      - name: Run commercial catalog, navigation, and phase traceability checks
+        run: node scripts/check-phase6.mjs
       - name: Test ciphertext-only CLI
         working-directory: apps/cli
         run: npm test
