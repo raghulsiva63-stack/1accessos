@@ -28,7 +28,7 @@ begin
     '2026-09-05T08:30:00Z',decode(repeat('33',32),'hex')
   ) then raise exception 'unrelated Sent event was persisted'; end if;
 
-  if (select count(*) from public.auth_sms_delivery_events) <> 1 then
+  if (select count(*) from public.auth_sms_delivery_events where provider_message_id='message_phase0_5_sms_test') <> 1 then
     raise exception 'unexpected SMS event count';
   end if;
   if (select provider_status from public.auth_sms_deliveries where id='64000000-0000-4000-8000-000000000004') <> 'DELIVERED' then

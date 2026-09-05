@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-05",
+  "environment": "development",
+  "projectRef": "egqgzkirazabocqwdlfp",
+  "sourceBaseline": "6218ae9ffc19054613814aacfc152f2e206c0f77",
+  "execution": "Supabase execute_sql; each suite begins a transaction and ends with rollback",
+  "suites": [
+    {
+      "path": "supabase/tests/auth_sms_delivery_observability.sql",
+      "sha256": "fef9d393098eee86a3c2b634e74543e6c599fd7e6af090d6cc0b3347c829b419",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase0_rls.sql",
+      "sha256": "a8c6b5c3ef88978ec089ca53f6103502c3a95cb5f9626521d156c6f9833c6694",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase1_completion.sql",
+      "sha256": "335933799a80b2b708d4e22b70eaf0c7ef030f2ce0c7dc483df62a1997bfa75d",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase1_vault_rpc.sql",
+      "sha256": "9086a46b2389abdfe8a43ecb79d4ac65ad8ad322698354c63c59cefd45fda9db",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase2_collaboration.sql",
+      "sha256": "d6068cfa51b33fad30549853b9a7dc97d1c4db9d67a129f7958e254f8c694619",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase4_billing.sql",
+      "sha256": "0cec85a4ea37af194c501f286ee463843a4165640b1125987c845b9ca33099b7",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase5_business_governance.sql",
+      "sha256": "ad524071dc56dba8a69131e28fb75d5a1c64575293eebd5f325c0fdc6ad36a94",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase5_business_organization.sql",
+      "sha256": "cc445aa1fd9ed514d1ad1b836689b16f68682db41a1684f8ea8843ab32eb7674",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase5_saas_ai_platform.sql",
+      "sha256": "8c963a058aef2d5433736ab4de4a3964db69bb01d87189376612d28822383bbb",
+      "result": "passed"
+    },
+    {
+      "path": "supabase/tests/phase6_commercial_catalog.sql",
+      "sha256": "5dbb7bafc29c14943f67a6d4289dff9a1db59c3fb853837c468f6f69dcfa5138",
+      "result": "passed"
+    }
+  ],
+  "limitations": [
+    "Database integration tests only; no independent review or real-device delivery evidence.",
+    "Historical phase6_commercial_catalog.sql validates the catalog, not Phase 6 privileged runtime.",
+    "The collaboration fixture was corrected for current entitlements and both authorization and member-limit denials were tested."
+  ]
+}

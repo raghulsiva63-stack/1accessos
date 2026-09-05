@@ -91,6 +91,29 @@ do $$ begin
 exception when invalid_authorization_specification then null;
 end $$;
 
+-- New Team tenants start with the free entitlement until explicitly upgraded.
+-- A denied invitation must not consume its token or grant membership.
+do $$ begin
+  perform public.accept_workspace_invite(
+    '71120000-0000-4000-8000-000000000001',decode(repeat('46',32),'hex'),
+    decode(repeat('4d',12),'hex'),decode(repeat('4e',48),'hex')
+  );
+  raise exception 'Free tenant bypassed the member limit';
+exception when check_violation then
+  if sqlerrm <> 'tenant member limit reached' then raise; end if;
+end $$;
+
+reset role;
+update public.tenant_entitlements
+set plan_code='team',source='manual',subscription_status='active',max_members=50,max_workspaces=50
+where tenant_id='71100000-0000-4000-8000-000000000001';
+-- Give the outsider fixture quota so membership-injection tests reach RLS,
+-- rather than being rejected earlier by the entitlement trigger.
+update public.tenant_entitlements set max_members=50
+where tenant_id=((select bootstrap ->> 'tenant_id' from phase2_fixtures where actor='outsider'))::uuid;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','72000000-0000-4000-8000-000000000002',true);
+
 select public.accept_workspace_invite(
   '71120000-0000-4000-8000-000000000001',decode(repeat('46',32),'hex'),
   decode(repeat('4d',12),'hex'),decode(repeat('4e',48),'hex')
