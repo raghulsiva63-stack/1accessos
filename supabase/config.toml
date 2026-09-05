@@ -5,3 +5,13 @@ verify_jwt = true
 # Stripe's signed raw body before applying an idempotent database transaction.
 [functions.stripe-webhook]
 verify_jwt = false
+
+# Supabase Auth signs Send SMS Hook requests with Standard Webhooks. The
+# function verifies that signature before sending a provider request.
+[functions.sent-sms-hook]
+verify_jwt = false
+
+# Sent sends no Supabase JWT. This receiver verifies Sent's raw-body HMAC,
+# timestamp freshness, and event idempotency before applying delivery state.
+[functions.sent-webhook]
+verify_jwt = false

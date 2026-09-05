@@ -32,7 +32,7 @@ document.addEventListener("submit", (event) => {
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   const request = message as Record<string, unknown>;
-  if (sender.id !== chrome.runtime.id || request?.type !== "PX_FILL" || request.origin !== location.origin || typeof request.username !== "string" || typeof request.secret !== "string") return false;
+  if (window.top !== window || sender.id !== chrome.runtime.id || request?.type !== "PX_FILL" || request.origin !== location.origin || typeof request.username !== "string" || typeof request.secret !== "string") return false;
   const found = fields(); if (!found) { sendResponse({ ok: false }); return false; }
   if (found.username) setValue(found.username, request.username);
   setValue(found.password, request.secret);

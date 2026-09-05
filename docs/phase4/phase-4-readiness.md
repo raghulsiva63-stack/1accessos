@@ -1,3 +1,5 @@
+> Historical internal checkpoint label. For current phase scope and acceptance use ADR-0010 and `docs/phase6/requirements-traceability.md`; this file does not establish revised-phase completion.
+
 # Passkey-X Phase 4 readiness
 
 Date: 2026-09-04

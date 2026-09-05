@@ -47,7 +47,11 @@ function hasPlaintextKeys(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   if (Array.isArray(value)) return value.some(hasPlaintextKeys);
   return Object.entries(value as Record<string, unknown>).some(([key, child]) =>
-    ["password", "master_password", "plaintext", "private_key", "secret_value"].includes(key.toLowerCase()) || hasPlaintextKeys(child)
+    [
+      "password", "master_password", "plaintext", "private_key", "secret_value",
+      "access_token", "refresh_token", "connector_token", "page_content", "form_content",
+      "dom_content", "vault_content", "raw_prompt",
+    ].includes(key.toLowerCase()) || hasPlaintextKeys(child)
   );
 }
 
@@ -70,7 +74,7 @@ Deno.serve(async (request) => {
   let identityId: string | null = null;
   async function currentIdentityId() {
     if (identityId) return identityId;
-    const { data, error } = await client.from("identities").select("id").eq("user_id", userData.user.id).single();
+    const { data, error } = await client.from("identities").select("id").eq("auth_user_id", userData.user.id).single();
     if (error || !data) throw error ?? new Error("identity unavailable");
     identityId = data.id;
     return identityId;
@@ -79,6 +83,68 @@ Deno.serve(async (request) => {
   try {
     if (request.method === "GET" && path === "/item-types") {
       return response(request, requestId, 200, { items: itemTypes.map((id) => ({ id, schema_version: 1 })) });
+    }
+    if (request.method === "GET" && path === "/connectors/catalog") {
+      const { data, error } = await client.from("connector_catalog")
+        .select("connector_key,display_name,category,auth_scheme,capabilities,minimum_scopes,adapter_stage,quality_label,certification_version,documentation_url")
+        .eq("published", true).eq("phase5_target", true).order("category").order("display_name");
+      if (error) throw error;
+      return response(request, requestId, 200, { connectors: data ?? [] });
+    }
+    if (request.method === "GET" && path === "/connectors") {
+      const tenantId = url.searchParams.get("tenant_id");
+      if (!tenantId) return failure(request, requestId, 422, "tenant_required", "tenant_id is required.");
+      const { data, error } = await client.from("tenant_connectors")
+        .select("id,tenant_id,connector_key,display_name,status,granted_scopes,token_expires_at,token_rotation_state,last_health_at,last_sync_at,next_sync_at,discovered_records")
+        .eq("tenant_id", tenantId).order("display_name");
+      if (error) throw error;
+      return response(request, requestId, 200, { connectors: data ?? [] });
+    }
+    if (request.method === "GET" && path === "/saas/dashboard") {
+      const tenantId = url.searchParams.get("tenant_id");
+      if (!tenantId) return failure(request, requestId, 422, "tenant_required", "tenant_id is required.");
+      const { data, error } = await client.rpc("phase5_saas_dashboard", { p_tenant_id: tenantId });
+      if (error) throw error;
+      if (!data) return failure(request, requestId, 403, "tenant_forbidden", "The tenant context is not available.");
+      return response(request, requestId, 200, data);
+    }
+    if (request.method === "GET" && path === "/saas/applications") {
+      const tenantId = url.searchParams.get("tenant_id");
+      if (!tenantId) return failure(request, requestId, 422, "tenant_required", "tenant_id is required.");
+      const { data, error } = await client.from("saas_applications")
+        .select("id,tenant_id,connector_id,app_key,display_name,category,sanctioned_state,data_risk,owner_identity_id,discovery_source,confidence,first_seen_at,last_seen_at")
+        .eq("tenant_id", tenantId).order("last_seen_at", { ascending: false }).limit(500);
+      if (error) throw error;
+      return response(request, requestId, 200, { applications: data ?? [] });
+    }
+    if (request.method === "GET" && path === "/saas/recommendations") {
+      const tenantId = url.searchParams.get("tenant_id");
+      if (!tenantId) return failure(request, requestId, 422, "tenant_required", "tenant_id is required.");
+      const { data, error } = await client.from("saas_recommendations")
+        .select("id,tenant_id,application_id,kind,severity,title,explanation,estimated_savings_minor,currency,evidence,destructive_action,action_state,generated_at,reviewed_at")
+        .eq("tenant_id", tenantId).order("generated_at", { ascending: false }).limit(500);
+      if (error) throw error;
+      return response(request, requestId, 200, { recommendations: data ?? [] });
+    }
+    if (request.method === "POST" && path === "/saas/recommendations/refresh") {
+      const body = await request.json();
+      if (hasPlaintextKeys(body)) return failure(request, requestId, 422, "plaintext_rejected", "Only approved non-secret metadata is accepted.");
+      if (!body?.tenant_id) return failure(request, requestId, 422, "tenant_required", "tenant_id is required.");
+      const { data, error } = await client.rpc("refresh_saas_recommendations", { p_tenant_id: body.tenant_id });
+      if (error) throw error;
+      return response(request, requestId, 200, { generated: data });
+    }
+    const connectorReconcileMatch = path.match(/^\/connectors\/([0-9a-f-]{36})\/reconcile$/iu);
+    if (connectorReconcileMatch && request.method === "POST") {
+      const { data: connector, error: connectorError } = await client.from("tenant_connectors")
+        .select("id,connector_key,status,connector_catalog!inner(adapter_stage,quality_label)")
+        .eq("id", connectorReconcileMatch[1]).single();
+      if (connectorError) throw connectorError;
+      const catalog = Array.isArray(connector.connector_catalog) ? connector.connector_catalog[0] : connector.connector_catalog;
+      if (!catalog || catalog.adapter_stage !== "production" || catalog.quality_label !== "production_verified") {
+        return failure(request, requestId, 409, "connector_not_certified", "This connector cannot reconcile until its adapter is production-certified.");
+      }
+      return failure(request, requestId, 503, "connector_runtime_unavailable", "The certified connector runtime is not configured in this environment.");
     }
     if (request.method === "GET" && path === "/workspaces") {
       const currentIdentity = await currentIdentityId();
@@ -213,7 +279,7 @@ Deno.serve(async (request) => {
     return failure(request, requestId, 404, "not_found", "The requested API operation does not exist.");
   } catch (error) {
     const code = typeof error === "object" && error && "code" in error ? String(error.code) : "request_failed";
-    const status = code === "40001" ? 409 : 400;
+    const status = code === "40001" ? 409 : code === "42501" ? 403 : 400;
     return failure(request, requestId, status, code, code === "40001" ? "The item changed; refresh and retry." : "The encrypted request could not be completed.");
   }
 });

@@ -3,34 +3,46 @@
 Date: 2026-09-05  
 Authority: VLight Vault Suite Functional and Technical Specifications v2.2
 
-The functional roadmap and Technical Appendix G use different numbering for
-some later milestones. Technical Appendix G is treated as authoritative for
-engineering release order, as required by the package's mandatory addendum.
+This report follows Technical Appendix G, “Revised Engineering Phase Plan v2.2” (0–8), and Appendix H. See ADR-0010 for reconciliation with the earlier §20 milestones and historical internal labels. The resubmitted ZIP matches the original byte-for-byte.
 
-| Technical phase | Required outcome | Current evidence | Status |
+| Phase | Required outcome | Current evidence | Status |
 |---|---|---|---|
-| 0 | Crypto, identity, devices, encrypted sync, entitlement/policy/audit skeleton | Crypto package, tenant/RLS schema, sync, device and audit foundations are implemented and tested | Engineering complete; independent crypto/design review still blocks production-secret approval |
-| 1 | Free + Personal, Chromium extension, sponsor-card isolation, basic AI/automation | Web vault and extension foundations exist; full sponsor isolation, desktop parity, AI/automation and launch E2E are not complete | Partial |
-| 2 | Family + Professional, verified sharing, client/project workspaces, Mission Mode | Sharing/workspace/mission foundations exist; complete Family recovery, Professional handover and pilot exit evidence are missing | Partial |
-| 3 | Team, Access Capsule/Checkout, Consent Ledger, Work-Life Firewall, approvals | Team workspace and approval foundations exist; Capsule/Checkout, Consent Ledger, Work-Life Firewall and pilot evidence are incomplete | Partial |
-| 4 | Business governance, Access Graph/Twin, Policy Sandbox, lifecycle, Session Capsule | Organization hierarchy, delegated-role data, lifecycle and policy foundations exist; graph/twin, policy executor, SSO/SCIM, SIEM and penetration-test gates remain | Foundation only |
-| 5 | SaaS/AI Manager, Ghost Account Radar, Identity Drift, Risk Weather, 25+ connectors | No certified 25-connector platform or complete SaaS/AI manager exists | Not complete |
-| 6 | PAM, Secretless Relay, agent/machine runtime credentials, blast-radius/time-machine/budget controls | Not implemented; mandatory addendum forbids production work on these capabilities before independent crypto review | Not started |
-| 7 | Enterprise trust, private regions/AI, SIEM depth, MSP and marketplace ecosystem | Not implemented | Not started |
-| 8 | Advanced recovery and adaptive controls | Future-gated by independent review | Not started |
+| 0 | Crypto, identity, devices, encrypted sync, policy/entitlement/audit foundation | Client encryption, tenant/RLS, sync, device and audit foundations | Engineering foundation complete; independent crypto/design review blocks acceptance |
+| 1 | Free/Personal, Chromium extension, sponsor isolation, basic AI/automation | Web vault, extension and personal foundations | Partial: desktop parity, signed sponsor/privacy proof, basic AI/automation and hosted E2E remain |
+| 2 | Family/Professional, verified sharing, client/project workspaces, Missions | Sharing, workspace and Mission foundations | Partial: complete suite flows, handover, revoke/expiry/offline/conflict and pilot evidence remain; advanced recovery is future-gated |
+| 3 | Team, Access Capsule/Checkout, Consent Ledger, Work-Life Firewall, approvals | Membership, sharing and approval primitives | Partial: complete named domain/API/UI flows, consent lifecycle and Team E2E evidence remain |
+| 4 | Business governance, Access Graph/Twin, Policy Sandbox, lifecycle, Session Capsule | Organization hierarchy, scoped admin, invitations, policies and audit export | Partial: shared authorization/simulation engine, session lifecycle, enforcement and independent review remain; billing is cross-cutting |
+| 5 | SaaS/AI Manager, Ghost Account Radar, Identity Drift, Risk Weather, 25+ connectors | Inventory, contracts/licenses/usage, Spend Governor, proposals, connector SDK and 28 target manifests | Engineering control-plane checkpoint complete; signature-domain completeness, production connectors, measured savings and independent isolation gates remain |
+| 6 | Privileged access + agent/machine identity; Secretless Relay, Blast-Radius Twin, Access Time Machine, Access Budget | Identity kinds and approval primitives only | Not started as a release; planning only until independent crypto review and preceding phase gates pass |
+| 7 | Enterprise trust, private AI/regions, SIEM depth, MSP, marketplace/ecosystem | Some MSP metadata and commercial catalog foundations | Not started as a release; enterprise draft is planning only |
+| 8 | Recovery Mesh, Digital Access Will, Offline Emergency Capsule, adaptive controls | Design references only | Not started; independent crypto/security review required |
 
-## Cross-cutting launch gates still open
+## Count
+
+- Strictly accepted Phase 0–5 releases: **0 of 6**.
+- Strictly accepted across the revised roadmap: **0 of 9**.
+- Engineering foundation complete: **Phase 0**; substantial but incomplete implementation: **Phases 1–5**.
+- Phase 6 plan: `privileged-runtime-plan.md`. Enterprise work belongs to Phase 7.
+
+## Cross-cutting release gates
 
 - Independent cryptographic design and implementation review.
-- Full disposable-user registration, confirmation, vault, recovery, extension,
-  sharing, revocation, billing, cancellation, and deletion E2E evidence.
+- Disposable-user signup, verification, vault, recovery, extension, sharing,
+  revocation, billing, cancellation, and deletion E2E evidence.
 - External authorization review and penetration test.
-- Approved Stripe test prices, tax registrations/treatment, refunds, proration,
-  dunning, seat changes, and webhook replay evidence.
-- Privacy/ad review for the Free sponsor-card system.
-- Business pilot and discovery-privacy review.
-- Connector certification and tenant-isolation audit.
+- Approved Stripe prices, tax treatment, refunds, proration, dunning, seat
+  changes, and billing lifecycle evidence.
+- Supabase leaked-password protection and production environment separation.
+- Branded SMTP is owner-configured but still needs disposable-user delivery,
+  SPF/DKIM/DMARC, bounce, recovery, and security-notification evidence. Optional
+  Phone MFA and the Supabase-to-Sent signed transport are implemented behind a
+  disabled activation flag; runtime secrets, hook registration, and one real
+  delivered-device ceremony remain.
+- Privacy/ad review, business pilot, and discovery-privacy review.
+- Twenty-five or more real production connector adapters, per-adapter
+  certification evidence, measured savings, and independent tenant-isolation
+  audit for Phase 5.
 
-This file supersedes informal claims that all earlier phases were complete.
-Existing phase documents should be read as engineering checkpoints unless their
-external/commercial gates are checked.
+Engineering checkpoints may be used for continued development but must not be
+advertised as approval to store real customer secrets or as a completed
+enterprise release.

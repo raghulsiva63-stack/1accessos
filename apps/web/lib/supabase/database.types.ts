@@ -874,6 +874,159 @@ export type Database = {
           },
         ]
       }
+      connector_catalog: {
+        Row: {
+          adapter_stage: string
+          auth_scheme: string
+          capabilities: string[]
+          category: string
+          certification_version: string | null
+          connector_key: string
+          created_at: string
+          display_name: string
+          documentation_url: string | null
+          minimum_scopes: string[]
+          phase5_target: boolean
+          published: boolean
+          quality_label: string
+          updated_at: string
+        }
+        Insert: {
+          adapter_stage?: string
+          auth_scheme: string
+          capabilities: string[]
+          category: string
+          certification_version?: string | null
+          connector_key: string
+          created_at?: string
+          display_name: string
+          documentation_url?: string | null
+          minimum_scopes: string[]
+          phase5_target?: boolean
+          published?: boolean
+          quality_label?: string
+          updated_at?: string
+        }
+        Update: {
+          adapter_stage?: string
+          auth_scheme?: string
+          capabilities?: string[]
+          category?: string
+          certification_version?: string | null
+          connector_key?: string
+          created_at?: string
+          display_name?: string
+          documentation_url?: string | null
+          minimum_scopes?: string[]
+          phase5_target?: boolean
+          published?: boolean
+          quality_label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      connector_certifications: {
+        Row: {
+          adapter_version: string
+          certified_at: string
+          checks: Json
+          connector_key: string
+          evidence_sha256: string
+          expires_at: string | null
+          id: string
+          result: string
+          suite_version: string
+        }
+        Insert: {
+          adapter_version: string
+          certified_at?: string
+          checks?: Json
+          connector_key: string
+          evidence_sha256: string
+          expires_at?: string | null
+          id?: string
+          result: string
+          suite_version: string
+        }
+        Update: {
+          adapter_version?: string
+          certified_at?: string
+          checks?: Json
+          connector_key?: string
+          evidence_sha256?: string
+          expires_at?: string | null
+          id?: string
+          result?: string
+          suite_version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connector_certifications_connector_key_fkey"
+            columns: ["connector_key"]
+            isOneToOne: false
+            referencedRelation: "connector_catalog"
+            referencedColumns: ["connector_key"]
+          },
+        ]
+      }
+      connector_credentials: {
+        Row: {
+          ciphertext_sha256: string
+          connector_id: string
+          created_at: string
+          encrypted_token_ref: string
+          envelope_algorithm: string
+          key_version: number
+          revoked_at: string | null
+          rotated_at: string | null
+          tenant_id: string
+        }
+        Insert: {
+          ciphertext_sha256: string
+          connector_id: string
+          created_at?: string
+          encrypted_token_ref: string
+          envelope_algorithm?: string
+          key_version: number
+          revoked_at?: string | null
+          rotated_at?: string | null
+          tenant_id: string
+        }
+        Update: {
+          ciphertext_sha256?: string
+          connector_id?: string
+          created_at?: string
+          encrypted_token_ref?: string
+          envelope_algorithm?: string
+          key_version?: number
+          revoked_at?: string | null
+          rotated_at?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connector_credentials_connector_id_fkey"
+            columns: ["connector_id"]
+            isOneToOne: true
+            referencedRelation: "tenant_connectors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connector_credentials_tenant_id_connector_id_fkey"
+            columns: ["tenant_id", "connector_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_connectors"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "connector_credentials_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       devices: {
         Row: {
           created_at: string
@@ -1189,6 +1342,126 @@ export type Database = {
           },
         ]
       }
+      lifecycle_workflow_runs: {
+        Row: {
+          created_at: string
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          result_summary: Json
+          started_at: string | null
+          status: string
+          tenant_id: string
+          trigger_ref_hash: string
+          workflow_id: string
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          idempotency_key: string
+          result_summary?: Json
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+          trigger_ref_hash: string
+          workflow_id: string
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string
+          result_summary?: Json
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+          trigger_ref_hash?: string
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lifecycle_workflow_runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lifecycle_workflow_runs_tenant_id_workflow_id_fkey"
+            columns: ["tenant_id", "workflow_id"]
+            isOneToOne: false
+            referencedRelation: "lifecycle_workflows"
+            referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
+      lifecycle_workflows: {
+        Row: {
+          action_type: string
+          approval_required: boolean
+          created_at: string
+          created_by: string
+          definition: Json
+          destructive_action: boolean
+          display_name: string
+          enabled: boolean
+          execution_mode: string
+          id: string
+          tenant_id: string
+          trigger_type: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          action_type: string
+          approval_required?: boolean
+          created_at?: string
+          created_by: string
+          definition?: Json
+          destructive_action?: boolean
+          display_name: string
+          enabled?: boolean
+          execution_mode?: string
+          id?: string
+          tenant_id: string
+          trigger_type: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          action_type?: string
+          approval_required?: boolean
+          created_at?: string
+          created_by?: string
+          definition?: Json
+          destructive_action?: boolean
+          display_name?: string
+          enabled?: boolean
+          execution_mode?: string
+          id?: string
+          tenant_id?: string
+          trigger_type?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lifecycle_workflows_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lifecycle_workflows_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mission_items: {
         Row: {
           item_id: string
@@ -1347,6 +1620,77 @@ export type Database = {
           },
         ]
       }
+      msp_tenant_access: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string
+          customer_tenant_id: string
+          id: string
+          permission: string
+          provider_tenant_id: string
+          revoked_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by: string
+          customer_tenant_id: string
+          id?: string
+          permission?: string
+          provider_tenant_id: string
+          revoked_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string
+          customer_tenant_id?: string
+          id?: string
+          permission?: string
+          provider_tenant_id?: string
+          revoked_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "msp_tenant_access_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "msp_tenant_access_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "msp_tenant_access_customer_tenant_id_fkey"
+            columns: ["customer_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "msp_tenant_access_provider_tenant_id_fkey"
+            columns: ["provider_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_admin_assignments: {
         Row: {
           assigned_by: string
@@ -1466,6 +1810,102 @@ export type Database = {
           },
         ]
       }
+      organization_device_posture_reports: {
+        Row: {
+          created_at: string
+          created_by: string
+          device_id: string
+          disk_encrypted: boolean | null
+          endpoint_protection: boolean | null
+          evaluation: string
+          evidence_hash: string | null
+          id: string
+          identity_id: string
+          observed_at: string
+          os_family: string
+          screen_lock: boolean | null
+          security_patch_current: boolean | null
+          source: string
+          tenant_id: string
+          valid_until: string
+          verification_status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          device_id: string
+          disk_encrypted?: boolean | null
+          endpoint_protection?: boolean | null
+          evaluation?: string
+          evidence_hash?: string | null
+          id?: string
+          identity_id: string
+          observed_at?: string
+          os_family?: string
+          screen_lock?: boolean | null
+          security_patch_current?: boolean | null
+          source: string
+          tenant_id: string
+          valid_until: string
+          verification_status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          device_id?: string
+          disk_encrypted?: boolean | null
+          endpoint_protection?: boolean | null
+          evaluation?: string
+          evidence_hash?: string | null
+          id?: string
+          identity_id?: string
+          observed_at?: string
+          os_family?: string
+          screen_lock?: boolean | null
+          security_patch_current?: boolean | null
+          source?: string
+          tenant_id?: string
+          valid_until?: string
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_device_posture_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_device_posture_reports_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_device_posture_reports_identity_id_fkey"
+            columns: ["identity_id"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_device_posture_reports_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_device_posture_reports_tenant_id_identity_id_fkey"
+            columns: ["tenant_id", "identity_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_memberships"
+            referencedColumns: ["tenant_id", "identity_id"]
+          },
+        ]
+      }
       organization_group_memberships: {
         Row: {
           assigned_by: string
@@ -1560,6 +2000,102 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          created_by: string
+          department_id: string | null
+          display_name: string
+          expires_at: string
+          id: string
+          job_title: string | null
+          recipient_email_hash: string
+          revoked_at: string | null
+          status: string
+          team_id: string | null
+          team_role: string
+          tenant_id: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          created_by: string
+          department_id?: string | null
+          display_name: string
+          expires_at: string
+          id: string
+          job_title?: string | null
+          recipient_email_hash: string
+          revoked_at?: string | null
+          status?: string
+          team_id?: string | null
+          team_role?: string
+          tenant_id: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          created_by?: string
+          department_id?: string | null
+          display_name?: string
+          expires_at?: string
+          id?: string
+          job_title?: string | null
+          recipient_email_hash?: string
+          revoked_at?: string | null
+          status?: string
+          team_id?: string | null
+          team_role?: string
+          tenant_id?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_invitations_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_invitations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_invitations_tenant_id_department_id_fkey"
+            columns: ["tenant_id", "department_id"]
+            isOneToOne: false
+            referencedRelation: "organization_departments"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "organization_invitations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_invitations_tenant_id_team_id_fkey"
+            columns: ["tenant_id", "team_id"]
+            isOneToOne: false
+            referencedRelation: "organization_teams"
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -1975,6 +2511,582 @@ export type Database = {
           },
         ]
       }
+      saas_applications: {
+        Row: {
+          app_key: string
+          category: string
+          confidence: number | null
+          connector_id: string | null
+          created_at: string
+          data_risk: string
+          discovery_source: string
+          display_name: string
+          external_ref_hash: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          owner_identity_id: string | null
+          sanctioned_state: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          app_key: string
+          category: string
+          confidence?: number | null
+          connector_id?: string | null
+          created_at?: string
+          data_risk?: string
+          discovery_source: string
+          display_name: string
+          external_ref_hash?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          owner_identity_id?: string | null
+          sanctioned_state?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          app_key?: string
+          category?: string
+          confidence?: number | null
+          connector_id?: string | null
+          created_at?: string
+          data_risk?: string
+          discovery_source?: string
+          display_name?: string
+          external_ref_hash?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          owner_identity_id?: string | null
+          sanctioned_state?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_applications_owner_identity_id_fkey"
+            columns: ["owner_identity_id"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_applications_tenant_id_connector_id_fkey"
+            columns: ["tenant_id", "connector_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_connectors"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "saas_applications_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_contracts: {
+        Row: {
+          application_id: string
+          billing_interval: string
+          created_at: string
+          currency: string
+          id: string
+          notice_days: number
+          purchased_seats: number
+          renewal_at: string | null
+          sku: string
+          source: string
+          tenant_id: string
+          unit_cost_minor: number
+          updated_at: string
+        }
+        Insert: {
+          application_id: string
+          billing_interval: string
+          created_at?: string
+          currency: string
+          id?: string
+          notice_days?: number
+          purchased_seats: number
+          renewal_at?: string | null
+          sku: string
+          source: string
+          tenant_id: string
+          unit_cost_minor: number
+          updated_at?: string
+        }
+        Update: {
+          application_id?: string
+          billing_interval?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          notice_days?: number
+          purchased_seats?: number
+          renewal_at?: string | null
+          sku?: string
+          source?: string
+          tenant_id?: string
+          unit_cost_minor?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_contracts_tenant_id_application_id_fkey"
+            columns: ["tenant_id", "application_id"]
+            isOneToOne: false
+            referencedRelation: "saas_applications"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "saas_contracts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_identity_accounts: {
+        Row: {
+          account_ref_hash: string
+          account_status: string
+          application_id: string
+          created_at: string
+          first_seen_at: string
+          id: string
+          identity_id: string | null
+          last_activity_bucket: string | null
+          last_seen_at: string
+          owner_state: string
+          privilege_tier: string
+          tenant_id: string
+        }
+        Insert: {
+          account_ref_hash: string
+          account_status?: string
+          application_id: string
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          identity_id?: string | null
+          last_activity_bucket?: string | null
+          last_seen_at?: string
+          owner_state?: string
+          privilege_tier?: string
+          tenant_id: string
+        }
+        Update: {
+          account_ref_hash?: string
+          account_status?: string
+          application_id?: string
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          identity_id?: string | null
+          last_activity_bucket?: string | null
+          last_seen_at?: string
+          owner_state?: string
+          privilege_tier?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_identity_accounts_identity_id_fkey"
+            columns: ["identity_id"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_identity_accounts_tenant_id_application_id_fkey"
+            columns: ["tenant_id", "application_id"]
+            isOneToOne: false
+            referencedRelation: "saas_applications"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "saas_identity_accounts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_licenses: {
+        Row: {
+          account_id: string | null
+          assigned_at: string | null
+          assigned_identity_id: string | null
+          contract_id: string
+          created_at: string
+          id: string
+          last_used_on: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          assigned_at?: string | null
+          assigned_identity_id?: string | null
+          contract_id: string
+          created_at?: string
+          id?: string
+          last_used_on?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          assigned_at?: string | null
+          assigned_identity_id?: string | null
+          contract_id?: string
+          created_at?: string
+          id?: string
+          last_used_on?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_licenses_assigned_identity_id_fkey"
+            columns: ["assigned_identity_id"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_licenses_tenant_id_account_id_fkey"
+            columns: ["tenant_id", "account_id"]
+            isOneToOne: false
+            referencedRelation: "saas_identity_accounts"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "saas_licenses_tenant_id_contract_id_fkey"
+            columns: ["tenant_id", "contract_id"]
+            isOneToOne: false
+            referencedRelation: "saas_contracts"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "saas_licenses_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_recommendations: {
+        Row: {
+          action_state: string
+          application_id: string | null
+          currency: string | null
+          destructive_action: boolean
+          estimated_savings_minor: number | null
+          evidence: Json
+          explanation: string
+          generated_at: string
+          id: string
+          kind: string
+          recommendation_key: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          severity: string
+          tenant_id: string
+          title: string
+        }
+        Insert: {
+          action_state?: string
+          application_id?: string | null
+          currency?: string | null
+          destructive_action?: boolean
+          estimated_savings_minor?: number | null
+          evidence?: Json
+          explanation: string
+          generated_at?: string
+          id?: string
+          kind: string
+          recommendation_key: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity: string
+          tenant_id: string
+          title: string
+        }
+        Update: {
+          action_state?: string
+          application_id?: string | null
+          currency?: string | null
+          destructive_action?: boolean
+          estimated_savings_minor?: number | null
+          evidence?: Json
+          explanation?: string
+          generated_at?: string
+          id?: string
+          kind?: string
+          recommendation_key?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          tenant_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_recommendations_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_recommendations_tenant_id_application_id_fkey"
+            columns: ["tenant_id", "application_id"]
+            isOneToOne: false
+            referencedRelation: "saas_applications"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "saas_recommendations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_savings_ledger: {
+        Row: {
+          amount_minor: number
+          application_id: string | null
+          currency: string
+          evidence_ref_hash: string
+          id: string
+          measurement: string
+          period_end: string
+          period_start: string
+          recommendation_id: string | null
+          recorded_at: string
+          recorded_by: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount_minor: number
+          application_id?: string | null
+          currency: string
+          evidence_ref_hash: string
+          id?: string
+          measurement: string
+          period_end: string
+          period_start: string
+          recommendation_id?: string | null
+          recorded_at?: string
+          recorded_by?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount_minor?: number
+          application_id?: string | null
+          currency?: string
+          evidence_ref_hash?: string
+          id?: string
+          measurement?: string
+          period_end?: string
+          period_start?: string
+          recommendation_id?: string | null
+          recorded_at?: string
+          recorded_by?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_savings_ledger_recommendation_id_fkey"
+            columns: ["recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "saas_recommendations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_savings_ledger_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_savings_ledger_tenant_id_application_id_fkey"
+            columns: ["tenant_id", "application_id"]
+            isOneToOne: false
+            referencedRelation: "saas_applications"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "saas_savings_ledger_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_savings_ledger_tenant_id_recommendation_id_fkey"
+            columns: ["tenant_id", "recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "saas_recommendations"
+            referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
+      saas_usage_facts: {
+        Row: {
+          activity_bucket: string
+          application_id: string
+          created_at: string
+          currency: string | null
+          id: number
+          identity_id: string | null
+          metric: string
+          quantity: number
+          source: string
+          source_ref_hash: string | null
+          tenant_id: string
+        }
+        Insert: {
+          activity_bucket: string
+          application_id: string
+          created_at?: string
+          currency?: string | null
+          id?: never
+          identity_id?: string | null
+          metric: string
+          quantity: number
+          source: string
+          source_ref_hash?: string | null
+          tenant_id: string
+        }
+        Update: {
+          activity_bucket?: string
+          application_id?: string
+          created_at?: string
+          currency?: string | null
+          id?: never
+          identity_id?: string | null
+          metric?: string
+          quantity?: number
+          source?: string
+          source_ref_hash?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_usage_facts_identity_id_fkey"
+            columns: ["identity_id"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_usage_facts_tenant_id_application_id_fkey"
+            columns: ["tenant_id", "application_id"]
+            isOneToOne: false
+            referencedRelation: "saas_applications"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "saas_usage_facts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spend_budgets: {
+        Row: {
+          approval_policy_id: string | null
+          chargeback_tag: string | null
+          consumed: number
+          created_at: string
+          created_by: string
+          currency: string | null
+          enforcement: string
+          hard_limit: number
+          id: string
+          metric: string
+          period_end: string
+          period_start: string
+          scope_id: string | null
+          scope_type: string
+          soft_limit: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          approval_policy_id?: string | null
+          chargeback_tag?: string | null
+          consumed?: number
+          created_at?: string
+          created_by: string
+          currency?: string | null
+          enforcement?: string
+          hard_limit: number
+          id?: string
+          metric: string
+          period_end: string
+          period_start: string
+          scope_id?: string | null
+          scope_type: string
+          soft_limit: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          approval_policy_id?: string | null
+          chargeback_tag?: string | null
+          consumed?: number
+          created_at?: string
+          created_by?: string
+          currency?: string | null
+          enforcement?: string
+          hard_limit?: number
+          id?: string
+          metric?: string
+          period_end?: string
+          period_start?: string
+          scope_id?: string | null
+          scope_type?: string
+          soft_limit?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spend_budgets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spend_budgets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_changes: {
         Row: {
           entity_id: string
@@ -2020,6 +3132,85 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
+      tenant_connectors: {
+        Row: {
+          configuration_summary: Json
+          connector_key: string
+          created_at: string
+          created_by: string
+          discovered_records: number
+          display_name: string
+          granted_scopes: string[]
+          id: string
+          last_health_at: string | null
+          last_sync_at: string | null
+          next_sync_at: string | null
+          status: string
+          tenant_id: string
+          token_expires_at: string | null
+          token_rotation_state: string
+          updated_at: string
+        }
+        Insert: {
+          configuration_summary?: Json
+          connector_key: string
+          created_at?: string
+          created_by: string
+          discovered_records?: number
+          display_name: string
+          granted_scopes?: string[]
+          id?: string
+          last_health_at?: string | null
+          last_sync_at?: string | null
+          next_sync_at?: string | null
+          status?: string
+          tenant_id: string
+          token_expires_at?: string | null
+          token_rotation_state?: string
+          updated_at?: string
+        }
+        Update: {
+          configuration_summary?: Json
+          connector_key?: string
+          created_at?: string
+          created_by?: string
+          discovered_records?: number
+          display_name?: string
+          granted_scopes?: string[]
+          id?: string
+          last_health_at?: string | null
+          last_sync_at?: string | null
+          next_sync_at?: string | null
+          status?: string
+          tenant_id?: string
+          token_expires_at?: string | null
+          token_rotation_state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_connectors_connector_key_fkey"
+            columns: ["connector_key"]
+            isOneToOne: false
+            referencedRelation: "connector_catalog"
+            referencedColumns: ["connector_key"]
+          },
+          {
+            foreignKeyName: "tenant_connectors_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_connectors_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2483,6 +3674,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      accept_organization_invitation: {
+        Args: { p_invitation_id: string; p_token_hash: string }
+        Returns: Json
+      }
       accept_workspace_invite: {
         Args: {
           p_invite_id: string
@@ -2624,6 +3819,32 @@ export type Database = {
         Args: { p_expected_revision: number; p_item_id: string }
         Returns: undefined
       }
+      evaluate_organization_device_readiness: {
+        Args: {
+          p_device_id: string
+          p_identity_id: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      export_organization_audit: {
+        Args: {
+          p_after_sequence?: number
+          p_limit?: number
+          p_tenant_id: string
+        }
+        Returns: {
+          action: string
+          actor_identity_id: string
+          event_hash: string
+          metadata: Json
+          occurred_at: string
+          previous_hash: string
+          sequence: number
+          target_id: string
+          target_type: string
+        }[]
+      }
       manage_organization_member_lifecycle: {
         Args: {
           p_department_id?: string
@@ -2644,12 +3865,42 @@ export type Database = {
         }
         Returns: undefined
       }
+      phase5_saas_dashboard: { Args: { p_tenant_id: string }; Returns: Json }
+      refresh_saas_recommendations: {
+        Args: { p_tenant_id: string }
+        Returns: number
+      }
+      reserve_phase5_budget: {
+        Args: {
+          p_budget_id: string
+          p_quantity: number
+          p_source_ref_hash: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      resolve_organization_policies: {
+        Args: { p_identity_id: string; p_tenant_id: string }
+        Returns: {
+          configuration: Json
+          policy_id: string
+          policy_type: string
+          priority: number
+          source_scope_id: string
+          source_scope_type: string
+          version: number
+        }[]
+      }
       restore_vault_item: {
         Args: { p_expected_revision: number; p_item_id: string }
         Returns: undefined
       }
       revoke_access_capsule: {
         Args: { p_capsule_id: string }
+        Returns: undefined
+      }
+      revoke_organization_invitation: {
+        Args: { p_invitation_id: string }
         Returns: undefined
       }
       revoke_workspace_invite: {
@@ -2816,4 +4067,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
