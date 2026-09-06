@@ -61,9 +61,11 @@ accepted.
   ceremonies. The replacement webhook signing secret and Price IDs are
   installed. The billing endpoint returns `billing_disabled` unless the
   server-only activation flag is exactly `true`.
-- Phone MFA: production Auth has phone disabled and does not yet have verified
-  Sent hook secrets/configuration. The Send SMS endpoint returns `sms_disabled`
-  unless the server-only activation flag is exactly `true`.
+- Phone MFA: production Auth has phone disabled. A fresh production-only hook
+  secret plus `SENT_DM_SMS_SANDBOX=false` and `SENT_DM_SMS_ENABLED=false` are
+  installed; the Sent API key and provider webhook registration are not. The
+  Send SMS endpoint remains fail-closed until the activation flag is explicitly
+  changed after provider acceptance.
 - CAPTCHA enforcement: the deployed client integration is ready, but the
   production Turnstile site key and matching Supabase Auth secret are not
   installed.

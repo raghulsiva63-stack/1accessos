@@ -104,10 +104,12 @@ user ceremony has accepted it.
    `Passkey-X`. Verify SPF, DKIM and DMARC, then run confirmation, password-reset,
    security-notification and bounce tests with a disposable inbox.
 5. Supply and enable matching Turnstile site/secret keys if CAPTCHA is required.
-6. Complete Sent onboarding beyond `KYC_COMPLETED`, register the signed hooks,
-   install production server secrets, and explicitly approve one real-device
-   delivery ceremony before phone MFA is exposed. SMS is verification only and
-   never decrypts or recovers a vault.
+6. Complete Sent onboarding beyond `KYC_COMPLETED`, securely install a rotated
+   production API key, register the signed provider hook, and explicitly approve
+   one real-device delivery ceremony before setting `SENT_DM_SMS_ENABLED=true`
+   or exposing phone MFA. A fresh production-only Auth-hook secret and the
+   fail-closed production flags are already installed. SMS is verification only
+   and never decrypts or recovers a vault.
 7. Implement the criteria marked Partial/Not implemented and obtain the listed
    independent reviews and device/provider/pilot evidence before a complete
    v2.2 production claim.
