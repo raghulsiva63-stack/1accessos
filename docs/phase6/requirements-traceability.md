@@ -8,7 +8,7 @@ This report follows Technical Appendix G, “Revised Engineering Phase Plan v2.2
 | Phase | Required outcome | Current evidence | Status |
 |---|---|---|---|
 | 0 | Crypto, identity, devices, encrypted sync, policy/entitlement/audit foundation | Client encryption, tenant/RLS, sync, device and audit foundations | Engineering foundation complete; independent crypto/design review blocks acceptance |
-| 1 | Free/Personal, Chromium extension, sponsor isolation, basic AI/automation | Web vault, extension and personal foundations | Partial: desktop parity, signed sponsor/privacy proof, basic AI/automation and hosted E2E remain |
+| 1 | Free/Personal, Chromium extension, sponsor isolation, basic AI/automation | Web vault, extension, personal foundations, local automation reviews and local rule-based security guidance | Partial: desktop parity, signed sponsor/privacy proof, hosted-AI decision and hosted E2E remain |
 | 2 | Family/Professional, verified sharing, client/project workspaces, Missions | Sharing, workspace and Mission foundations | Partial: complete suite flows, handover, revoke/expiry/offline/conflict and pilot evidence remain; advanced recovery is future-gated |
 | 3 | Team, Access Capsule/Checkout, Consent Ledger, Work-Life Firewall, approvals | Membership, sharing and approval primitives | Partial: complete named domain/API/UI flows, consent lifecycle and Team E2E evidence remain |
 | 4 | Business governance, Access Graph/Twin, Policy Sandbox, lifecycle, Session Capsule | Organization hierarchy, scoped admin, invitations, policies and audit export | Partial: shared authorization/simulation engine, session lifecycle, enforcement and independent review remain; billing is cross-cutting |
@@ -33,11 +33,12 @@ This report follows Technical Appendix G, “Revised Engineering Phase Plan v2.2
 - Approved Stripe prices, tax treatment, refunds, proration, dunning, seat
   changes, and billing lifecycle evidence.
 - Supabase leaked-password protection and production environment separation.
-- Branded SMTP is owner-configured but still needs disposable-user delivery,
-  SPF/DKIM/DMARC, bounce, recovery, and security-notification evidence. Optional
-  Phone MFA and the Supabase-to-Sent signed transport are implemented behind a
-  disabled activation flag; runtime secrets, hook registration, and one real
-  delivered-device ceremony remain.
+- Branded SMTP is not configured in production. SMTP credentials,
+  SPF/DKIM/DMARC, disposable-user delivery, bounce, recovery, and
+  security-notification evidence remain. Optional Phone MFA and the
+  Supabase-to-Sent signed transport are implemented behind a disabled
+  activation flag; a Supabase Pro plan, runtime secrets, hook registration, and
+  one approved real delivered-device ceremony remain.
 - Privacy/ad review, business pilot, and discovery-privacy review.
 - Twenty-five or more real production connector adapters, per-adapter
   certification evidence, measured savings, and independent tenant-isolation

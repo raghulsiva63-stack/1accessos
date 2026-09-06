@@ -11,22 +11,28 @@
 [context.production.environment]
   NEXT_PUBLIC_PASSKEYS_ENABLED = "true"
   NEXT_PUBLIC_PHONE_MFA_ENABLED = "false"
-  NEXT_PUBLIC_BILLING_ENABLED = "false"
+  NEXT_PUBLIC_BILLING_ENABLED = "true"
+  NEXT_PUBLIC_PLAN_CATALOG_ENABLED = "true"
+  NEXT_PUBLIC_STRIPE_TEST_MODE = "true"
 
 [context.deploy-preview.environment]
   NEXT_PUBLIC_PASSKEYS_ENABLED = "false"
   NEXT_PUBLIC_PHONE_MFA_ENABLED = "false"
   NEXT_PUBLIC_BILLING_ENABLED = "false"
+  NEXT_PUBLIC_PLAN_CATALOG_ENABLED = "false"
+  NEXT_PUBLIC_STRIPE_TEST_MODE = "true"
 
 [context.branch-deploy.environment]
   NEXT_PUBLIC_PASSKEYS_ENABLED = "false"
   NEXT_PUBLIC_PHONE_MFA_ENABLED = "false"
   NEXT_PUBLIC_BILLING_ENABLED = "false"
+  NEXT_PUBLIC_PLAN_CATALOG_ENABLED = "false"
+  NEXT_PUBLIC_STRIPE_TEST_MODE = "true"
 
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://egqgzkirazabocqwdlfp.supabase.co wss://egqgzkirazabocqwdlfp.supabase.co; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'; worker-src 'self' blob:"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://wkkmyacbhqloubtwvjom.supabase.co wss://wkkmyacbhqloubtwvjom.supabase.co; font-src 'self' data:; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'; worker-src 'self' blob:"
     Cross-Origin-Opener-Policy = "same-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
     Referrer-Policy = "strict-origin-when-cross-origin"

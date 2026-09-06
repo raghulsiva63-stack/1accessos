@@ -9,10 +9,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build && node --test tests/vault-crypto.test.mjs",
-    "lint": "eslint app lib components tests/vault-crypto.test.mjs"
+    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
+    "lint": "eslint app lib components tests"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "1.6.1",
     "@supabase/supabase-js": "2.115.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

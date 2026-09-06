@@ -6,7 +6,7 @@ import {
   ArrowRight, Building2, Check, Code2, Fingerprint, KeyRound, Menu,
   ShieldCheck, Sparkles, Users,
 } from "lucide-react";
-import { loadPublicPlanCatalog, type BillingCurrency, type BillingInterval, type PublicCatalogPlan } from "@/lib/billing/client";
+import { publicCatalogEnabled, loadPublicPlanCatalog, rememberPlanSelection, stripeTestMode, type BillingCurrency, type BillingInterval, type PublicCatalogPlan } from "@/lib/billing/client";
 
 function money(amountMinor: number, currency: BillingCurrency) {
   return new Intl.NumberFormat(currency === "inr" ? "en-IN" : "en-US", {
@@ -36,7 +36,7 @@ function PlanCard({ plan, currency, interval, office = false }: { plan: PublicCa
     <p className="public-plan-summary">{plan.summary}</p>
     <PlanPrice plan={plan} currency={currency} interval={interval} />
     <div className="public-plan-meta"><span><Users /> {seats}</span>{plan.trialDays > 0 && <span><Sparkles /> {plan.trialDays}-day trial policy</span>}</div>
-    <a className={plan.featured ? "public-plan-action primary" : "public-plan-action"} href="#access">{plan.code === "enterprise" ? "Request an enterprise pilot" : plan.code === "free" ? "Start free" : `Choose ${plan.name}`} <ArrowRight /></a>
+    <a className={plan.featured ? "public-plan-action primary" : "public-plan-action"} href="#access" onClick={() => rememberPlanSelection(plan.code)}>{plan.code === "enterprise" ? "Request an enterprise pilot" : plan.code === "free" ? "Start free" : `Choose ${plan.name}`} <ArrowRight /></a>
     <ul>{plan.features.map((feature) => <li key={feature}><Check /> <span>{feature}</span></li>)}</ul>
     {plan.commercialStatus !== "active" && <p className="public-plan-status">Launch catalog · paid checkout remains safely disabled</p>}
   </article>;
@@ -49,6 +49,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
   const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
+    if (!publicCatalogEnabled) return;
     let active = true;
     loadPublicPlanCatalog()
       .then((catalog) => { if (active) { setPlans(catalog); setCatalogState(catalog.length ? "ready" : "error"); } })
@@ -60,7 +61,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
   const officePlans = useMemo(() => plans.filter((plan) => ["team", "business"].includes(plan.code)), [plans]);
   const enterprise = plans.find((plan) => plan.code === "enterprise");
 
-  const links = <><a href="#product">Product</a><a href="#teams">Teams</a><a href="#business">Business</a><a href="#security">Security</a><a href="#pricing">Pricing</a></>;
+  const links = <><a href="#product">Product</a>{publicCatalogEnabled && <><a href="#teams">Teams</a><a href="#business">Business</a></>}<a href="#security">Security</a><a href="#pricing">Pricing</a></>;
 
   return <main className="public-site">
     <header className="public-header">
@@ -94,6 +95,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
     </section>
 
     <section className="public-pricing" id="pricing">
+      {!publicCatalogEnabled ? <div className="public-catalog-state" role="status"><h2>Paid plans are not available yet</h2><p>Commercial terms are awaiting approval. Paid checkout is disabled.</p></div> : <>
       <div className="public-section-heading"><div><span className="public-kicker"><Sparkles /> Versioned launch catalog</span><h2>A clear plan for every way you work.</h2><p>Prices and package capabilities come from the server-managed 2026-09-v2.2 catalog—not from hard-coded page copy.</p></div><div className="public-pricing-controls" aria-label="Pricing options"><div><button className={currency === "inr" ? "active" : ""} onClick={() => setCurrency("inr")}>INR</button><button className={currency === "usd" ? "active" : ""} onClick={() => setCurrency("usd")}>USD</button></div><div><button className={interval === "month" ? "active" : ""} onClick={() => setInterval("month")}>Monthly</button><button className={interval === "year" ? "active" : ""} onClick={() => setInterval("year")}>Yearly</button></div></div></div>
 
       {catalogState === "loading" && <div className="public-catalog-state" role="status">Loading the verified plan catalog…</div>}
@@ -104,7 +106,8 @@ export function PublicSite({ children }: { children: ReactNode }) {
         <div className="public-plan-grid office">{officePlans.map((plan) => <PlanCard key={plan.code} plan={plan} currency={currency} interval={interval} office />)}</div>
         {enterprise && <PlanCard plan={enterprise} currency={currency} interval={interval} office />}
       </>}
-      <p className="public-pricing-note"><ShieldCheck /> Displayed amounts are proposed launch prices from the product specification. Paid checkout remains disabled until Stripe test prices, tax treatment, and end-to-end billing evidence are approved.</p>
+      <p className="public-pricing-note"><ShieldCheck /> {stripeTestMode ? "Checkout uses Stripe sandbox only: test cards, no real charges. Displayed amounts are the v2.2 test catalog." : "Displayed amounts are the active server-managed catalog. Tax is collected only where configured and registered."}</p>
+      </>}
     </section>
 
     <footer className="public-footer"><div><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={55} /><p>Private access for people, teams, and machines.</p></div><div><strong>Product</strong><a href="#security">Security</a><a href="#pricing">Pricing</a><a href="#access">Sign in</a></div><div><strong>Company</strong><span>Vlightsoft</span><span>passkey-x.com</span></div><small>© 2026 Vlightsoft. Passkey-X launch catalog v2.2.</small></footer>

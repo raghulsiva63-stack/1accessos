@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { downloadBlob } from "@/lib/browser/download";
 import type { WorkspaceVault } from "@/lib/vault/items";
 import {
   assignOrganizationAdministrator, createOrganizationInvitation, createOrganizationPolicy,
@@ -38,12 +39,7 @@ function safeMessage(reason: unknown) {
 }
 
 function downloadText(filename: string, content: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content],{ type }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob([content], { type }), filename);
 }
 
 // Called by invitation event handlers; every row in a bulk action shares its expiry.

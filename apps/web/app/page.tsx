@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Factor, Session } from "@supabase/supabase-js";
 import {
   Archive, Bot, Braces, BriefcaseBusiness, Check, ChevronRight, CircleGauge, Clock3,
@@ -17,18 +17,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OrganizationView } from "@/components/organization-view";
 import { SaasAiManager } from "@/components/saas-ai-manager";
+import { AutomationsView } from "@/components/automations-view";
 import { PublicSite } from "@/components/public-site";
+import { TurnstileCheck } from "@/components/turnstile-check";
 import {
   createDeviceKeyPair, createEncryptedExport, createRecoveryKey, deriveMasterKey,
   fromBase64Url, parseRecoveryKey, randomBytes, recoveryFile, recoveryVerifier, saveProtectedDeviceKey,
   toBase64Url, toPostgresBytea, unwrapKey, WEB_KDF_PROFILE, wrapKey,
 } from "@/lib/crypto/vault";
-import { isSupabaseConfigured, passkeysEnabled, phoneMfaEnabled, supabase } from "@/lib/supabase/client";
+import { captchaEnabled, isSupabaseConfigured, passkeysEnabled, phoneMfaEnabled, supabase } from "@/lib/supabase/client";
+import { captchaOptions, captchaReady } from "@/lib/auth/captcha";
+import { downloadBlob } from "@/lib/browser/download";
 import {
   createVaultItem, deleteVaultItem, type ItemKind, listVaultItemHistory,
   listVaultItems, listWorkspaceVaults, restoreVaultItem, type VaultHistoryEntry,
   type VaultItem, type VaultPayload, type WorkspaceVault, updateVaultItem,
 } from "@/lib/vault/items";
+import { WorkspaceRequestGate } from "@/lib/vault/request-gate";
 import { generatePassphrase, generatePassword, parseLoginCsv, passwordHealth } from "@/lib/vault/tools";
 import { downloadEncryptedAttachment, listEncryptedAttachments, type VaultAttachment, uploadEncryptedAttachment } from "@/lib/vault/attachments";
 import {
@@ -42,9 +47,10 @@ import {
   type WorkspaceSuite,
 } from "@/lib/collaboration/phase2";
 import {
-  beginCheckout, billingEnabled, FREE_ENTITLEMENT, loadBillingCatalog,
+  beginCheckout, billingEnabled, clearPlanSelection, FREE_ENTITLEMENT, loadBillingCatalog,
   loadPublicPlanCatalog, loadTenantEntitlement, openCustomerPortal, type BillingCurrency,
-  type BillingInterval, type BillingPrice, type PublicCatalogPlan, type TenantEntitlement,
+  readPlanSelection, stripeTestMode, type BillingInterval, type BillingPrice, type PlanCode,
+  type PublicCatalogPlan, type TenantEntitlement,
 } from "@/lib/billing/client";
 import {
   acceptOrganizationInvitation, parseOrganizationInvitationLink,
@@ -127,6 +133,7 @@ function customerError(reason: unknown, fallback: string) {
   if (detail.includes("weak_password") || detail.includes("password should be")) return "Choose a stronger login password with at least 12 characters.";
   if (detail.includes("signup_disabled") || detail.includes("signups not allowed")) return "New account registration is temporarily unavailable.";
   if (detail.includes("rate") || detail.includes("too many")) return "Too many attempts. Wait a moment and try again.";
+  if (detail.includes("captcha")) return "Complete the security check again, then retry.";
   if (detail.includes("mfa_phone_enroll_not_enabled") || detail.includes("phone enroll") || detail.includes("sms provider")) return "SMS verification is not active for this environment yet.";
   if (detail.includes("invalid phone") || detail.includes("phone format")) return "Enter a mobile number in international format, such as +14155550123.";
   if (detail.includes("factor") && detail.includes("already")) return "This mobile verification method is already enrolled.";
@@ -248,11 +255,72 @@ function FatalNotice({ message }: { message: string }) {
 }
 
 function AuthScreen() {
-  const [mode, setMode] = useState<"signin" | "signup">("signin"); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
-  async function submit(event: React.FormEvent) { event.preventDefault(); setBusy(true); setMessage(""); try { const result = mode === "signin" ? await supabase!.auth.signInWithPassword({ email, password }) : await supabase!.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } }); if (result.error) setMessage(customerError(result.error, mode === "signin" ? "Sign-in could not be completed. Try again." : "Your account could not be created. Try again.")); else if (mode === "signup" && !result.data.session) setMessage("Check your email to confirm the account, then sign in."); } catch (reason) { setMessage(customerError(reason, "The account service is temporarily unavailable. Try again.")); } finally { setBusy(false); } }
-  async function signInWithPasskey() { setBusy(true); setMessage(""); try { const { error } = await supabase!.auth.signInWithPasskey(); if (error) setMessage(customerError(error, "Passkey sign-in could not be completed. Use your login password or try again.")); } catch (reason) { setMessage(customerError(reason, "Passkey sign-in could not be completed. Use your login password or try again.")); } finally { setBusy(false); } }
-  async function requestPasswordReset() { if (!email) { setMessage("Enter your email first."); return; } setBusy(true); setMessage(""); try { const { error } = await supabase!.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin }); if (error) throw error; setMessage("If an account exists for this email, a secure reset link is on its way."); } catch (reason) { setMessage(customerError(reason, "A reset link could not be sent. Try again shortly.")); } finally { setBusy(false); } }
-  return <PublicSite><Card className="auth-card"><CardHeader><p className="eyebrow">{mode === "signin" ? "Welcome back" : "Create your private vault"}</p><CardTitle>{mode === "signin" ? "Sign in to Passkey-X" : "Create your account"}</CardTitle><CardDescription>Account login and vault unlock are separate security steps.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={submit}><div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div><div><Label htmlFor="password">Login password</Label><Input id="password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={12} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>{message && <p className="form-message" role="status">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Continue securely" : "Create account"}</Button>{mode === "signin" && <Button type="button" variant="ghost" disabled={busy} onClick={() => void requestPasswordReset()}>Forgot login password?</Button>}<Button type="button" variant="ghost" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); }}>{mode === "signin" ? "New to Passkey-X? Create account" : "I already have an account"}</Button></form>{mode === "signin" && passkeysEnabled && <div className="passkey-signin"><span>or</span><Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => void signInWithPasskey()}><Fingerprint /> Sign in with a passkey</Button><small>Account authentication only. Your separate vault password is still required.</small></div>}</CardContent></Card></PublicSite>;
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function requireCaptcha() {
+    if (captchaReady(captchaEnabled, captchaToken)) return true;
+    setMessage("Complete the security check before continuing.");
+    return false;
+  }
+
+  function resetCaptcha() {
+    setCaptchaToken(null);
+    setCaptchaReset((current) => current + 1);
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!requireCaptcha()) return;
+    setBusy(true); setMessage("");
+    try {
+      const security = captchaOptions(captchaToken);
+      const result = mode === "signin"
+        ? await supabase!.auth.signInWithPassword({ email, password, options: security })
+        : await supabase!.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin, ...security } });
+      if (result.error) setMessage(customerError(result.error, mode === "signin" ? "Sign-in could not be completed. Try again." : "Your account could not be created. Try again."));
+      else if (mode === "signup" && !result.data.session) setMessage("Check your email to confirm the account, then sign in.");
+    } catch (reason) {
+      setMessage(customerError(reason, "The account service is temporarily unavailable. Try again."));
+    } finally { resetCaptcha(); setBusy(false); }
+  }
+
+  async function signInWithPasskey() {
+    if (!requireCaptcha()) return;
+    setBusy(true); setMessage("");
+    try {
+      const { error } = await supabase!.auth.signInWithPasskey({ options: captchaOptions(captchaToken) });
+      if (error) setMessage(customerError(error, "Passkey sign-in could not be completed. Use your login password or try again."));
+    } catch (reason) {
+      setMessage(customerError(reason, "Passkey sign-in could not be completed. Use your login password or try again."));
+    } finally { resetCaptcha(); setBusy(false); }
+  }
+
+  async function requestPasswordReset() {
+    if (!email) { setMessage("Enter your email first."); return; }
+    if (!requireCaptcha()) return;
+    setBusy(true); setMessage("");
+    try {
+      const { error } = await supabase!.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin, ...captchaOptions(captchaToken) });
+      if (error) throw error;
+      setMessage("If an account exists for this email, a secure reset link is on its way.");
+    } catch (reason) {
+      setMessage(customerError(reason, "A reset link could not be sent. Try again shortly."));
+    } finally { resetCaptcha(); setBusy(false); }
+  }
+
+  function switchMode() {
+    setMode((current) => current === "signin" ? "signup" : "signin");
+    setMessage("");
+    resetCaptcha();
+  }
+
+  return <PublicSite><Card className="auth-card"><CardHeader><p className="eyebrow">{mode === "signin" ? "Welcome back" : "Create your private vault"}</p><CardTitle>{mode === "signin" ? "Sign in to Passkey-X" : "Create your account"}</CardTitle><CardDescription>Account login and vault unlock are separate security steps.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={submit}><div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div><div><Label htmlFor="password">Login password</Label><Input id="password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={12} required value={password} onChange={(event) => setPassword(event.target.value)} /></div><TurnstileCheck action={mode === "signin" ? "auth-signin" : "auth-signup"} resetKey={captchaReset} onToken={setCaptchaToken} onProblem={() => setMessage("The security check could not load. Refresh the page and try again.")} />{message && <p className="form-message" role="status">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Continue securely" : "Create account"}</Button>{mode === "signin" && <Button type="button" variant="ghost" disabled={busy} onClick={() => void requestPasswordReset()}>Forgot login password?</Button>}<Button type="button" variant="ghost" disabled={busy} onClick={switchMode}>{mode === "signin" ? "New to Passkey-X? Create account" : "I already have an account"}</Button></form>{mode === "signin" && passkeysEnabled && <div className="passkey-signin"><span>or</span><Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => void signInWithPasskey()}><Fingerprint /> Sign in with a passkey</Button><small>Account authentication only. Your separate vault password is still required.</small></div>}</CardContent></Card></PublicSite>;
 }
 
 function AccountPasswordReset({ email, onComplete }: { email: string; onComplete: () => void }) {
@@ -261,16 +329,23 @@ function AccountPasswordReset({ email, onComplete }: { email: string; onComplete
   return <main className="center-screen setup-bg"><Card className="auth-card"><CardHeader><Brand /><div className="step-pill">Secure account recovery</div><CardTitle>Create a new login password</CardTitle><CardDescription>Updating the login for {email} does not reset or decrypt the separate vault password.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={submit}><div><Label htmlFor="new-login-password">New login password</Label><Input id="new-login-password" type="password" minLength={12} autoComplete="new-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></div><div><Label htmlFor="confirm-login-password">Confirm login password</Label><Input id="confirm-login-password" type="password" minLength={12} autoComplete="new-password" required value={confirm} onChange={(event) => setConfirm(event.target.value)} /></div>{message && <p className="form-message" role="status">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Updating…" : "Update login password"}</Button></form></CardContent></Card></main>;
 }
 
+type PendingVaultSetup = Omit<CryptoProfile, "identity_id"> & {
+  workspace_nonce: string;
+  workspace_wrapped_key: string;
+  device_public_key: string;
+};
+
 function VaultSetup({ email, onComplete }: { email: string; onComplete: (profile: CryptoProfile) => void }) {
-  const [loginPassword, setLoginPassword] = useState(""); const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState(""); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [recoveryKey, setRecoveryKey] = useState<string | null>(null); const [pendingProfile, setPendingProfile] = useState<CryptoProfile | null>(null); const [downloaded, setDownloaded] = useState(false);
+  const [loginPassword, setLoginPassword] = useState(""); const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState(""); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [recoveryKey, setRecoveryKey] = useState<string | null>(null); const [pendingSetup, setPendingSetup] = useState<PendingVaultSetup | null>(null); const [downloaded, setDownloaded] = useState(false);
   async function setup(event: React.FormEvent) {
     event.preventDefault(); if (password !== confirm) { setMessage("The vault passwords do not match."); return; } if (password === loginPassword) { setMessage("Your vault password must be different from your login password."); return; } setBusy(true); setMessage("");
-    const salt = randomBytes(16); const accountRoot = randomBytes(32); const workspaceKey = randomBytes(32); let masterKey: Uint8Array | null = null;
-    try { const reauth = await supabase!.auth.signInWithPassword({ email, password: loginPassword }); if (reauth.error) throw new Error("Login-password verification failed."); masterKey = await deriveMasterKey(password, salt); const recovery = createRecoveryKey(); const verifier = await recoveryVerifier(recovery.secret); const masterWrapped = await wrapKey(masterKey, accountRoot, "1accessos:account-root:v1"); const recoveryWrapped = await wrapKey(recovery.secret, accountRoot, "1accessos:recovery:v1"); const workspaceWrapped = await wrapKey(accountRoot, workspaceKey, "1accessos:workspace:v1"); const device = await createDeviceKeyPair(); const devicePrivate = await wrapKey(accountRoot, device.privateKey, "1accessos:device-private:v1"); await saveProtectedDeviceKey(devicePrivate); const { data, error } = await supabase!.rpc("bootstrap_personal_vault", { p_salt: toPostgresBytea(salt), p_kdf_parameters: WEB_KDF_PROFILE, p_master_nonce: toPostgresBytea(fromBase64Url(masterWrapped.nonce)), p_master_wrapped_root: toPostgresBytea(fromBase64Url(masterWrapped.ciphertext)), p_recovery_nonce: toPostgresBytea(fromBase64Url(recoveryWrapped.nonce)), p_recovery_wrapped_root: toPostgresBytea(fromBase64Url(recoveryWrapped.ciphertext)), p_recovery_verifier: toPostgresBytea(verifier), p_workspace_nonce: toPostgresBytea(fromBase64Url(workspaceWrapped.nonce)), p_workspace_wrapped_key: toPostgresBytea(fromBase64Url(workspaceWrapped.ciphertext)), p_device_public_key: toPostgresBytea(device.publicKey) }); const verifierValue = toBase64Url(verifier); verifier.fill(0); if (error) throw error; const bootstrap = data as { identity_id: string }; setRecoveryKey(recovery.display); setPendingProfile({ identity_id: bootstrap.identity_id, salt: toBase64Url(salt), kdf_parameters: WEB_KDF_PROFILE, master_nonce: masterWrapped.nonce, master_wrapped_root: masterWrapped.ciphertext, recovery_nonce: recoveryWrapped.nonce, recovery_wrapped_root: recoveryWrapped.ciphertext, recovery_verifier: verifierValue }); setLoginPassword(""); setPassword(""); setConfirm(""); }
-    catch (reason) { setMessage(customerError(reason, "Your private vault could not be created. Try again.")); } finally { accountRoot.fill(0); workspaceKey.fill(0); masterKey?.fill(0); setLoginPassword(""); setBusy(false); }
+    const salt = randomBytes(16); const accountRoot = randomBytes(32); const workspaceKey = randomBytes(32); let masterKey: Uint8Array | null = null; let recoverySecret: Uint8Array | null = null; let verifier: Uint8Array | null = null; let devicePrivateKey: Uint8Array | null = null;
+    try { const reauth = await supabase!.auth.signInWithPassword({ email, password: loginPassword }); if (reauth.error) throw new Error("Login-password verification failed."); masterKey = await deriveMasterKey(password, salt); const recovery = createRecoveryKey(); recoverySecret = recovery.secret; verifier = await recoveryVerifier(recoverySecret); const masterWrapped = await wrapKey(masterKey, accountRoot, "1accessos:account-root:v1"); const recoveryWrapped = await wrapKey(recoverySecret, accountRoot, "1accessos:recovery:v1"); const workspaceWrapped = await wrapKey(accountRoot, workspaceKey, "1accessos:workspace:v1"); const device = await createDeviceKeyPair(); devicePrivateKey = device.privateKey; const devicePrivate = await wrapKey(accountRoot, devicePrivateKey, "1accessos:device-private:v1"); await saveProtectedDeviceKey(devicePrivate); setRecoveryKey(recovery.display); setPendingSetup({ salt: toBase64Url(salt), kdf_parameters: WEB_KDF_PROFILE, master_nonce: masterWrapped.nonce, master_wrapped_root: masterWrapped.ciphertext, recovery_nonce: recoveryWrapped.nonce, recovery_wrapped_root: recoveryWrapped.ciphertext, recovery_verifier: toBase64Url(verifier), workspace_nonce: workspaceWrapped.nonce, workspace_wrapped_key: workspaceWrapped.ciphertext, device_public_key: toBase64Url(device.publicKey) }); setDownloaded(false); setMessage("Download the recovery key before the encrypted vault is created."); setLoginPassword(""); setPassword(""); setConfirm(""); }
+    catch (reason) { setMessage(customerError(reason, "Your private vault setup could not be prepared. Try again.")); } finally { accountRoot.fill(0); workspaceKey.fill(0); masterKey?.fill(0); recoverySecret?.fill(0); verifier?.fill(0); devicePrivateKey?.fill(0); setLoginPassword(""); setBusy(false); }
   }
-  function download() { if (!recoveryKey) return; const url = URL.createObjectURL(recoveryFile(recoveryKey)); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "passkey-x-recovery-key.json"; anchor.click(); URL.revokeObjectURL(url); setDownloaded(true); }
-  return <main className="center-screen setup-bg"><Card className="setup-card"><CardHeader><Brand /><div className="step-pill">Account verified</div><CardTitle>{recoveryKey ? "Save your recovery key" : "Create your private vault"}</CardTitle><CardDescription>{recoveryKey ? "This is the only recovery method. Keep an offline copy." : `Signed in as ${email}. Choose a new password used only to unlock your vault.`}</CardDescription></CardHeader><CardContent>{recoveryKey ? <div className="form-stack"><div className="recovery-box"><KeyRound /><code>{recoveryKey}</code></div><Button size="lg" onClick={download}><Download /> Download recovery key</Button><Button variant="outline" disabled={!pendingProfile || !downloaded} onClick={() => { if (pendingProfile) onComplete(pendingProfile); }}>I saved it securely — continue</Button><p className="field-hint">The continue button unlocks after the recovery file has been downloaded.</p></div> : <form className="form-stack" onSubmit={setup}><div><Label htmlFor="setup-login-password">Verify login password</Label><Input id="setup-login-password" type="password" minLength={12} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></div><div><Label htmlFor="vault-password">Vault master password</Label><Input id="vault-password" type="password" minLength={12} autoComplete="new-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></div><div><Label htmlFor="vault-confirm">Confirm vault password</Label><Input id="vault-confirm" type="password" minLength={12} autoComplete="new-password" required value={confirm} onChange={(event) => setConfirm(event.target.value)} /></div><p className="field-hint">Login and vault passwords must be different. Passkey-X cannot recover the vault password.</p>{message && <p className="form-message" role="alert">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Securing vault…" : "Create encrypted vault"}</Button></form>}</CardContent></Card></main>;
+  function download() { if (!recoveryKey) return; setMessage(""); try { downloadBlob(recoveryFile(recoveryKey), "passkey-x-recovery-key.json"); setDownloaded(true); setMessage("Recovery-key download started. Confirm the file is saved before continuing."); } catch { setDownloaded(false); setMessage("The recovery-key file could not be downloaded. Check browser download permissions and try again."); } }
+  async function finishSetup() { if (!pendingSetup || !downloaded) return; setBusy(true); setMessage(""); try { const { data, error } = await supabase!.rpc("bootstrap_personal_vault", { p_salt: toPostgresBytea(fromBase64Url(pendingSetup.salt)), p_kdf_parameters: WEB_KDF_PROFILE, p_master_nonce: toPostgresBytea(fromBase64Url(pendingSetup.master_nonce)), p_master_wrapped_root: toPostgresBytea(fromBase64Url(pendingSetup.master_wrapped_root)), p_recovery_nonce: toPostgresBytea(fromBase64Url(pendingSetup.recovery_nonce)), p_recovery_wrapped_root: toPostgresBytea(fromBase64Url(pendingSetup.recovery_wrapped_root)), p_recovery_verifier: toPostgresBytea(fromBase64Url(pendingSetup.recovery_verifier!)), p_workspace_nonce: toPostgresBytea(fromBase64Url(pendingSetup.workspace_nonce)), p_workspace_wrapped_key: toPostgresBytea(fromBase64Url(pendingSetup.workspace_wrapped_key)), p_device_public_key: toPostgresBytea(fromBase64Url(pendingSetup.device_public_key)) }); if (error) throw error; const bootstrap = data as { identity_id: string }; onComplete({ identity_id: bootstrap.identity_id, salt: pendingSetup.salt, kdf_parameters: pendingSetup.kdf_parameters, master_nonce: pendingSetup.master_nonce, master_wrapped_root: pendingSetup.master_wrapped_root, recovery_nonce: pendingSetup.recovery_nonce, recovery_wrapped_root: pendingSetup.recovery_wrapped_root, recovery_verifier: pendingSetup.recovery_verifier }); } catch (reason) { setMessage(customerError(reason, "Your encrypted vault could not be created. The downloaded recovery key has not been activated; retry or restart setup.")); } finally { setBusy(false); } }
+  return <main className="center-screen setup-bg"><Card className="setup-card"><CardHeader><Brand /><div className="step-pill">Account verified</div><CardTitle>{recoveryKey ? "Save your recovery key" : "Create your private vault"}</CardTitle><CardDescription>{recoveryKey ? "This is the only recovery method. Keep an offline copy." : `Signed in as ${email}. Choose a new password used only to unlock your vault.`}</CardDescription></CardHeader><CardContent>{recoveryKey ? <div className="form-stack"><div className="recovery-box"><KeyRound /><code>{recoveryKey}</code></div><Button size="lg" disabled={busy} onClick={download}><Download /> Download recovery key</Button><Button variant="outline" disabled={!pendingSetup || !downloaded || busy} onClick={() => void finishSetup()}>{busy ? "Creating encrypted vault…" : "I saved it securely — create vault"}</Button><p className="field-hint">No vault record is created until the recovery file has downloaded and you confirm here.</p>{message && <p className="form-message" role="status">{message}</p>}</div> : <form className="form-stack" onSubmit={setup}><div><Label htmlFor="setup-login-password">Verify login password</Label><Input id="setup-login-password" type="password" minLength={12} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></div><div><Label htmlFor="vault-password">Vault master password</Label><Input id="vault-password" type="password" minLength={12} autoComplete="new-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></div><div><Label htmlFor="vault-confirm">Confirm vault password</Label><Input id="vault-confirm" type="password" minLength={12} autoComplete="new-password" required value={confirm} onChange={(event) => setConfirm(event.target.value)} /></div><p className="field-hint">Login and vault passwords must be different. Passkey-X cannot recover the vault password.</p>{message && <p className="form-message" role="alert">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Preparing recovery…" : "Prepare encrypted vault"}</Button></form>}</CardContent></Card></main>;
 }
 
 function UnlockScreen({ profile, email, onUnlock, onProfileChange }: { profile: CryptoProfile; email: string; onUnlock: (key: Uint8Array) => void; onProfileChange: (profile: CryptoProfile) => void }) {
@@ -281,7 +356,9 @@ function UnlockScreen({ profile, email, onUnlock, onProfileChange }: { profile: 
 }
 
 function VaultShell({ email, profile, rootKey, onLock }: { email: string; profile: CryptoProfile; rootKey: Uint8Array; onLock: () => void }) {
-  const [view, setView] = useState<View>("home");
+  const [view, setView] = useState<View>(() => readPlanSelection() ? "billing" : "home");
+  const requests = useRef(new WorkspaceRequestGate());
+  const workspaceLoadVersion = useRef(0);
   const [workspaces, setWorkspaces] = useState<WorkspaceVault[]>([]);
   const [vault, setVault] = useState<WorkspaceVault | null>(null);
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -302,49 +379,68 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
   const initials = useMemo(() => email.slice(0, 2).toUpperCase(), [email]);
 
   async function refresh(openVault: WorkspaceVault) {
-    const [active, deleted] = await Promise.all([listVaultItems(openVault), listVaultItems(openVault, { trash: true })]);
-    setItems(active);
-    setTrash(deleted);
-    setSelected((current) => current ? [...active, ...deleted].find((item) => item.id === current.id) ?? null : null);
+    const ticket = requests.current.issue(openVault.workspaceId, "items");
+    if (!ticket) return;
+    try {
+      const [active, deleted] = await Promise.all([listVaultItems(openVault), listVaultItems(openVault, { trash: true })]);
+      if (!requests.current.accepts(ticket)) return;
+      setItems(active); setTrash(deleted);
+      setSelected((current) => current ? [...active, ...deleted].find((item) => item.id === current.id) ?? null : null);
+    } catch (reason) { if (requests.current.accepts(ticket)) throw reason; }
   }
 
   async function refreshEntitlement(openVault: WorkspaceVault) {
-    try { setEntitlement(await loadTenantEntitlement(openVault.tenantId)); }
-    catch { setEntitlement(FREE_ENTITLEMENT); }
+    const ticket = requests.current.issue(openVault.workspaceId, "entitlement");
+    if (!ticket) return;
+    try {
+      const next = await loadTenantEntitlement(openVault.tenantId);
+      if (requests.current.accepts(ticket)) setEntitlement(next);
+    } catch { if (requests.current.accepts(ticket)) setEntitlement(FREE_ENTITLEMENT); }
+  }
+
+  function selectWorkspace(next: WorkspaceVault) {
+    requests.current.select(next.workspaceId);
+    setVault(next); setItems([]); setTrash([]); setSelected(null); setEditor(null);
+    setHistory(null); setRevealed(false); setEntitlement(FREE_ENTITLEMENT);
+    setFilter("all"); setQuery(""); setError("");
   }
 
   async function reloadWorkspaces(preferredId?: string) {
+    const version = ++workspaceLoadVersion.current;
     const next = await listWorkspaceVaults(profile.identity_id, rootKey);
-    setWorkspaces((previous) => {
-      previous.forEach((entry) => entry.key.fill(0));
-      return next;
-    });
+    if (version !== workspaceLoadVersion.current) { next.forEach((entry) => entry.key.fill(0)); return; }
     const chosen = next.find((entry) => entry.workspaceId === (preferredId ?? vault?.workspaceId)) ?? next[0];
-    setVault(chosen);
-    await Promise.all([refresh(chosen), refreshEntitlement(chosen)]);
-    return chosen;
+    if (!chosen) { next.forEach((entry) => entry.key.fill(0)); throw new Error("No accessible workspace."); }
+    workspaces.forEach((entry) => entry.key.fill(0));
+    setWorkspaces(next); setLoading(true); selectWorkspace(chosen);
+    try { await Promise.all([refresh(chosen), refreshEntitlement(chosen)]); }
+    finally { if (version === workspaceLoadVersion.current) setLoading(false); }
   }
 
   useEffect(() => {
     let active = true;
     let opened: WorkspaceVault[] = [];
+    const version = ++workspaceLoadVersion.current;
     listWorkspaceVaults(profile.identity_id, rootKey).then(async (next) => {
       opened = next;
-      if (!active) { next.forEach((entry) => entry.key.fill(0)); return; }
-      setWorkspaces(next);
-      setVault(next[0]);
+      if (!active || version !== workspaceLoadVersion.current) { next.forEach((entry) => entry.key.fill(0)); return; }
+      if (!next[0]) throw new Error("No accessible workspace.");
+      setWorkspaces(next); selectWorkspace(next[0]);
       await Promise.all([refresh(next[0]), refreshEntitlement(next[0])]);
-    }).catch((reason) => { if (active) setError(customerError(reason, "Unable to open this workspace. Try again.")); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; opened.forEach((entry) => entry.key.fill(0)); };
+    }).catch((reason) => { if (active && version === workspaceLoadVersion.current) setError(customerError(reason, "Unable to open this workspace. Try again.")); })
+      .finally(() => { if (active && version === workspaceLoadVersion.current) setLoading(false); });
+    const gate = requests.current;
+    return () => { active = false; workspaceLoadVersion.current += 1; gate.select(null); opened.forEach((entry) => entry.key.fill(0)); };
   }, [profile.identity_id, rootKey]);
 
   async function switchWorkspace(workspaceId: string) {
     const next = workspaces.find((entry) => entry.workspaceId === workspaceId);
     if (!next) return;
-    setLoading(true); setSelected(null); setFilter("all"); setQuery(""); setVault(next);
-    try { await Promise.all([refresh(next), refreshEntitlement(next)]); } catch (reason) { setError(customerError(reason, "Unable to switch workspaces. Try again.")); }
-    finally { setLoading(false); }
+    const version = ++workspaceLoadVersion.current;
+    setLoading(true); selectWorkspace(next);
+    try { await Promise.all([refresh(next), refreshEntitlement(next)]); }
+    catch (reason) { if (version === workspaceLoadVersion.current) setError(customerError(reason, "Unable to switch workspaces. Try again.")); }
+    finally { if (version === workspaceLoadVersion.current) setLoading(false); }
   }
 
   async function acceptPendingLink() {
@@ -378,8 +474,8 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
   async function toggle(item: VaultItem, key: "favorite" | "archived") { if (!vault) return; await updateVaultItem(vault, item, { ...item.payload, [key]: !item.payload[key], updatedAt: new Date().toISOString() }); await refresh(vault); }
   async function showHistory(item: VaultItem) { if (vault) setHistory(await listVaultItemHistory(vault, item)); }
   function openVault(filterValue: VaultFilter = "all") { setFilter(filterValue); setView("vault"); setSelected(null); }
-  function lockVault() { workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); onLock(); }
-  async function signOut() { workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); await supabase!.auth.signOut(); }
+  function lockVault() { requests.current.select(null); workspaceLoadVersion.current += 1; workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); onLock(); }
+  async function signOut() { requests.current.select(null); workspaceLoadVersion.current += 1; workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); await supabase!.auth.signOut(); }
   const planLabel = entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1);
   return <main className="vault-app">
     <aside className="vault-sidebar"><Brand /><nav>{NAV_SECTIONS.map((section) => <div className="nav-section" key={section.label}><span className="nav-section-label">{section.label}</span>{section.views.map((viewId) => { const entry = NAV.find((candidate) => candidate.id === viewId)!; const Icon = entry.icon; return <button key={entry.id} className={`nav-item ${view === entry.id ? "active" : ""}`} onClick={() => { setView(entry.id); setSelected(null); }}><Icon /> {entry.label}{entry.id === "vault" && <span>{items.length}</span>}</button>; })}</div>)}</nav><div className="plan-chip"><Sparkles /><div><strong>{planLabel}</strong><span>{entitlement.ai_credits_remaining} private AI credits</span></div></div><div className="sidebar-account"><div className="avatar">{initials}</div><div><strong>{email.split("@")[0]}</strong><span>{vault?.name ?? "Opening workspace"}</span></div><MoreHorizontal /></div></aside>
@@ -399,7 +495,7 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
         {view === "security" && <SecurityView health={health} items={items} onOpen={(id) => { const item = items.find((candidate) => candidate.id === id); if (item) { setView("vault"); setSelected(item); } }} />}
         {view === "account-security" && <AccountSecurityView />}
         {view === "generator" && <GeneratorView />}
-        {view === "automations" && <AutomationsView entitlement={entitlement} />}
+        {vault && <AutomationsView key={`${vault.identityId}:${vault.tenantId}:${vault.workspaceId}`} vault={vault} items={items} visible={view === "automations"} onNavigate={setView} />}
         {view === "devices" && <DevicesView identityId={profile.identity_id} />}
         {view === "billing" && vault && <BillingView vault={vault} entitlement={entitlement} onRefresh={() => refreshEntitlement(vault)} />}
         {view === "settings" && vault && <SettingsView email={email} items={items} vault={vault} profile={profile} entitlement={entitlement} onImported={() => refresh(vault)} />}
@@ -421,7 +517,7 @@ function PlanSummaryCard({ entitlement }: { entitlement: Entitlement }) { return
 
 function WorkspacesView({ identityId, rootKey, workspaces, vault, onSelect, onReload }: {
   identityId: string; rootKey: Uint8Array; workspaces: WorkspaceVault[]; vault: WorkspaceVault;
-  onSelect: (id: string) => Promise<void>; onReload: (id?: string) => Promise<WorkspaceVault>;
+  onSelect: (id: string) => Promise<void>; onReload: (id?: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [suite, setSuite] = useState<WorkspaceSuite>("team");
@@ -569,15 +665,8 @@ function SecurityView({ health, items, onOpen }: { health: ReturnType<typeof pas
 
 function GeneratorView() {
   const [mode, setMode] = useState<"password" | "passphrase">("password"); const [length, setLength] = useState(24); const [value, setValue] = useState(() => generatePassword({ length: 24, uppercase: true, lowercase: true, numbers: true, symbols: true, avoidAmbiguous: true })); const [options, setOptions] = useState({ uppercase: true, lowercase: true, numbers: true, symbols: true, avoidAmbiguous: true });
-  function regenerate() { setValue(mode === "password" ? generatePassword({ length, ...options }) : generatePassphrase(5)); }
-  return <div className="feature-page narrow-page"><Card className="generator-card"><CardHeader><span className="feature-icon"><WandSparkles /></span><CardTitle>Private password generator</CardTitle><CardDescription>Generated with the browser cryptographic random-number generator. Values never leave this device.</CardDescription></CardHeader><CardContent><div className="segmented"><button className={mode === "password" ? "active" : ""} onClick={() => { setMode("password"); setValue(generatePassword({ length, ...options })); }}>Password</button><button className={mode === "passphrase" ? "active" : ""} onClick={() => { setMode("passphrase"); setValue(generatePassphrase(5)); }}>Passphrase</button></div><div className="generated-value"><code>{value}</code><CopyButton value={value} /><button aria-label="Generate another" onClick={regenerate}><RefreshCw /></button></div>{mode === "password" && <><div className="range-row"><Label htmlFor="password-length">Length</Label><strong>{length}</strong><input id="password-length" type="range" min="12" max="64" value={length} onChange={(event) => { const next = Number(event.target.value); setLength(next); setValue(generatePassword({ length: next, ...options })); }} /></div><div className="option-grid">{(["uppercase", "lowercase", "numbers", "symbols", "avoidAmbiguous"] as const).map((key) => <label key={key}><input type="checkbox" checked={options[key]} onChange={(event) => { const next = { ...options, [key]: event.target.checked }; setOptions(next); try { setValue(generatePassword({ length, ...next })); } catch { /* wait for another option */ } }} /><span>{key === "avoidAmbiguous" ? "Avoid ambiguous" : key[0].toUpperCase() + key.slice(1)}</span></label>)}</div></>}<div className="privacy-note"><ShieldCheck /><span>Clipboard copies are cleared after 30 seconds when the copied value is still present.</span></div></CardContent></Card></div>;
-}
-
-function AutomationsView({ entitlement }: { entitlement: Entitlement }) {
-  const recipes = [{ id: "weekly-health", title: "Weekly vault health review", detail: "Remind me to review weak, reused, and stale passwords.", icon: CircleGauge }, { id: "stale-passwords", title: "Stale password watch", detail: "Surface logins that have not been changed for one year.", icon: History }, { id: "device-review", title: "Monthly device review", detail: "Prompt me to revoke browsers and devices I no longer use.", icon: Laptop }];
-  const [enabled, setEnabled] = useState<string[]>(() => { if (typeof window === "undefined") return []; return JSON.parse(localStorage.getItem("passkey-x-automations") ?? "[]") as string[]; });
-  function toggle(id: string) { const next = enabled.includes(id) ? enabled.filter((value) => value !== id) : [...enabled, id]; setEnabled(next); localStorage.setItem("passkey-x-automations", JSON.stringify(next)); }
-  return <div className="feature-page"><div className="feature-intro"><div><span className="status-pill"><Bot /> Private by default</span><h2>Useful routines, under your control</h2><p>These starter automations run as local reminders. They do not send vault fields to a remote service.</p></div><div className="credit-meter"><span>Monthly runs</span><strong>{entitlement.automation_runs_remaining}</strong><small>remaining</small></div></div><div className="recipe-grid">{recipes.map(({ id, title, detail, icon: Icon }) => <Card key={id}><CardHeader><span className="feature-icon"><Icon /></span><CardTitle>{title}</CardTitle><CardDescription>{detail}</CardDescription></CardHeader><CardContent><label className="switch-row"><span>{enabled.includes(id) ? "Enabled" : "Disabled"}</span><input type="checkbox" checked={enabled.includes(id)} onChange={() => toggle(id)} /></label></CardContent></Card>)}</div><Card className="concierge-card"><CardHeader><span className="feature-icon"><Sparkles /></span><CardTitle>Security Concierge</CardTitle><CardDescription>Local privacy mode is active. A hosted AI provider has not been connected, so Passkey-X will not pretend that remote AI is available.</CardDescription></CardHeader><CardContent><div className="privacy-mode"><ShieldCheck /><div><strong>Privacy mode: Local only</strong><span>Vault contents stay on this device. Provider connection is an explicit future hosting decision.</span></div></div></CardContent></Card></div>;
+  function regenerate() { setValue(mode === "password" ? generatePassword({ length, ...options }) : generatePassphrase(7)); }
+  return <div className="feature-page narrow-page"><Card className="generator-card"><CardHeader><span className="feature-icon"><WandSparkles /></span><CardTitle>Private password generator</CardTitle><CardDescription>Generated with the browser cryptographic random-number generator. Values never leave this device.</CardDescription></CardHeader><CardContent><div className="segmented"><button className={mode === "password" ? "active" : ""} onClick={() => { setMode("password"); setValue(generatePassword({ length, ...options })); }}>Password</button><button className={mode === "passphrase" ? "active" : ""} onClick={() => { setMode("passphrase"); setValue(generatePassphrase(7)); }}>Passphrase</button></div><div className="generated-value"><code>{value}</code><CopyButton value={value} /><button aria-label="Generate another" onClick={regenerate}><RefreshCw /></button></div>{mode === "password" && <><div className="range-row"><Label htmlFor="password-length">Length</Label><strong>{length}</strong><input id="password-length" type="range" min="12" max="64" value={length} onChange={(event) => { const next = Number(event.target.value); setLength(next); setValue(generatePassword({ length: next, ...options })); }} /></div><div className="option-grid">{(["uppercase", "lowercase", "numbers", "symbols", "avoidAmbiguous"] as const).map((key) => <label key={key}><input type="checkbox" disabled={key !== "avoidAmbiguous" && options[key] && [options.uppercase, options.lowercase, options.numbers, options.symbols].filter(Boolean).length === 1} checked={options[key]} onChange={(event) => { const next = { ...options, [key]: event.target.checked }; setOptions(next); try { setValue(generatePassword({ length, ...next })); } catch { /* wait for another option */ } }} /><span>{key === "avoidAmbiguous" ? "Avoid ambiguous" : key[0].toUpperCase() + key.slice(1)}</span></label>)}</div></>}<p className="field-hint">Passphrases use seven randomly selected words. <a href="/third-party-notices.txt" target="_blank" rel="noreferrer">Wordlist attribution</a></p><div className="privacy-note"><ShieldCheck /><span>Clipboard copies are cleared after 30 seconds when the copied value is still present.</span></div></CardContent></Card></div>;
 }
 
 type AccountPasskey = { id: string; friendly_name?: string; created_at: string; last_used_at?: string };
@@ -705,6 +794,8 @@ function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault;
   const [interval, setInterval] = useState<BillingInterval>("month");
   const [prices, setPrices] = useState<BillingPrice[]>([]);
   const [catalogPlans, setCatalogPlans] = useState<PublicCatalogPlan[]>([]);
+  const [selectedPlan] = useState<Exclude<PlanCode, "free"> | null>(() => readPlanSelection());
+  const [seatCounts, setSeatCounts] = useState({ team: 3, business: 5 });
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -712,7 +803,8 @@ function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault;
     if (result === "success") return "Checkout completed. Your plan activates only after the signed Stripe webhook is verified.";
     if (result === "cancelled") return "Checkout was cancelled. Your current plan is unchanged.";
     if (result === "portal-return") return "Billing portal closed. Refresh to read the latest verified entitlement.";
-    return "";
+    const selected = readPlanSelection();
+    return selected ? `You selected ${selected[0].toUpperCase() + selected.slice(1)}. Confirm the billing options below to continue.` : "";
   });
   const canManage = vault.role === "owner";
 
@@ -733,9 +825,10 @@ function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault;
     return () => { active = false; };
   }, [canManage, vault.tenantId]);
 
-  async function checkout(plan: "personal" | "family" | "team" | "business") {
+  async function checkout(plan: Exclude<PlanCode, "free">) {
     setBusy(plan); setMessage("");
-    try { window.location.assign(await beginCheckout(vault.tenantId, plan, interval, currency)); }
+    const quantity = plan === "team" || plan === "business" ? seatCounts[plan] : 1;
+    try { const url = await beginCheckout(vault.tenantId, plan, interval, currency, quantity); clearPlanSelection(); window.location.assign(url); }
     catch (reason) { setMessage(customerError(reason, "Checkout could not be started. Your current plan is unchanged.")); setBusy(""); }
   }
 
@@ -754,9 +847,10 @@ function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault;
 
   return <div className="feature-page billing-page"><div className="feature-intro"><div><span className="status-pill"><CreditCard /> SaaS workspace billing</span><h2>Choose the right protection for this workspace</h2><p>Checkout and subscription management are hosted by Stripe. Passkey-X receives billing status only—never card details or vault contents.</p></div><div className="billing-status"><small>Current plan</small><strong>{entitlement.plan_code}</strong><span>{entitlement.subscription_status.replaceAll("_", " ")}</span></div></div>
     <div className="billing-toolbar"><div className="billing-segment" role="group" aria-label="Billing currency"><button className={currency === "inr" ? "active" : ""} onClick={() => setCurrency("inr")}>INR</button><button className={currency === "usd" ? "active" : ""} onClick={() => setCurrency("usd")}>USD</button></div><div className="billing-segment" role="group" aria-label="Billing interval"><button className={interval === "month" ? "active" : ""} onClick={() => setInterval("month")}>Monthly</button><button className={interval === "year" ? "active" : ""} onClick={() => setInterval("year")}>Annual</button></div>{entitlement.source === "stripe" && <Button variant="outline" disabled={!canManage || busy !== ""} onClick={() => void portal()}><CreditCard /> {busy === "portal" ? "Opening…" : "Manage billing"}</Button>}<Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}><RefreshCw /> Refresh</Button></div>
-    {!billingEnabled && <div className="billing-notice"><ShieldCheck /><div><strong>Test billing is safely disabled</strong><p>The subscription code is ready, but Checkout stays unavailable until all sixteen Stripe test Price IDs and the signed webhook secret are installed in Supabase.</p></div></div>}
+    {stripeTestMode && <div className="billing-notice"><ShieldAlert /><div><strong>Stripe sandbox checkout</strong><p>Use Stripe test cards only. No real payment will be collected and sandbox subscriptions must not be treated as commercial orders.</p></div></div>}
+    {!billingEnabled && <div className="billing-notice"><ShieldCheck /><div><strong>Test billing is safely disabled</strong><p>Checkout stays unavailable until all twenty Stripe test Price IDs, the restricted key, and the signed webhook secret are installed in Supabase.</p></div></div>}
     {!canManage && <div className="billing-notice"><ShieldAlert /><div><strong>Workspace owner access required</strong><p>Members can see the verified plan. Only an owner can start Checkout or open the Customer Portal.</p></div></div>}
-    <div className="pricing-grid">{catalogPlans.map((plan) => { const livePrice = prices.find((entry) => entry.plan === plan.code && entry.currency === currency && entry.interval === interval); const current = entitlement.plan_code === plan.code; const canCheckout = ["personal", "family", "team", "business"].includes(plan.code); const displayPrice = livePrice ? formatPrice(livePrice) : formatCatalogPrice(plan, currency, interval); return <Card key={plan.code} className={`pricing-card ${current ? "current" : ""} ${plan.code === "business" ? "featured" : ""}`}><CardHeader>{plan.code === "business" && <span className="popular-pill">For offices</span>}<CardTitle>{plan.name}</CardTitle><CardDescription>{plan.summary}</CardDescription></CardHeader><CardContent><div className="plan-price"><strong>{displayPrice}</strong><span>{plan.billingModel === "per_seat" ? `per user / ${interval}` : plan.billingModel === "contract" ? "contract pricing" : plan.code === "free" ? "forever" : `per ${interval}`}</span>{plan.trialDays > 0 && <small>{plan.trialDays}-day trial policy</small>}</div><ul>{plan.features.slice(0, 6).map((feature) => <li key={feature}><Check /> {feature}</li>)}</ul>{plan.code === "free" ? <Button variant="outline" disabled>{current ? "Current plan" : "Included"}</Button> : plan.code === "enterprise" ? <Button variant="outline" disabled>Sales-assisted</Button> : !canCheckout ? <Button variant="outline" disabled>Checkout pending</Button> : <Button disabled={!billingEnabled || !canManage || !livePrice || busy !== "" || current} onClick={() => void checkout(plan.code as "personal" | "family" | "team" | "business")}>{current ? "Current plan" : busy === plan.code ? "Opening secure Checkout…" : `Choose ${plan.name}`}</Button>}</CardContent></Card>; })}</div>
+    <div className="pricing-grid">{catalogPlans.map((plan) => { const livePrice = prices.find((entry) => entry.plan === plan.code && entry.currency === currency && entry.interval === interval); const current = entitlement.plan_code === plan.code; const selected = selectedPlan === plan.code; const canCheckout = ["personal", "family", "professional", "team", "business"].includes(plan.code); const displayPrice = livePrice ? formatPrice(livePrice) : formatCatalogPrice(plan, currency, interval); const seatPlan = plan.code === "team" || plan.code === "business" ? plan.code : null; const seatCount = seatPlan ? seatCounts[seatPlan] : 1; const minimumSeats = plan.minSeats ?? 1; const maximumSeats = plan.maxSeats ?? minimumSeats; return <Card key={plan.code} className={`pricing-card ${current ? "current" : ""} ${selected ? "selected" : ""} ${plan.code === "business" ? "featured" : ""}`}><CardHeader>{plan.code === "business" && <span className="popular-pill">For offices</span>}{selected && !current && <span className="selected-plan-pill">Your selection</span>}<CardTitle>{plan.name}</CardTitle><CardDescription>{plan.summary}</CardDescription></CardHeader><CardContent><div className="plan-price"><strong>{displayPrice}</strong><span>{plan.billingModel === "per_seat" ? `per user / ${interval}` : plan.billingModel === "contract" ? "contract pricing" : plan.code === "free" ? "forever" : `per ${interval}`}</span>{plan.trialDays > 0 && <small>{plan.trialDays}-day test trial</small>}</div>{seatPlan && <div><Label htmlFor={`billing-seats-${seatPlan}`}>Seats</Label><Input id={`billing-seats-${seatPlan}`} type="number" inputMode="numeric" min={minimumSeats} max={maximumSeats} value={seatCount} onChange={(event) => { const next = Number(event.target.value); setSeatCounts((currentCounts) => ({ ...currentCounts, [seatPlan]: Number.isSafeInteger(next) ? Math.min(maximumSeats, Math.max(minimumSeats, next)) : minimumSeats })); }} /><p className="field-hint">{minimumSeats}–{maximumSeats} users · Checkout quantity is validated on the server.</p></div>}<ul>{plan.features.slice(0, 6).map((feature) => <li key={feature}><Check /> {feature}</li>)}</ul>{plan.code === "free" ? <Button variant="outline" disabled>{current ? "Current plan" : "Included"}</Button> : plan.code === "enterprise" ? <Button variant="outline" disabled>Sales-assisted</Button> : !canCheckout ? <Button variant="outline" disabled>Checkout pending</Button> : <Button disabled={!billingEnabled || !canManage || !livePrice || busy !== "" || current} onClick={() => void checkout(plan.code as Exclude<PlanCode, "free">)}>{current ? "Current plan" : busy === plan.code ? "Opening secure Checkout…" : `Choose ${plan.name}`}</Button>}</CardContent></Card>; })}</div>
     {message && <p className="settings-message" role="status">{message}</p>}<div className="privacy-note"><ShieldCheck /><span>Plan access changes only after a verified Stripe webhook updates the tenant entitlement. Redirect query parameters cannot unlock paid features.</span></div><p className="billing-footnote">Taxes are not calculated or collected until Vlightsoft confirms the required registrations and explicitly enables Stripe Tax.</p>
   </div>;
 }
@@ -764,7 +858,7 @@ function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault;
 function SettingsView({ email, items, vault, profile, entitlement, onImported }: { email: string; items: VaultItem[]; vault: WorkspaceVault; profile: CryptoProfile; entitlement: Entitlement; onImported: () => Promise<void> | void }) {
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [exportPassword, setExportPassword] = useState(""); const [showExport, setShowExport] = useState(false);
   async function importCsv(file: File) { if (!window.confirm("Import this CSV? It is parsed locally and each record is encrypted before upload.")) return; setBusy(true); setMessage(""); try { const rows = parseLoginCsv(await file.text()); for (const row of rows) await createVaultItem(vault, "login", { version: 1, ...row, updatedAt: new Date().toISOString() }); await onImported(); setMessage(`${rows.length} encrypted login${rows.length === 1 ? "" : "s"} imported.`); } catch (reason) { setMessage(customerError(reason, "This file could not be imported. Check its format and try again.")); } finally { setBusy(false); } }
-  async function exportVault(event: React.FormEvent) { event.preventDefault(); setBusy(true); setMessage(""); let master: Uint8Array | null = null; let verified: Uint8Array | null = null; try { master = await deriveMasterKey(exportPassword, bytea(profile.salt), { algorithm: "ARGON2ID", ...profile.kdf_parameters }); verified = await unwrapKey(master, { algorithm: "AES-256-GCM", nonce: toBase64Url(bytea(profile.master_nonce)), ciphertext: toBase64Url(bytea(profile.master_wrapped_root)) }, "1accessos:account-root:v1"); const data = await createEncryptedExport({ product: "Passkey-X", version: 1, items }, exportPassword); const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `passkey-x-export-${new Date().toISOString().slice(0, 10)}.pxvault`; anchor.click(); URL.revokeObjectURL(url); setExportPassword(""); setShowExport(false); setMessage("Encrypted export downloaded."); } catch { setMessage("Vault reauthentication failed; no export was created."); } finally { master?.fill(0); verified?.fill(0); setBusy(false); } }
+  async function exportVault(event: React.FormEvent) { event.preventDefault(); setBusy(true); setMessage(""); let master: Uint8Array | null = null; let verified: Uint8Array | null = null; try { master = await deriveMasterKey(exportPassword, bytea(profile.salt), { algorithm: "ARGON2ID", ...profile.kdf_parameters }); verified = await unwrapKey(master, { algorithm: "AES-256-GCM", nonce: toBase64Url(bytea(profile.master_nonce)), ciphertext: toBase64Url(bytea(profile.master_wrapped_root)) }, "1accessos:account-root:v1"); const data = await createEncryptedExport({ product: "Passkey-X", version: 1, items }, exportPassword); downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), `passkey-x-export-${new Date().toISOString().slice(0, 10)}.pxvault`); setExportPassword(""); setShowExport(false); setMessage("Encrypted export download started."); } catch { setMessage("Vault reauthentication failed or the browser blocked the download; no export was saved."); } finally { master?.fill(0); verified?.fill(0); setBusy(false); } }
   return <div className="feature-page"><div className="settings-grid"><Card><CardHeader><CardTitle>Account</CardTitle><CardDescription>Signed in as {email}</CardDescription></CardHeader><CardContent><div className="setting-row"><span>Plan</span><strong>{entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1)}</strong></div><div className="setting-row"><span>Billing status</span><strong>{entitlement.subscription_status.replaceAll("_", " ")}</strong></div><div className="setting-row"><span>Encryption</span><strong>Argon2id + AES-256-GCM</strong></div><div className="setting-row"><span>Workspace</span><code>{vault.workspaceId.slice(0, 8)}…</code></div></CardContent></Card><Card><CardHeader><CardTitle>Import logins</CardTitle><CardDescription>Chrome-compatible or standard CSV. The source file is never uploaded.</CardDescription></CardHeader><CardContent><label className="file-action"><Upload /><span>{busy ? "Working…" : "Choose CSV file"}</span><input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCsv(file); event.target.value = ""; }} /></label></CardContent></Card><Card><CardHeader><CardTitle>Encrypted backup</CardTitle><CardDescription>Reauthenticate with your vault password before a portable encrypted export is created.</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={() => setShowExport(true)}><Download /> Export {items.length} items</Button></CardContent></Card><Card><CardHeader><CardTitle>Workspace entitlement</CardTitle><CardDescription>Plan access is tenant-scoped and controlled by verified server-side billing events.</CardDescription></CardHeader><CardContent><p className="field-hint">Use Plans & billing to compare tiers or manage an active Stripe subscription. Billing never receives vault fields.</p></CardContent></Card></div>{message && <p className="settings-message" role="status">{message}</p>}{showExport && <div className="modal-backdrop"><Card className="item-editor" role="dialog" aria-modal="true" aria-labelledby="export-title"><CardHeader><button className="modal-close" aria-label="Close" onClick={() => setShowExport(false)}><X /></button><CardTitle id="export-title">Confirm encrypted export</CardTitle><CardDescription>Enter your vault password. The export is encrypted locally with a fresh salt.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={exportVault}><div><Label htmlFor="export-password">Vault password</Label><Input id="export-password" type="password" autoComplete="current-password" required value={exportPassword} onChange={(event) => setExportPassword(event.target.value)} /></div><Button disabled={busy}>{busy ? "Encrypting…" : "Reauthenticate and download"}</Button></form></CardContent></Card></div>}</div>;
 }
 

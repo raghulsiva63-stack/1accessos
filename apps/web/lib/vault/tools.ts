@@ -1,12 +1,7 @@
 import type { VaultItem } from "@/lib/vault/items";
 
-const WORDS = [
-  "amber", "anchor", "atlas", "birch", "bloom", "cedar", "cipher", "cloud",
-  "comet", "coral", "delta", "ember", "falcon", "fjord", "forest", "globe",
-  "harbor", "indigo", "jungle", "lilac", "lumen", "maple", "meadow", "nebula",
-  "ocean", "orbit", "pearl", "pixel", "quartz", "raven", "river", "saffron",
-  "signal", "silver", "spruce", "summit", "tiger", "velvet", "willow", "zenith",
-] as const;
+// EFF large wordlist; attribution and source hash in THIRD_PARTY_NOTICES.md.
+import WORDS from "./eff-words.json";
 
 function randomIndex(max: number) {
   if (!Number.isSafeInteger(max) || max < 1) throw new Error("Invalid random range.");
@@ -26,16 +21,16 @@ export type PasswordOptions = {
 };
 
 export function generatePassword(options: PasswordOptions) {
+  if (!Number.isFinite(options.length)) throw new Error("Password length must be finite.");
   const length = Math.min(128, Math.max(12, Math.floor(options.length)));
   const groups = [
-    options.uppercase ? "ABCDEFGHJKLMNPQRSTUVWXYZ" : "",
-    options.lowercase ? "abcdefghijkmnopqrstuvwxyz" : "",
-    options.numbers ? "23456789" : "",
+    options.uppercase ? (options.avoidAmbiguous ? "ABCDEFGHJKLMNPQRSTUVWXYZ" : "ABCDEFGHIJKLMNOPQRSTUVWXYZ") : "",
+    options.lowercase ? (options.avoidAmbiguous ? "abcdefghijkmnopqrstuvwxyz" : "abcdefghijklmnopqrstuvwxyz") : "",
+    options.numbers ? (options.avoidAmbiguous ? "23456789" : "0123456789") : "",
     options.symbols ? "!@#$%^&*()-_=+[]{}" : "",
   ].filter(Boolean);
   if (!groups.length) throw new Error("Select at least one character group.");
-  let alphabet = groups.join("");
-  if (!options.avoidAmbiguous) alphabet += "Il1O0|`'\"";
+  const alphabet = groups.join("");
   const result = groups.map((group) => group[randomIndex(group.length)]);
   while (result.length < length) result.push(alphabet[randomIndex(alphabet.length)]);
   for (let index = result.length - 1; index > 0; index -= 1) {
@@ -45,8 +40,11 @@ export function generatePassword(options: PasswordOptions) {
   return result.join("");
 }
 
-export function generatePassphrase(words = 5, separator = "-") {
-  return Array.from({ length: Math.min(12, Math.max(4, words)) }, () => WORDS[randomIndex(WORDS.length)]).join(separator);
+export function generatePassphrase(words = 7, separator = " ") {
+  if (!Number.isFinite(words)) throw new Error("Word count must be finite.");
+  if (![" ", "."].includes(separator)) throw new Error("Choose a supported separator.");
+  const count = Math.min(12, Math.max(6, Math.floor(words)));
+  return Array.from({ length: count }, () => WORDS[randomIndex(WORDS.length)]).join(separator);
 }
 
 export type HealthFinding = {
@@ -57,8 +55,8 @@ export type HealthFinding = {
   itemIds: string[];
 };
 
-export function passwordHealth(items: VaultItem[]) {
-  const logins = items.filter((item) => item.contentType === "login" && item.payload.secret);
+export function passwordHealth(items: VaultItem[], now = Date.now()) {
+  const logins = items.filter((item) => !item.deletedAt && !item.payload.archived && item.contentType === "login" && item.payload.secret);
   const bySecret = new Map<string, VaultItem[]>();
   for (const item of logins) {
     const secret = item.payload.secret!;
@@ -69,7 +67,7 @@ export function passwordHealth(items: VaultItem[]) {
     const value = item.payload.secret!;
     return value.length < 14 || !/[A-Z]/u.test(value) || !/[a-z]/u.test(value) || !/\d/u.test(value);
   });
-  const old = logins.filter((item) => Date.now() - Date.parse(item.payload.updatedAt) > 365 * 86_400_000);
+  const old = logins.filter((item) => now - Date.parse(item.payload.updatedAt) > 365 * 86_400_000);
   const findings: HealthFinding[] = [
     ...reused.map((group, index) => ({
       id: `reused-${index}`,
@@ -88,7 +86,7 @@ export function passwordHealth(items: VaultItem[]) {
     ...(old.length ? [{
       id: "old",
       severity: "warning" as const,
-      title: "Passwords not updated for a year",
+      title: "Login records not updated for a year",
       detail: `${old.length} login${old.length === 1 ? "" : "s"} may need review.`,
       itemIds: old.map((item) => item.id),
     }] : []),
