@@ -32,7 +32,7 @@ Deno.serve(async (request: Request) => {
 
     const digest = bytesToHex(await sha256(rawBody));
     const admin = adminSupabase();
-    const { data, error } = await admin.rpc("apply_sent_sms_delivery_event", {
+    const { data: authMapped, error } = await admin.rpc("apply_sent_sms_delivery_event", {
       p_provider_message_id: messageId,
       p_event_name: event.event,
       p_provider_status: status,
@@ -41,8 +41,16 @@ Deno.serve(async (request: Request) => {
       p_payload_sha256: `\\x${digest}`,
     });
     if (error) throw error;
+    const { data: notificationMapped, error: notificationError } = await admin.rpc("apply_sent_notification_event", {
+      p_provider_message_id: messageId,
+      p_event_name: event.event,
+      p_provider_status: status,
+      p_happened_at: happenedAt,
+      p_payload_sha256: `\\x${digest}`,
+    });
+    if (notificationError) throw notificationError;
 
-    console.log(JSON.stringify({ function: "sent-webhook", event: event.event, mapped: data === true }));
+    console.log(JSON.stringify({ function: "sent-webhook", event: event.event, authMapped: authMapped === true, notificationMapped: notificationMapped === true }));
     return json(200, { received: true });
   } catch (reason) {
     const code = safeCode(reason);

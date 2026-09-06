@@ -27,9 +27,9 @@
     "app/**/*.ts",
     "app/**/*.tsx",
     "lib/**/*.ts",
+    "netlify/**/*.mts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }
-

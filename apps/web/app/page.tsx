@@ -4,12 +4,12 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Factor, Session } from "@supabase/supabase-js";
 import {
-  Archive, Bot, Braces, BriefcaseBusiness, Check, ChevronRight, CircleGauge, Clock3,
+  Archive, Bell, Bot, Braces, BriefcaseBusiness, Check, ChevronRight, CircleGauge, Clock3,
   Copy, CreditCard, Database, Download, Eye, EyeOff, FileKey, FileText, Fingerprint,
   FolderKanban, Heart, History, IdCard, Inbox, KeyRound, Laptop, LockKeyhole, LogOut,
   MoreHorizontal, Paperclip, Pencil, Play, Plus, Radio, RefreshCw, Search, Send, Smartphone,
   Settings, Share2, ShieldAlert, ShieldCheck, Sparkles, Star, Trash2, Upload,
-  UserPlus, UserRound, Users, Vault, WandSparkles, Wifi, X,
+  UserPlus, UserRound, Users, Vault, WandSparkles, Waypoints, Wifi, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,9 @@ import { SaasAiManager } from "@/components/saas-ai-manager";
 import { AutomationsView } from "@/components/automations-view";
 import { PublicSite } from "@/components/public-site";
 import { TurnstileCheck } from "@/components/turnstile-check";
+import { AccountDeletionCard } from "@/components/account-deletion-card";
+import { NotificationsView } from "@/components/notifications-view";
+import { RuntimeAccessView } from "@/components/runtime-access-view";
 import {
   createDeviceKeyPair, createEncryptedExport, createRecoveryKey, deriveMasterKey,
   fromBase64Url, parseRecoveryKey, randomBytes, recoveryFile, recoveryVerifier, saveProtectedDeviceKey,
@@ -27,6 +30,7 @@ import {
 } from "@/lib/crypto/vault";
 import { captchaEnabled, isSupabaseConfigured, passkeysEnabled, phoneMfaEnabled, supabase } from "@/lib/supabase/client";
 import { captchaOptions, captchaReady } from "@/lib/auth/captcha";
+import { authSessionTransition } from "@/lib/auth/session-machine";
 import { downloadBlob } from "@/lib/browser/download";
 import {
   createVaultItem, deleteVaultItem, type ItemKind, listVaultItemHistory,
@@ -68,7 +72,7 @@ type CryptoProfile = {
   recovery_verifier: string | null;
 };
 
-type View = "home" | "vault" | "workspaces" | "organization" | "saas-ai" | "missions" | "sharing" | "inbox" | "security" | "account-security" | "generator" | "automations" | "devices" | "billing" | "settings";
+type View = "home" | "vault" | "workspaces" | "organization" | "saas-ai" | "runtime" | "notifications" | "missions" | "sharing" | "inbox" | "security" | "account-security" | "generator" | "automations" | "devices" | "billing" | "settings";
 type VaultFilter = ItemKind | "all" | "favorites" | "archive" | "trash";
 type DeviceRow = { id: string; status: "pending" | "trusted" | "revoked"; created_at: string; last_seen_at: string | null; revoked_at: string | null };
 type Entitlement = TenantEntitlement;
@@ -95,6 +99,8 @@ const NAV: { id: View; label: string; icon: typeof Vault }[] = [
   { id: "workspaces", label: "Workspaces", icon: Users },
   { id: "organization", label: "Organization", icon: BriefcaseBusiness },
   { id: "saas-ai", label: "SaaS & AI", icon: Sparkles },
+  { id: "runtime", label: "Runtime & Twin", icon: Waypoints },
+  { id: "notifications", label: "Notifications", icon: Bell },
   { id: "missions", label: "Missions", icon: FolderKanban },
   { id: "sharing", label: "Sharing", icon: Share2 },
   { id: "inbox", label: "Access inbox", icon: Inbox },
@@ -110,8 +116,8 @@ const NAV: { id: View; label: string; icon: typeof Vault }[] = [
 const NAV_SECTIONS: { label: string; views: View[] }[] = [
   { label: "Workspace", views: ["home", "vault", "workspaces"] },
   { label: "Access", views: ["missions", "sharing", "inbox"] },
-  { label: "Protect", views: ["security", "account-security", "generator", "devices"] },
-  { label: "Manage", views: ["organization", "saas-ai", "automations", "billing", "settings"] },
+  { label: "Protect", views: ["security", "account-security", "notifications", "generator", "devices"] },
+  { label: "Manage", views: ["organization", "saas-ai", "runtime", "automations", "billing", "settings"] },
 ];
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -140,6 +146,7 @@ function customerError(reason: unknown, fallback: string) {
   if (detail.includes("challenge") || detail.includes("invalid otp") || detail.includes("otp expired")) return "That security code is invalid or expired. Request a new code.";
   if (detail.includes("notallowederror") || detail.includes("cancel") || detail.includes("webauthn")) return "Passkey verification was cancelled or could not be completed.";
   if (detail.includes("passkey") && (detail.includes("disabled") || detail.includes("not enabled"))) return "Passkey sign-in is temporarily unavailable. Use your login password.";
+  if (detail.includes("secure device storage")) return "Secure browser storage is unavailable or blocked. Close other Passkey-X tabs, allow site storage, and try again.";
   if (detail.includes("billing_not_configured")) return "Secure billing is not active yet. Your current plan is unchanged.";
   if (detail.includes("subscription_exists")) return "This workspace already has a subscription. Use Manage billing to make changes.";
   if (detail.includes("customer_missing")) return "No billing profile exists for this workspace yet.";
@@ -155,17 +162,39 @@ export default function Home() {
   const [mfaState, setMfaState] = useState<"checking" | "required" | "satisfied">("checking");
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError] = useState("");
+  const activeUserId = useRef<string | null>(null);
+  const sessionUserId = session?.user.id ?? null;
 
   useEffect(() => {
     if (!supabase) return;
     let active = true;
-    supabase.auth.getSession().then(({ data }) => { if (active) { setSession(data.session); setLoading(false); } });
-    const { data } = supabase.auth.onAuthStateChange((event, next) => { setSession(next); setMfaState("checking"); setProfile(null); setError(""); if (event === "PASSWORD_RECOVERY") setAccountRecovery(true); if (!next) { setAccountRecovery(false); setRootKey((current) => { current?.fill(0); return null; }); } });
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      activeUserId.current = data.session?.user.id ?? null;
+      setSession(data.session);
+      setLoading(false);
+    });
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      const transition = authSessionTransition(activeUserId.current, next?.user.id ?? null, event);
+      activeUserId.current = transition.nextUserId;
+      setSession(next);
+      if (transition.accountChanged) {
+        setMfaState(next ? "checking" : "satisfied");
+        setProfile(null);
+        setError("");
+        setAccountRecovery(transition.passwordRecovery);
+      } else if (transition.passwordRecovery) {
+        setAccountRecovery(true);
+      }
+      if (transition.clearVaultState) {
+        setRootKey((current) => { current?.fill(0); return null; });
+      }
+    });
     return () => { active = false; data.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
-    if (!supabase || !session) return;
+    if (!supabase || !sessionUserId) return;
     let active = true;
     supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data, error: mfaError }) => {
       if (!active) return;
@@ -173,14 +202,14 @@ export default function Home() {
       setMfaState(data.nextLevel === "aal2" && data.currentLevel !== "aal2" ? "required" : "satisfied");
     });
     return () => { active = false; };
-  }, [session]);
+  }, [sessionUserId]);
 
   useEffect(() => {
-    if (!supabase || !session || mfaState !== "satisfied") return;
+    if (!supabase || !sessionUserId || mfaState !== "satisfied") return;
     let active = true;
     supabase.from("account_crypto_profiles").select("identity_id,salt,kdf_parameters,master_nonce,master_wrapped_root,recovery_nonce,recovery_wrapped_root,recovery_verifier").maybeSingle().then(({ data, error: profileError }) => { if (!active) return; if (profileError) setError(customerError(profileError, "Your secure vault profile could not be loaded. Try signing in again.")); setProfile(data as CryptoProfile | null); setLoading(false); });
     return () => { active = false; };
-  }, [session, mfaState]);
+  }, [sessionUserId, mfaState]);
 
   if (loading) return <main className="center-screen"><div className="loading-ring" aria-label="Loading Passkey-X" /></main>;
   if (!isSupabaseConfigured) return <ConfigurationNotice />;
@@ -255,13 +284,15 @@ function FatalNotice({ message }: { message: string }) {
 }
 
 function AuthScreen() {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaReset, setCaptchaReset] = useState(0);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   function requireCaptcha() {
     if (captchaReady(captchaEnabled, captchaToken)) return true;
@@ -276,15 +307,28 @@ function AuthScreen() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (mode === "forgot") return;
+    if (mode === "signup" && password !== confirmPassword) {
+      setMessage("The login passwords do not match.");
+      return;
+    }
     if (!requireCaptcha()) return;
     setBusy(true); setMessage("");
     try {
       const security = captchaOptions(captchaToken);
+      const normalizedEmail = email.trim().toLowerCase();
       const result = mode === "signin"
-        ? await supabase!.auth.signInWithPassword({ email, password, options: security })
-        : await supabase!.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin, ...security } });
+        ? await supabase!.auth.signInWithPassword({ email: normalizedEmail, password, options: security })
+        : await supabase!.auth.signUp({ email: normalizedEmail, password, options: { emailRedirectTo: `${window.location.origin}/#access`, ...security } });
       if (result.error) setMessage(customerError(result.error, mode === "signin" ? "Sign-in could not be completed. Try again." : "Your account could not be created. Try again."));
-      else if (mode === "signup" && !result.data.session) setMessage("Check your email to confirm the account, then sign in.");
+      else if (mode === "signup" && !result.data.session) {
+        if (result.data.user?.identities?.length === 0) setMessage("An account already exists for this email. Sign in or reset the login password.");
+        else {
+          setPassword("");
+          setConfirmPassword("");
+          setMessage("Account created. Check your email, confirm the address, then return here to sign in.");
+        }
+      }
     } catch (reason) {
       setMessage(customerError(reason, "The account service is temporarily unavailable. Try again."));
     } finally { resetCaptcha(); setBusy(false); }
@@ -301,26 +345,55 @@ function AuthScreen() {
     } finally { resetCaptcha(); setBusy(false); }
   }
 
-  async function requestPasswordReset() {
+  async function requestPasswordReset(event: React.FormEvent) {
+    event.preventDefault();
     if (!email) { setMessage("Enter your email first."); return; }
     if (!requireCaptcha()) return;
     setBusy(true); setMessage("");
     try {
-      const { error } = await supabase!.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin, ...captchaOptions(captchaToken) });
+      const { error } = await supabase!.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: `${window.location.origin}/#access`, ...captchaOptions(captchaToken) });
       if (error) throw error;
+      setResetSent(true);
       setMessage("If an account exists for this email, a secure reset link is on its way.");
     } catch (reason) {
       setMessage(customerError(reason, "A reset link could not be sent. Try again shortly."));
     } finally { resetCaptcha(); setBusy(false); }
   }
 
-  function switchMode() {
-    setMode((current) => current === "signin" ? "signup" : "signin");
+  function switchMode(nextMode: "signin" | "signup" | "forgot") {
+    setMode(nextMode);
     setMessage("");
+    setPassword("");
+    setConfirmPassword("");
+    setResetSent(false);
     resetCaptcha();
   }
 
-  return <PublicSite><Card className="auth-card"><CardHeader><p className="eyebrow">{mode === "signin" ? "Welcome back" : "Create your private vault"}</p><CardTitle>{mode === "signin" ? "Sign in to Passkey-X" : "Create your account"}</CardTitle><CardDescription>Account login and vault unlock are separate security steps.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={submit}><div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div><div><Label htmlFor="password">Login password</Label><Input id="password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={12} required value={password} onChange={(event) => setPassword(event.target.value)} /></div><TurnstileCheck action={mode === "signin" ? "auth-signin" : "auth-signup"} resetKey={captchaReset} onToken={setCaptchaToken} onProblem={() => setMessage("The security check could not load. Refresh the page and try again.")} />{message && <p className="form-message" role="status">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Continue securely" : "Create account"}</Button>{mode === "signin" && <Button type="button" variant="ghost" disabled={busy} onClick={() => void requestPasswordReset()}>Forgot login password?</Button>}<Button type="button" variant="ghost" disabled={busy} onClick={switchMode}>{mode === "signin" ? "New to Passkey-X? Create account" : "I already have an account"}</Button></form>{mode === "signin" && passkeysEnabled && <div className="passkey-signin"><span>or</span><Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => void signInWithPasskey()}><Fingerprint /> Sign in with a passkey</Button><small>Account authentication only. Your separate vault password is still required.</small></div>}</CardContent></Card></PublicSite>;
+  const title = mode === "signin" ? "Sign in to Passkey-X" : mode === "signup" ? "Create your account" : "Reset your login password";
+  const description = mode === "forgot"
+    ? "We’ll send a single-use recovery link. This changes account login only; it cannot decrypt or reset your vault."
+    : "Account login and vault unlock are separate security steps.";
+  const turnstileAction = mode === "signin" ? "auth-signin" : mode === "signup" ? "auth-signup" : "auth-reset";
+
+  return <PublicSite><Card className="auth-card"><CardHeader><p className="eyebrow">{mode === "signin" ? "Welcome back" : mode === "signup" ? "Create your private vault" : "Account recovery"}</p><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>
+    {mode === "forgot" ? <form className="form-stack" onSubmit={requestPasswordReset}>
+      <div><Label htmlFor="reset-email">Email</Label><Input id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+      <TurnstileCheck action={turnstileAction} resetKey={captchaReset} onToken={setCaptchaToken} onProblem={() => setMessage("The security check could not load. Refresh the page and try again.")} />
+      {message && <p className="form-message" role="status">{message}</p>}
+      <Button size="lg" disabled={busy || resetSent}>{busy ? "Sending…" : resetSent ? "Reset email sent" : "Send secure reset link"}</Button>
+      <Button type="button" variant="ghost" disabled={busy} onClick={() => switchMode("signin")}>Back to sign in</Button>
+    </form> : <form className="form-stack" onSubmit={submit}>
+      <div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+      <div><Label htmlFor="password">Login password</Label><Input id="password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={12} required value={password} onChange={(event) => setPassword(event.target.value)} />{mode === "signup" && <p className="field-hint">Use at least 12 characters. This password signs in to your account but never decrypts the vault.</p>}</div>
+      {mode === "signup" && <div><Label htmlFor="confirm-login-password">Confirm login password</Label><Input id="confirm-login-password" type="password" autoComplete="new-password" minLength={12} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></div>}
+      <TurnstileCheck action={turnstileAction} resetKey={captchaReset} onToken={setCaptchaToken} onProblem={() => setMessage("The security check could not load. Refresh the page and try again.")} />
+      {message && <p className="form-message" role="status">{message}</p>}
+      <Button size="lg" disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Continue securely" : "Create account"}</Button>
+      {mode === "signin" && <Button type="button" variant="ghost" disabled={busy} onClick={() => switchMode("forgot")}>Forgot login password?</Button>}
+      <Button type="button" variant="ghost" disabled={busy} onClick={() => switchMode(mode === "signin" ? "signup" : "signin")}>{mode === "signin" ? "New to Passkey-X? Create account" : "I already have an account"}</Button>
+    </form>}
+    {mode === "signin" && passkeysEnabled && <div className="passkey-signin"><span>or</span><Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => void signInWithPasskey()}><Fingerprint /> Sign in with a passkey</Button><small>Account authentication only. Your separate vault password is still required.</small></div>}
+  </CardContent></Card></PublicSite>;
 }
 
 function AccountPasswordReset({ email, onComplete }: { email: string; onComplete: () => void }) {
@@ -336,16 +409,176 @@ type PendingVaultSetup = Omit<CryptoProfile, "identity_id"> & {
 };
 
 function VaultSetup({ email, onComplete }: { email: string; onComplete: (profile: CryptoProfile) => void }) {
-  const [loginPassword, setLoginPassword] = useState(""); const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState(""); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [recoveryKey, setRecoveryKey] = useState<string | null>(null); const [pendingSetup, setPendingSetup] = useState<PendingVaultSetup | null>(null); const [downloaded, setDownloaded] = useState(false);
+  const [loginPassword, setLoginPassword] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  const [pendingSetup, setPendingSetup] = useState<PendingVaultSetup | null>(null);
+  const [downloaded, setDownloaded] = useState(false);
+  const [savedConfirmed, setSavedConfirmed] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+
   async function setup(event: React.FormEvent) {
-    event.preventDefault(); if (password !== confirm) { setMessage("The vault passwords do not match."); return; } if (password === loginPassword) { setMessage("Your vault password must be different from your login password."); return; } setBusy(true); setMessage("");
-    const salt = randomBytes(16); const accountRoot = randomBytes(32); const workspaceKey = randomBytes(32); let masterKey: Uint8Array | null = null; let recoverySecret: Uint8Array | null = null; let verifier: Uint8Array | null = null; let devicePrivateKey: Uint8Array | null = null;
-    try { const reauth = await supabase!.auth.signInWithPassword({ email, password: loginPassword }); if (reauth.error) throw new Error("Login-password verification failed."); masterKey = await deriveMasterKey(password, salt); const recovery = createRecoveryKey(); recoverySecret = recovery.secret; verifier = await recoveryVerifier(recoverySecret); const masterWrapped = await wrapKey(masterKey, accountRoot, "1accessos:account-root:v1"); const recoveryWrapped = await wrapKey(recoverySecret, accountRoot, "1accessos:recovery:v1"); const workspaceWrapped = await wrapKey(accountRoot, workspaceKey, "1accessos:workspace:v1"); const device = await createDeviceKeyPair(); devicePrivateKey = device.privateKey; const devicePrivate = await wrapKey(accountRoot, devicePrivateKey, "1accessos:device-private:v1"); await saveProtectedDeviceKey(devicePrivate); setRecoveryKey(recovery.display); setPendingSetup({ salt: toBase64Url(salt), kdf_parameters: WEB_KDF_PROFILE, master_nonce: masterWrapped.nonce, master_wrapped_root: masterWrapped.ciphertext, recovery_nonce: recoveryWrapped.nonce, recovery_wrapped_root: recoveryWrapped.ciphertext, recovery_verifier: toBase64Url(verifier), workspace_nonce: workspaceWrapped.nonce, workspace_wrapped_key: workspaceWrapped.ciphertext, device_public_key: toBase64Url(device.publicKey) }); setDownloaded(false); setMessage("Download the recovery key before the encrypted vault is created."); setLoginPassword(""); setPassword(""); setConfirm(""); }
-    catch (reason) { setMessage(customerError(reason, "Your private vault setup could not be prepared. Try again.")); } finally { accountRoot.fill(0); workspaceKey.fill(0); masterKey?.fill(0); recoverySecret?.fill(0); verifier?.fill(0); devicePrivateKey?.fill(0); setLoginPassword(""); setBusy(false); }
+    event.preventDefault();
+    if (password !== confirm) { setMessage("The vault passwords do not match."); return; }
+    if (password === loginPassword) { setMessage("Your vault password must be different from your login password."); return; }
+    if (!captchaReady(captchaEnabled, captchaToken)) { setMessage("Complete the security check before continuing."); return; }
+    setBusy(true);
+    setMessage("Verifying your account and deriving encryption keys. This can take a few seconds.");
+    const salt = randomBytes(16);
+    const accountRoot = randomBytes(32);
+    const workspaceKey = randomBytes(32);
+    let masterKey: Uint8Array | null = null;
+    let recoverySecret: Uint8Array | null = null;
+    let verifier: Uint8Array | null = null;
+    let devicePrivateKey: Uint8Array | null = null;
+    try {
+      const reauth = await supabase!.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: loginPassword,
+        options: captchaOptions(captchaToken),
+      });
+      if (reauth.error) throw reauth.error;
+      masterKey = await deriveMasterKey(password, salt);
+      const recovery = createRecoveryKey();
+      recoverySecret = recovery.secret;
+      verifier = await recoveryVerifier(recoverySecret);
+      const masterWrapped = await wrapKey(masterKey, accountRoot, "1accessos:account-root:v1");
+      const recoveryWrapped = await wrapKey(recoverySecret, accountRoot, "1accessos:recovery:v1");
+      const workspaceWrapped = await wrapKey(accountRoot, workspaceKey, "1accessos:workspace:v1");
+      const device = await createDeviceKeyPair();
+      devicePrivateKey = device.privateKey;
+      const devicePrivate = await wrapKey(accountRoot, devicePrivateKey, "1accessos:device-private:v1");
+      await saveProtectedDeviceKey(devicePrivate);
+      setRecoveryKey(recovery.display);
+      setPendingSetup({
+        salt: toBase64Url(salt),
+        kdf_parameters: WEB_KDF_PROFILE,
+        master_nonce: masterWrapped.nonce,
+        master_wrapped_root: masterWrapped.ciphertext,
+        recovery_nonce: recoveryWrapped.nonce,
+        recovery_wrapped_root: recoveryWrapped.ciphertext,
+        recovery_verifier: toBase64Url(verifier),
+        workspace_nonce: workspaceWrapped.nonce,
+        workspace_wrapped_key: workspaceWrapped.ciphertext,
+        device_public_key: toBase64Url(device.publicKey),
+      });
+      setDownloaded(false);
+      setSavedConfirmed(false);
+      setMessage("Recovery material is ready. Download the file and store it offline before creating the vault.");
+      setPassword("");
+      setConfirm("");
+    } catch (reason) {
+      setMessage(customerError(reason, "Your private vault setup could not be prepared. Check the login password and try again."));
+    } finally {
+      accountRoot.fill(0);
+      workspaceKey.fill(0);
+      masterKey?.fill(0);
+      recoverySecret?.fill(0);
+      verifier?.fill(0);
+      devicePrivateKey?.fill(0);
+      setLoginPassword("");
+      setCaptchaToken(null);
+      setCaptchaReset((current) => current + 1);
+      setBusy(false);
+    }
   }
-  function download() { if (!recoveryKey) return; setMessage(""); try { downloadBlob(recoveryFile(recoveryKey), "passkey-x-recovery-key.json"); setDownloaded(true); setMessage("Recovery-key download started. Confirm the file is saved before continuing."); } catch { setDownloaded(false); setMessage("The recovery-key file could not be downloaded. Check browser download permissions and try again."); } }
-  async function finishSetup() { if (!pendingSetup || !downloaded) return; setBusy(true); setMessage(""); try { const { data, error } = await supabase!.rpc("bootstrap_personal_vault", { p_salt: toPostgresBytea(fromBase64Url(pendingSetup.salt)), p_kdf_parameters: WEB_KDF_PROFILE, p_master_nonce: toPostgresBytea(fromBase64Url(pendingSetup.master_nonce)), p_master_wrapped_root: toPostgresBytea(fromBase64Url(pendingSetup.master_wrapped_root)), p_recovery_nonce: toPostgresBytea(fromBase64Url(pendingSetup.recovery_nonce)), p_recovery_wrapped_root: toPostgresBytea(fromBase64Url(pendingSetup.recovery_wrapped_root)), p_recovery_verifier: toPostgresBytea(fromBase64Url(pendingSetup.recovery_verifier!)), p_workspace_nonce: toPostgresBytea(fromBase64Url(pendingSetup.workspace_nonce)), p_workspace_wrapped_key: toPostgresBytea(fromBase64Url(pendingSetup.workspace_wrapped_key)), p_device_public_key: toPostgresBytea(fromBase64Url(pendingSetup.device_public_key)) }); if (error) throw error; const bootstrap = data as { identity_id: string }; onComplete({ identity_id: bootstrap.identity_id, salt: pendingSetup.salt, kdf_parameters: pendingSetup.kdf_parameters, master_nonce: pendingSetup.master_nonce, master_wrapped_root: pendingSetup.master_wrapped_root, recovery_nonce: pendingSetup.recovery_nonce, recovery_wrapped_root: pendingSetup.recovery_wrapped_root, recovery_verifier: pendingSetup.recovery_verifier }); } catch (reason) { setMessage(customerError(reason, "Your encrypted vault could not be created. The downloaded recovery key has not been activated; retry or restart setup.")); } finally { setBusy(false); } }
-  return <main className="center-screen setup-bg"><Card className="setup-card"><CardHeader><Brand /><div className="step-pill">Account verified</div><CardTitle>{recoveryKey ? "Save your recovery key" : "Create your private vault"}</CardTitle><CardDescription>{recoveryKey ? "This is the only recovery method. Keep an offline copy." : `Signed in as ${email}. Choose a new password used only to unlock your vault.`}</CardDescription></CardHeader><CardContent>{recoveryKey ? <div className="form-stack"><div className="recovery-box"><KeyRound /><code>{recoveryKey}</code></div><Button size="lg" disabled={busy} onClick={download}><Download /> Download recovery key</Button><Button variant="outline" disabled={!pendingSetup || !downloaded || busy} onClick={() => void finishSetup()}>{busy ? "Creating encrypted vault…" : "I saved it securely — create vault"}</Button><p className="field-hint">No vault record is created until the recovery file has downloaded and you confirm here.</p>{message && <p className="form-message" role="status">{message}</p>}</div> : <form className="form-stack" onSubmit={setup}><div><Label htmlFor="setup-login-password">Verify login password</Label><Input id="setup-login-password" type="password" minLength={12} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></div><div><Label htmlFor="vault-password">Vault master password</Label><Input id="vault-password" type="password" minLength={12} autoComplete="new-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></div><div><Label htmlFor="vault-confirm">Confirm vault password</Label><Input id="vault-confirm" type="password" minLength={12} autoComplete="new-password" required value={confirm} onChange={(event) => setConfirm(event.target.value)} /></div><p className="field-hint">Login and vault passwords must be different. Passkey-X cannot recover the vault password.</p>{message && <p className="form-message" role="alert">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Preparing recovery…" : "Prepare encrypted vault"}</Button></form>}</CardContent></Card></main>;
+
+  function download() {
+    if (!recoveryKey) return;
+    setMessage("");
+    try {
+      downloadBlob(recoveryFile(recoveryKey), "passkey-x-recovery-key.json");
+      setDownloaded(true);
+      setSavedConfirmed(false);
+      setMessage("Recovery-key download started. Find the JSON file in Downloads, then confirm below.");
+    } catch {
+      setDownloaded(false);
+      setSavedConfirmed(false);
+      setMessage("The recovery-key file could not be downloaded. Allow downloads for this site and try again.");
+    }
+  }
+
+  async function copyRecoveryKey() {
+    if (!recoveryKey) return;
+    try {
+      await navigator.clipboard.writeText(recoveryKey);
+      setMessage("Recovery key copied. Store it offline; the downloadable file is still required before vault creation.");
+    } catch {
+      setMessage("Clipboard access was blocked. Use the Download recovery key button instead.");
+    }
+  }
+
+  async function finishSetup() {
+    if (!pendingSetup || !downloaded || !savedConfirmed) {
+      setMessage("Download the recovery file and confirm that it is stored safely before continuing.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Creating your encrypted vault…");
+    try {
+      const { data, error } = await supabase!.rpc("bootstrap_personal_vault", {
+        p_salt: toPostgresBytea(fromBase64Url(pendingSetup.salt)),
+        p_kdf_parameters: pendingSetup.kdf_parameters,
+        p_master_nonce: toPostgresBytea(fromBase64Url(pendingSetup.master_nonce)),
+        p_master_wrapped_root: toPostgresBytea(fromBase64Url(pendingSetup.master_wrapped_root)),
+        p_recovery_nonce: toPostgresBytea(fromBase64Url(pendingSetup.recovery_nonce)),
+        p_recovery_wrapped_root: toPostgresBytea(fromBase64Url(pendingSetup.recovery_wrapped_root)),
+        p_recovery_verifier: toPostgresBytea(fromBase64Url(pendingSetup.recovery_verifier!)),
+        p_workspace_nonce: toPostgresBytea(fromBase64Url(pendingSetup.workspace_nonce)),
+        p_workspace_wrapped_key: toPostgresBytea(fromBase64Url(pendingSetup.workspace_wrapped_key)),
+        p_device_public_key: toPostgresBytea(fromBase64Url(pendingSetup.device_public_key)),
+      });
+      if (error) throw error;
+      const bootstrap = data as { identity_id: string };
+      onComplete({
+        identity_id: bootstrap.identity_id,
+        salt: pendingSetup.salt,
+        kdf_parameters: pendingSetup.kdf_parameters,
+        master_nonce: pendingSetup.master_nonce,
+        master_wrapped_root: pendingSetup.master_wrapped_root,
+        recovery_nonce: pendingSetup.recovery_nonce,
+        recovery_wrapped_root: pendingSetup.recovery_wrapped_root,
+        recovery_verifier: pendingSetup.recovery_verifier,
+      });
+    } catch (reason) {
+      setMessage(customerError(reason, "Your encrypted vault could not be created. The downloaded recovery key is not active yet; retry safely."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function restartSetup() {
+    setRecoveryKey(null);
+    setPendingSetup(null);
+    setDownloaded(false);
+    setSavedConfirmed(false);
+    setMessage("");
+  }
+
+  const step = recoveryKey ? 2 : 1;
+  return <main className="center-screen setup-bg"><Card className="setup-card"><CardHeader><Brand /><div className="step-pill">Account verified</div><div className="setup-progress" aria-label={`Vault setup step ${step} of 3`}><span className="active">1. Protect</span><span className={step >= 2 ? "active" : ""}>2. Recover</span><span>3. Create</span></div><CardTitle>{recoveryKey ? "Save your recovery key" : "Create your private vault"}</CardTitle><CardDescription>{recoveryKey ? "This is the only recovery method. Keep an offline copy before the encrypted vault is created." : `Signed in as ${email}. Choose a new password used only to unlock your vault.`}</CardDescription></CardHeader><CardContent>
+    {recoveryKey ? <div className="form-stack">
+      <div className="recovery-box"><KeyRound /><code>{recoveryKey}</code></div>
+      <div className="recovery-actions"><Button size="lg" disabled={busy} onClick={download}><Download /> {downloaded ? "Download recovery key again" : "Download recovery key"}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => void copyRecoveryKey()}><Copy /> Copy key</Button></div>
+      <label className={`recovery-confirmation ${downloaded ? "ready" : ""}`}><input type="checkbox" disabled={!downloaded || busy} checked={savedConfirmed} onChange={(event) => setSavedConfirmed(event.target.checked)} /><span>I found the downloaded file and stored it safely.</span></label>
+      <Button size="lg" variant="outline" disabled={!pendingSetup || !downloaded || !savedConfirmed || busy} onClick={() => void finishSetup()}>{busy ? "Creating encrypted vault…" : "Create vault and continue"}</Button>
+      <Button type="button" variant="ghost" disabled={busy} onClick={restartSetup}>Restart password setup</Button>
+      <p className="field-hint">No vault record is created until the file download is started and you explicitly confirm it is stored.</p>
+      {message && <p className="form-message" role="status">{message}</p>}
+    </div> : <form className="form-stack" onSubmit={setup}>
+      <div><Label htmlFor="setup-login-password">Verify login password</Label><Input id="setup-login-password" type="password" minLength={12} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></div>
+      <div><Label htmlFor="vault-password">New vault master password</Label><Input id="vault-password" type="password" minLength={12} autoComplete="new-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></div>
+      <div><Label htmlFor="vault-confirm">Confirm vault password</Label><Input id="vault-confirm" type="password" minLength={12} autoComplete="new-password" required value={confirm} onChange={(event) => setConfirm(event.target.value)} /></div>
+      <p className="field-hint">Use at least 12 characters. Login and vault passwords must be different. Passkey-X cannot recover the vault password.</p>
+      <TurnstileCheck action="vault-setup" resetKey={captchaReset} onToken={setCaptchaToken} onProblem={() => setMessage("The security check could not load. Refresh the page and try again.")} />
+      {message && <p className="form-message" role="status">{message}</p>}
+      <Button size="lg" disabled={busy}>{busy ? "Preparing recovery…" : "Prepare recovery key"}</Button>
+    </form>}
+  </CardContent></Card></main>;
 }
 
 function UnlockScreen({ profile, email, onUnlock, onProfileChange }: { profile: CryptoProfile; email: string; onUnlock: (key: Uint8Array) => void; onProfileChange: (profile: CryptoProfile) => void }) {
@@ -489,6 +722,8 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
         {view === "workspaces" && vault && <WorkspacesView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} workspaces={workspaces} vault={vault} onSelect={switchWorkspace} onReload={reloadWorkspaces} />}
         {view === "organization" && vault && <OrganizationView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
         {view === "saas-ai" && vault && <SaasAiManager key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
+        {view === "runtime" && vault && <RuntimeAccessView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
+        {view === "notifications" && vault && <NotificationsView key={vault.tenantId} vault={vault} />}
         {view === "missions" && vault && <MissionsView key={vault.workspaceId} vault={vault} items={items} />}
         {view === "sharing" && vault && <SharingView key={vault.workspaceId} vault={vault} items={items} />}
         {view === "inbox" && vault && <AccessInboxView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} vault={vault} items={items} />}
@@ -859,7 +1094,7 @@ function SettingsView({ email, items, vault, profile, entitlement, onImported }:
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [exportPassword, setExportPassword] = useState(""); const [showExport, setShowExport] = useState(false);
   async function importCsv(file: File) { if (!window.confirm("Import this CSV? It is parsed locally and each record is encrypted before upload.")) return; setBusy(true); setMessage(""); try { const rows = parseLoginCsv(await file.text()); for (const row of rows) await createVaultItem(vault, "login", { version: 1, ...row, updatedAt: new Date().toISOString() }); await onImported(); setMessage(`${rows.length} encrypted login${rows.length === 1 ? "" : "s"} imported.`); } catch (reason) { setMessage(customerError(reason, "This file could not be imported. Check its format and try again.")); } finally { setBusy(false); } }
   async function exportVault(event: React.FormEvent) { event.preventDefault(); setBusy(true); setMessage(""); let master: Uint8Array | null = null; let verified: Uint8Array | null = null; try { master = await deriveMasterKey(exportPassword, bytea(profile.salt), { algorithm: "ARGON2ID", ...profile.kdf_parameters }); verified = await unwrapKey(master, { algorithm: "AES-256-GCM", nonce: toBase64Url(bytea(profile.master_nonce)), ciphertext: toBase64Url(bytea(profile.master_wrapped_root)) }, "1accessos:account-root:v1"); const data = await createEncryptedExport({ product: "Passkey-X", version: 1, items }, exportPassword); downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), `passkey-x-export-${new Date().toISOString().slice(0, 10)}.pxvault`); setExportPassword(""); setShowExport(false); setMessage("Encrypted export download started."); } catch { setMessage("Vault reauthentication failed or the browser blocked the download; no export was saved."); } finally { master?.fill(0); verified?.fill(0); setBusy(false); } }
-  return <div className="feature-page"><div className="settings-grid"><Card><CardHeader><CardTitle>Account</CardTitle><CardDescription>Signed in as {email}</CardDescription></CardHeader><CardContent><div className="setting-row"><span>Plan</span><strong>{entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1)}</strong></div><div className="setting-row"><span>Billing status</span><strong>{entitlement.subscription_status.replaceAll("_", " ")}</strong></div><div className="setting-row"><span>Encryption</span><strong>Argon2id + AES-256-GCM</strong></div><div className="setting-row"><span>Workspace</span><code>{vault.workspaceId.slice(0, 8)}…</code></div></CardContent></Card><Card><CardHeader><CardTitle>Import logins</CardTitle><CardDescription>Chrome-compatible or standard CSV. The source file is never uploaded.</CardDescription></CardHeader><CardContent><label className="file-action"><Upload /><span>{busy ? "Working…" : "Choose CSV file"}</span><input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCsv(file); event.target.value = ""; }} /></label></CardContent></Card><Card><CardHeader><CardTitle>Encrypted backup</CardTitle><CardDescription>Reauthenticate with your vault password before a portable encrypted export is created.</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={() => setShowExport(true)}><Download /> Export {items.length} items</Button></CardContent></Card><Card><CardHeader><CardTitle>Workspace entitlement</CardTitle><CardDescription>Plan access is tenant-scoped and controlled by verified server-side billing events.</CardDescription></CardHeader><CardContent><p className="field-hint">Use Plans & billing to compare tiers or manage an active Stripe subscription. Billing never receives vault fields.</p></CardContent></Card></div>{message && <p className="settings-message" role="status">{message}</p>}{showExport && <div className="modal-backdrop"><Card className="item-editor" role="dialog" aria-modal="true" aria-labelledby="export-title"><CardHeader><button className="modal-close" aria-label="Close" onClick={() => setShowExport(false)}><X /></button><CardTitle id="export-title">Confirm encrypted export</CardTitle><CardDescription>Enter your vault password. The export is encrypted locally with a fresh salt.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={exportVault}><div><Label htmlFor="export-password">Vault password</Label><Input id="export-password" type="password" autoComplete="current-password" required value={exportPassword} onChange={(event) => setExportPassword(event.target.value)} /></div><Button disabled={busy}>{busy ? "Encrypting…" : "Reauthenticate and download"}</Button></form></CardContent></Card></div>}</div>;
+  return <div className="feature-page"><div className="settings-grid"><Card><CardHeader><CardTitle>Account</CardTitle><CardDescription>Signed in as {email}</CardDescription></CardHeader><CardContent><div className="setting-row"><span>Plan</span><strong>{entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1)}</strong></div><div className="setting-row"><span>Billing status</span><strong>{entitlement.subscription_status.replaceAll("_", " ")}</strong></div><div className="setting-row"><span>Encryption</span><strong>Argon2id + AES-256-GCM</strong></div><div className="setting-row"><span>Workspace</span><code>{vault.workspaceId.slice(0, 8)}…</code></div></CardContent></Card><Card><CardHeader><CardTitle>Import logins</CardTitle><CardDescription>Chrome-compatible or standard CSV. The source file is never uploaded.</CardDescription></CardHeader><CardContent><label className="file-action"><Upload /><span>{busy ? "Working…" : "Choose CSV file"}</span><input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCsv(file); event.target.value = ""; }} /></label></CardContent></Card><Card><CardHeader><CardTitle>Encrypted backup</CardTitle><CardDescription>Reauthenticate with your vault password before a portable encrypted export is created.</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={() => setShowExport(true)}><Download /> Export {items.length} items</Button></CardContent></Card><Card><CardHeader><CardTitle>Workspace entitlement</CardTitle><CardDescription>Plan access is tenant-scoped and controlled by verified server-side billing events.</CardDescription></CardHeader><CardContent><p className="field-hint">Use Plans & billing to compare tiers or manage an active Stripe subscription. Billing never receives vault fields.</p></CardContent></Card><AccountDeletionCard email={email} /></div>{message && <p className="settings-message" role="status">{message}</p>}{showExport && <div className="modal-backdrop"><Card className="item-editor" role="dialog" aria-modal="true" aria-labelledby="export-title"><CardHeader><button className="modal-close" aria-label="Close" onClick={() => setShowExport(false)}><X /></button><CardTitle id="export-title">Confirm encrypted export</CardTitle><CardDescription>Enter your vault password. The export is encrypted locally with a fresh salt.</CardDescription></CardHeader><CardContent><form className="form-stack" onSubmit={exportVault}><div><Label htmlFor="export-password">Vault password</Label><Input id="export-password" type="password" autoComplete="current-password" required value={exportPassword} onChange={(event) => setExportPassword(event.target.value)} /></div><Button disabled={busy}>{busy ? "Encrypting…" : "Reauthenticate and download"}</Button></form></CardContent></Card></div>}</div>;
 }
 
 function ItemEditor({ item, onClose, onSave }: { item?: VaultItem; onClose: () => void; onSave: (kind: ItemKind, payload: VaultPayload) => Promise<void> }) {

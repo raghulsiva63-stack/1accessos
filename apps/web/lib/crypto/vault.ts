@@ -174,16 +174,45 @@ export async function createDeviceKeyPair() {
   };
 }
 
-export async function saveProtectedDeviceKey(ciphertext: WrappedKey) {
+export async function saveProtectedDeviceKey(ciphertext: WrappedKey, timeoutMs = 8_000) {
   await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open("oneaccessos-device", 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("keys");
-    request.onerror = () => reject(request.error);
+    let settled = false;
+    let request: IDBOpenDBRequest;
+    const timer = globalThis.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Secure device storage timed out."));
+    }, timeoutMs);
+    const finish = (reason?: unknown) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timer);
+      if (reason) reject(reason);
+      else resolve();
+    };
+    try {
+      request = indexedDB.open("oneaccessos-device", 1);
+    } catch (reason) {
+      finish(reason);
+      return;
+    }
+    request.onblocked = () => finish(new Error("Secure device storage is blocked by another tab."));
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains("keys")) request.result.createObjectStore("keys");
+    };
+    request.onerror = () => finish(request.error ?? new Error("Secure device storage could not open."));
     request.onsuccess = () => {
-      const transaction = request.result.transaction("keys", "readwrite");
-      transaction.objectStore("keys").put(ciphertext, "device-private-key");
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+      if (settled) { request.result.close(); return; }
+      try {
+        const transaction = request.result.transaction("keys", "readwrite");
+        transaction.objectStore("keys").put(ciphertext, "device-private-key");
+        transaction.oncomplete = () => { request.result.close(); finish(); };
+        transaction.onerror = () => { request.result.close(); finish(transaction.error ?? new Error("Secure device storage write failed.")); };
+        transaction.onabort = () => { request.result.close(); finish(transaction.error ?? new Error("Secure device storage write was aborted.")); };
+      } catch (reason) {
+        request.result.close();
+        finish(reason);
+      }
     };
   });
 }

@@ -15,3 +15,12 @@ verify_jwt = false
 # timestamp freshness, and event idempotency before applying delivery state.
 [functions.sent-webhook]
 verify_jwt = false
+
+# User-initiated account deletion and tenant messaging both require an active
+# Supabase access token. Their handlers also repeat authorization checks before
+# any destructive action or use of a tenant-scoped provider credential.
+[functions.account-lifecycle]
+verify_jwt = true
+
+[functions.tenant-sms]
+verify_jwt = true

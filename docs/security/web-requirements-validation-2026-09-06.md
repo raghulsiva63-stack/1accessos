@@ -8,15 +8,19 @@ Targets: `https://passkey-x.com`, Supabase `wkkmyacbhqloubtwvjom`, Stripe test m
 
 ## Release decision
 
-**HOLD — do not describe the complete v2.2 web product as production-ready.**
+**UAT CANDIDATE — suitable for controlled web acceptance testing, not a GA
+production claim.**
 
 The reported recovery-key and package-selection defects are fixed in the
-candidate source, and all local checks pass. The candidate is not yet published
-because paid Checkout would still fail without its server-only Stripe restricted
-key and Customer Portal configuration. The replacement webhook secret and all
-20 Price IDs are installed, but the previous webhook endpoint still needs to be
-removed to prevent rejected duplicate deliveries. Production custom SMTP is
-saved as disabled, so `noreply@passkey-x.com` delivery cannot be claimed.
+candidate source. The onboarding state machine now preserves recovery material
+during same-account reauthentication instead of remounting vault setup. The
+Stripe test restricted key,
+replacement webhook secret and all 20 Price IDs are installed, and billing is
+activated for the production-site deployment. Customer Portal and old-webhook
+cleanup were reported complete by the account owner but could not be read back
+through the connected Stripe capability. Production custom SMTP is enabled,
+but the Dashboard readback shows no sender address; therefore branded delivery
+from `noreply@passkey-x.com` cannot yet be claimed.
 
 This report distinguishes source/schema foundations from production acceptance.
 An unchecked external ceremony, provider connection, independent review, or
@@ -26,11 +30,13 @@ missing workflow is not converted into a pass by a successful build.
 
 | Area | Candidate result | Production state |
 |---|---|---|
-| Recovery-key download during first vault setup | Fixed. The download anchor stays attached for the click, its object URL remains valid for 60 seconds, failures are shown, and vault bootstrap is impossible until download succeeds and the user confirms the saved file. | Awaiting publication and a disposable-user browser download/recovery ceremony. Existing vault recovery keys cannot be re-displayed because the service never stores their plaintext. |
+| Recovery-key download during first vault setup | Fixed. Same-user `SIGNED_IN` and token-refresh events preserve the pending setup; the download anchor stays attached for the click, its object URL remains valid for 60 seconds, failures are shown, and vault bootstrap is impossible until download succeeds and the user confirms the saved file. | Awaiting a disposable-user browser download/recovery ceremony after UAT publication. Existing vault recovery keys cannot be re-displayed because the service never stores their plaintext. |
+| Login, signup and forgot-password | Reworked into distinct, CAPTCHA-ready flows with normalized email, password confirmation, enumeration-safe reset messaging and an explicit account-login/vault-password boundary. | Awaiting real confirmation and password-reset email ceremonies after UAT publication. |
 | Package buttons | Fixed. A Personal, Family, Professional, Team or Business selection survives the sign-in/vault-unlock boundary and opens the selected plan in Plans & billing. | Public production still runs the previous deploy, which says paid plans are unavailable. Checkout activation is blocked by the runtime items below. |
-| Package catalog | Seven published packages, 24 public price rows (four Free display rows plus 20 paid catalog rows), and 48 display entitlements are installed. Five Stripe test Products and all 20 paid recurring Prices were independently read back and matched for amount, currency, interval, lookup key and metadata. | Database/catalog and all 20 runtime Price-ID secrets are ready. The restricted Stripe test key and Customer Portal configuration are still missing; no billing customer or billing event exists yet. |
-| Branded email | Signup, confirmation redirect, login-password reset, and account-security notification paths are wired to Supabase Auth. | Custom SMTP sender/domain delivery is not verified in production. A code path cannot prove that `noreply@passkey-x.com` is accepted, signed, delivered, bounced and recoverable. |
-| Account deletion | Not implemented as a safe end-user workflow. | Requires ownership-transfer rules for shared tenants, recent reauthentication, transactional key/data cleanup, Auth-user deletion, confirmation UX and rollback-safe E2E before it can be tested. |
+| Package catalog | Seven published packages, 24 public price rows (four Free display rows plus 20 paid catalog rows), and 48 display entitlements are installed. Five Stripe test Products and all 20 paid recurring Prices were independently read back and matched for amount, currency, interval, lookup key and metadata. | Database/catalog, restricted test key, webhook secret and all 20 runtime Price-ID secrets are ready; billing is active. No billing customer or billing event exists yet, so Checkout/Portal/webhook E2E remains open. |
+| Branded email | Signup, confirmation redirect, login-password reset, and account-security notification paths are wired to Supabase Auth. Custom SMTP is enabled with the configured provider host. | The saved sender-address readback is empty and real delivery is not verified. A code path cannot prove that `noreply@passkey-x.com` is accepted, signed, delivered, bounced and recoverable. |
+| Account deletion | Implemented internally with typed confirmation, fresh-session enforcement, retryable request state, storage/database cleanup and Auth-user deletion. | Personal-account UAT is ready. Shared-tenant owner transfer/blocking and rollback/retry ceremonies still require disposable users. |
+| Customer SMS notifications | Implemented internally as opt-in, write-only tenant credential setup, organization/profile scoping, phone verification, idempotent production sends and signed delivery-state ingestion. | Requires one consenting phone and a Sent sender profile that is authorized to deliver to it. The global Supabase Auth SMS hook remains separate and disabled. |
 
 ## Functional acceptance criteria
 
@@ -45,8 +51,8 @@ user ceremony has accepted it.
 | F-003 | Partial | Verified-email, one-time-fragment workspace invitations and encrypted key envelopes exist. Invite-email delivery and unregistered-recipient E2E are open. |
 | F-004 | Partial | Access Capsules model reveal/fill-only, expiry, uses and revocation. Recipient-extension proof that normal UI never exposes the password is open. |
 | F-005 | Partial | Mission definitions and assigned items are client-encrypted and runnable. The current model is workspace-scoped; the complete configured workspace-set journey and E2E are open. |
-| F-006 | Not implemented | Organization lifecycle foundations exist, but Access Twin impact preview before removal/project closure does not. |
-| F-007 | Not implemented | Local security checks exist; no approved hosted-AI provider path, raw-secret egress blocker ceremony or hosted credit accounting exists. |
+| F-006 | Implemented internally | Access Twin simulations cover identity/resource removal and project closure against tenant-scoped graph snapshots. Real organization lifecycle acceptance remains open. |
+| F-007 | Implemented internally | Hosted AI runs server-side through Netlify AI Gateway, sends aggregate counts only, rate-limits requests and persists request metadata without raw prompts or output. Provider observation, credit reconciliation and independent egress review remain open. |
 | F-008 | Partial | Access requests/approvals and deterministic budget/policy primitives exist. Critical automation execution is proposal-only or local; complete policy-plus-human approval workflows are open. |
 | F-009 | Partial | Signed Stripe events drive exact entitlements and cancellation returns to Free without deleting data. Impact preview and downgrade grace-period UX are not implemented. |
 | F-010 | Partial | Append-only audit primitives exist. A complete Trust Receipt artifact and every sensitive Business grant/revoke journey are not implemented. |
@@ -55,71 +61,72 @@ user ceremony has accepted it.
 | F-013 | Partial | HUMAN/service/machine/workload/agent identity kinds and attributable grants exist. Responsible-owner explanation and full non-human UI/runtime flow are open. |
 | F-014 | Partial | Privacy-minimized discovery tables reject page/form/prompt/vault content by design. No production connector has yet supplied and proven an unmanaged application signal. |
 | F-015 | Implemented internally | Atomic Spend Governor reservations enforce soft/hard thresholds and alert/approval/block actions in rollback tests. Real provider usage reconciliation and pilot evidence are open. |
-| F-016 | Not implemented | Zero-standing privileged resources, JIT/JEA issuance and expiry revocation runtime are Phase 6 plan only. |
-| F-017 | Not implemented | Dynamic short-lived agent credential brokerage and production adapters are Phase 6 plan only. |
+| F-016 | Partial | Zero-standing resources, requests, approvals, expiry, kill controls and evidence records are implemented. Credential issuance remains fail-closed until accepted review evidence and a production-certified adapter exist. |
+| F-017 | Partial | Agent profiles and tenant-scoped task capsules are implemented with cross-tenant validation and suspended-by-default state. No dynamic credential is issued without the same review/adapter gates. |
 | F-018 | Partial | Verified posture policy evaluation and safe advisory UI exist. IdP/MDM attestation, enforced production denial and guided remediation are open. |
 | F-019 | Partial | Customer-approved MSP metadata context is RLS-tested not to create tenant membership or expose key envelopes. Production context-switch/audit-mixing E2E and independent isolation review are open. |
-| F-020 | Not implemented | Privilege Flight Recorder runtime attribution is Phase 6 plan only. |
+| F-020 | Implemented internally | Tenant-scoped Flight Recorder evidence is append-only and hash chained, with actor/session/resource attribution. Independent tamper-evidence review and live adapter evidence remain open. |
 | F-021 | Implemented internally | Waste Autopilot produces reviewable proposals and never performs deprovisioning in the analyzer. Real connector execution policy and pilot evidence are open. |
 | F-022 | Partial | Connector health/scope/lifecycle contracts, encrypted-reference storage and 28 target manifests exist. The 25+ real adapters and certification evidence do not. |
-| F-023 | Not implemented | Access Twin 2.0 cross-domain simulation is not implemented. |
+| F-023 | Implemented internally | Access Twin 2.0 stores versioned graph snapshots and produces reviewable cross-domain impact simulations. Live IdP/MDM/SIEM connector evidence remains open. |
 
 ## Verified candidate evidence
 
-- Repository checks: 18 package tests, 3 CLI tests and 15 auth/security tests pass.
-- Web checks: production Next.js build, TypeScript, lint and 23 web tests pass.
-- Production database: 63 of 63 public tables have RLS enabled.
+- Repository checks: 18 package tests, 3 CLI tests and 21 auth/security tests pass.
+- Web checks: production Next.js build, TypeScript, lint and 25 web tests pass.
+- Production database: the v2.2 web control-plane migrations are applied. All
+  18 new tables have RLS; direct browser roles have no privileges on the five
+  secret-bearing tables.
 - Production catalog: 7 published plans, 24 price display rows and 48
   entitlement display rows.
-- Production functions: `v1`, `billing`, `sent-sms-hook`, `sent-webhook` and
-  `stripe-webhook` are active. Billing remains fail-closed until explicitly
-  activated with complete server secrets.
+- Production functions: `account-lifecycle` and `tenant-sms` are active with
+  JWT verification; the signed `sent-webhook` handler is updated. Existing
+  `v1`, `billing`, `sent-sms-hook` and `stripe-webhook` functions remain active.
+  Billing is guarded by a server-side activation flag and uses Stripe test mode.
 - Production billing secrets/config: all 20 Stripe Price IDs, the replacement
-  webhook signing secret, `STRIPE_LIVEMODE=false`, the production origin and
-  `BILLING_ENABLED=false` are installed. The restricted key is not installed.
-- Supabase security advisor: one open warning, leaked-password protection
-  disabled; it requires an eligible Supabase plan. Performance findings are
-  informational unused indexes in a near-empty database.
-- Current Netlify deploy is healthy but is the earlier build. Browser readback
-  shows the public catalog disabled, confirming that the candidate fixes are not
-  live yet.
+  webhook signing secret, restricted test key, `STRIPE_LIVEMODE=false`, the
+  production origin and `BILLING_ENABLED=true` are installed.
+- Supabase security advisor: leaked-password protection is disabled and requires
+  an eligible Supabase plan. It also reports five authenticated
+  `SECURITY DEFINER` RPCs. Those RPCs are intentional transactional boundaries:
+  each fixes `search_path`, derives the actor from the JWT, validates tenant
+  manager/Business access (or ownership for AI audit completion), and exposes no
+  underlying secret-table grant. The five no-policy notices are intentional
+  fail-closed backend-only tables.
+- Netlify UAT publication and live browser verification are the next release
+  actions for this candidate.
 
 ## Required runtime completion
 
-1. Create a Stripe **test-mode restricted key** with only the application
-   permissions required to read Products/Prices and create/read Customers,
-   Checkout Sessions and Billing Portal Sessions. Enter it directly into the
-   Supabase production secret store as `STRIPE_RESTRICTED_KEY`; never paste it
-   into chat.
-2. Configure the Stripe test Customer Portal for subscription cancellation and
-   payment-method management. The connected Stripe API exposes portal reads but
-   not portal configuration writes.
-3. The replacement Stripe test webhook and its signing secret are installed,
-   together with all 20 verified Price IDs, `STRIPE_LIVEMODE=false` and the
-   production origin. Remove the previous webhook endpoint in Stripe Dashboard,
-   then enable `BILLING_ENABLED=true` only after an authenticated catalog
-   request passes.
-4. Finish production custom SMTP with a verified sending domain, SMTP host,
+1. Run authenticated Stripe test Checkout, Portal, webhook and cancellation
+   ceremonies. Customer Portal and previous-webhook cleanup were reported
+   complete by the account owner but still require observed end-to-end proof.
+2. Finish production custom SMTP with a verified sending domain, SMTP host,
    port, username and password, sender `noreply@passkey-x.com`, and sender name
-   `Passkey-X`. Verify SPF, DKIM and DMARC, then run confirmation, password-reset,
-   security-notification and bounce tests with a disposable inbox.
-5. Supply and enable matching Turnstile site/secret keys if CAPTCHA is required.
-6. Complete Sent onboarding beyond `KYC_COMPLETED`, securely install a rotated
-   production API key, register the signed provider hook, and explicitly approve
-   one real-device delivery ceremony before setting `SENT_DM_SMS_ENABLED=true`
-   or exposing phone MFA. A fresh production-only Auth-hook secret and the
-   fail-closed production flags are already installed. SMS is verification only
-   and never decrypts or recovers a vault.
-7. Implement the criteria marked Partial/Not implemented and obtain the listed
+   `Passkey-X`. Custom SMTP is enabled, but the sender-address field reads back
+   empty. Correct that field, verify SPF, DKIM and DMARC, then run confirmation,
+   password-reset, security-notification and bounce tests with a disposable
+   inbox.
+3. The Turnstile site key is present in the web candidate. Install its matching
+   secret in Supabase Auth Attack Protection and save the provider selection
+   before claiming CAPTCHA enforcement.
+4. The customer notifications panel accepts each tenant's own Sent credential,
+   validates its organization/profile scope, verifies a notification phone and
+   performs real production sends. Run one consenting-device ceremony before
+   accepting it. The global Supabase Auth SMS hook remains disabled until its
+   separate provider delivery proof. SMS is verification/notification only and
+   never decrypts or recovers a vault.
+5. Complete the criteria marked Partial and obtain the listed
    independent reviews and device/provider/pilot evidence before a complete
    v2.2 production claim.
 
 ## Safe deployment order
 
-1. Complete Stripe and SMTP secret/configuration steps through secure provider
-   forms.
-2. Deploy the candidate to Netlify production.
-3. Verify public catalog/readback and response headers.
+1. Publish the candidate to Netlify as the controlled UAT build.
+2. Verify the deployed commit, public catalog, function routing and response
+   headers.
+3. Save the matching Turnstile secret through the secure Supabase form, then
+   confirm CAPTCHA enforcement.
 4. Run disposable-user signup, confirmation, recovery-key download, vault
    recovery and deletion tests.
 5. Run Stripe test Checkout success, 3DS, decline, webhook replay, portal and

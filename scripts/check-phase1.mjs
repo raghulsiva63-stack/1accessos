@@ -6,6 +6,7 @@ const itemModel = await readFile("apps/web/lib/vault/items.ts", "utf8");
 const crypto = await readFile("apps/web/lib/crypto/vault.ts", "utf8");
 const attachments = await readFile("apps/web/lib/vault/attachments.ts", "utf8");
 const downloads = await readFile("apps/web/lib/browser/download.ts", "utf8");
+const sessionMachine = await readFile("apps/web/lib/auth/session-machine.ts", "utf8");
 const completion = await readFile("supabase/migrations/00000000000004_phase1_completion.sql", "utf8");
 const invoker = await readFile("supabase/migrations/00000000000006_invoker_bootstrap_and_recovery.sql", "utf8");
 const recoveryPolicy = await readFile("supabase/migrations/00000000000007_recovery_policy_efficiency.sql", "utf8");
@@ -24,7 +25,9 @@ for (const kind of [
 assert.match(page, /Passkey-X/);
 assert.match(page, /vault password must be different from your login password/i);
 assert.match(page, /resetPasswordForEmail/);
-assert.match(page, /PASSWORD_RECOVERY/);
+assert.match(page, /authSessionTransition/);
+assert.match(sessionMachine, /PASSWORD_RECOVERY/);
+assert.match(sessionMachine, /previousUserId !== nextUserId/);
 assert.match(page, /updating the login.*does not reset or decrypt the separate vault password/is);
 assert.doesNotMatch(page, /aria-label="1accessos"|Unable to open 1accessos/);
 assert.match(crypto, /PX-RK1-/);

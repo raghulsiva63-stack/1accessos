@@ -4,7 +4,7 @@ import { Turnstile } from "@marsidev/react-turnstile";
 import { captchaSiteKey } from "@/lib/supabase/client";
 
 type TurnstileCheckProps = {
-  action: "auth-signin" | "auth-signup";
+  action: "auth-signin" | "auth-signup" | "auth-reset" | "vault-setup" | "account-delete";
   resetKey: number;
   onProblem: () => void;
   onToken: (token: string | null) => void;

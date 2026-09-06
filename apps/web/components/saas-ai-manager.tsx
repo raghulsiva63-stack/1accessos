@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HostedAiAdvisor } from "@/components/hosted-ai-advisor";
 import type { TenantEntitlement } from "@/lib/billing/client";
 import {
   approveMspTenantAccess, createDraftConnector, createManualSaasApplication,
@@ -123,6 +124,7 @@ export function SaasAiManager({ vault,entitlement,onOpenBilling }: {
 
     {message && <p className="settings-message" role="status">{message}</p>}
     {loading ? <div className="vault-loading"><div className="loading-ring" /><p>Loading privacy-minimized SaaS metadata…</p></div> : <>
+      {!viewingManagedTenant && <HostedAiAdvisor tenantId={activeTenant} />}
       <div className="phase5-metrics">
         <article><AppWindow /><span><strong>{snapshot.dashboard.applications}</strong>Applications</span></article>
         <article><CircleAlert /><span><strong>{snapshot.dashboard.unsanctioned_apps}</strong>Unsanctioned</span></article>
