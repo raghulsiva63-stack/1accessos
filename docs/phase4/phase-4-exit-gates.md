@@ -9,10 +9,11 @@ evidence.
 
 ## Completed engineering gates
 
-- [x] Tenant-scoped Free, Personal, Family, Team, and Phase 5 Business entitlement model.
+- [x] Tenant-scoped Free, Personal, Family, Professional, Team, and Business entitlement model.
 - [x] INR/USD and monthly/annual server-side Price matrix.
-- [x] Personal, Family, and Team Product shells created in Stripe test mode.
-- [x] Business Product shell created in Stripe test mode without an unapproved Price.
+- [x] Personal, Family, Professional, Team, and Business Products created in Stripe test mode.
+- [x] All 20 recurring Stripe test Prices read back against amount, currency,
+  interval, lookup-key, active-state, mode, and Product/Price metadata checks.
 - [x] Hosted Stripe Checkout and Customer Portal Edge Function.
 - [x] Tenant-owner authorization before all billing actions.
 - [x] Signed raw-body Stripe webhook handler with test/live-mode check.
@@ -28,9 +29,10 @@ evidence.
 
 ## Commercial activation gates
 
-- [ ] Vlightsoft approves all sixteen test and live Price amounts.
-- [ ] Stripe test Prices and Customer Portal are configured.
-- [ ] Test restricted key and signed webhook secret are stored in Supabase.
+- [x] The user authorized Stripe sandbox as the only payment environment for
+  this release and the v2.2 amounts were installed as test Prices.
+- [ ] Stripe test Customer Portal is configured.
+- [ ] Test restricted key and a fresh signed webhook secret are stored in Supabase.
 - [ ] Stripe test-mode checkout, 3DS, decline, retry, portal, and cancellation
   ceremonies pass through the deployed application.
 - [ ] Qualified tax advice confirms registrations and product tax treatment;

@@ -14,7 +14,7 @@ assert.match(netlify, /\[context\.production\.environment\][\s\S]*?NEXT_PUBLIC_P
 assert.match(netlify, /\[context\.deploy-preview\.environment\][\s\S]*?NEXT_PUBLIC_PASSKEYS_ENABLED = "false"/);
 assert.match(netlify, /\[context\.branch-deploy\.environment\][\s\S]*?NEXT_PUBLIC_PASSKEYS_ENABLED = "false"/);
 assert.match(client, /experimental:\s*\{\s*passkey:\s*passkeysEnabled\s*\}/);
-assert.match(page, /auth\.signInWithPasskey\(\)/);
+assert.match(page, /auth\.signInWithPasskey\(/);
 assert.match(page, /auth\.registerPasskey\(\)/);
 assert.match(page, /auth\.passkey\.list\(\)/);
 assert.match(page, /auth\.passkey\.update\(/);

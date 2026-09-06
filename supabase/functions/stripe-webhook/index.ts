@@ -11,7 +11,7 @@ type SubscriptionSnapshot = {
   subscriptionId: string;
   productId: string;
   priceId: string;
-  plan: "personal" | "family" | "team" | "business";
+  plan: "personal" | "family" | "professional" | "team" | "business";
   interval: "month" | "year";
   currency: "inr" | "usd";
   status: string;

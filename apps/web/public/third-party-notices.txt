@@ -1,0 +1,8 @@
+EFF Large Wordlist (2016), Electronic Frontier Foundation.
+Source: https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+EFF policy: https://www.eff.org/copyright
+Converted from numbered text to a JSON word array; word spellings unchanged.
+Source SHA256: addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e
+No EFF endorsement is implied.

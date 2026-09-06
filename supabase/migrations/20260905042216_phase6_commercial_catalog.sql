@@ -213,12 +213,12 @@ insert into public.plan_catalog(
   min_seats, max_seats, trial_days, is_featured, sort_order, status,
   commercial_status
 ) values
-  ('2026-09-v2.2','free','Free','One person exploring Passkey-X','Core encrypted vault with privacy-safe sponsor cards.','free',null,null,0,false,10,'draft','proposed'),
-  ('2026-09-v2.2','personal','Personal','Individuals','Ad-free personal protection with unlimited devices.','flat',null,null,14,false,20,'draft','proposed'),
-  ('2026-09-v2.2','family','Family','Households of up to 6','Shared family vaults, recovery support, and pooled usage.','flat',null,null,14,false,30,'draft','proposed'),
-  ('2026-09-v2.2','professional','Professional','Freelancers, consultants, and developers','Client workspaces and developer-secret workflows.','flat',null,null,14,false,40,'draft','proposed'),
-  ('2026-09-v2.2','team','Team','Small teams and focused workgroups','Encrypted collaboration, roles, approvals, alerts, and developer tools.','per_seat',3,50,21,false,50,'draft','proposed'),
-  ('2026-09-v2.2','business','Business','Growing multi-department organizations','Lifecycle governance, organization policy, and access intelligence.','per_seat',5,500,21,true,60,'draft','proposed'),
+  ('2026-09-v2.2','free','Free','One person exploring Passkey-X','Core encrypted vault with privacy-safe sponsor cards.','free',null,null,0,false,10,'draft','active'),
+  ('2026-09-v2.2','personal','Personal','Individuals','Ad-free personal protection with unlimited devices.','flat',null,null,14,false,20,'draft','active'),
+  ('2026-09-v2.2','family','Family','Households of up to 6','Shared family vaults, recovery support, and pooled usage.','flat',null,null,14,false,30,'draft','active'),
+  ('2026-09-v2.2','professional','Professional','Freelancers, consultants, and developers','Client workspaces and developer-secret workflows.','flat',null,null,14,false,40,'draft','active'),
+  ('2026-09-v2.2','team','Team','Small teams and focused workgroups','Encrypted collaboration, roles, approvals, alerts, and developer tools.','per_seat',3,50,21,false,50,'draft','active'),
+  ('2026-09-v2.2','business','Business','Growing multi-department organizations','Lifecycle governance, organization policy, and access intelligence.','per_seat',5,500,21,true,60,'draft','active'),
   ('2026-09-v2.2','enterprise','Enterprise','Large, regulated, and MSP organizations','Advanced trust, private deployment options, SIEM depth, and contract controls.','contract',null,null,0,false,70,'draft','proposed');
 
 insert into public.plan_prices(

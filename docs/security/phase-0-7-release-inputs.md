@@ -11,7 +11,7 @@ Code fixes, deterministic policy and privacy checks, development-only schema/API
 | Priority | Needed input | Why / release gate | Timing |
 |---|---|---|---|
 | 1 | Named independent cryptographic reviewer and engagement process; approved findings/sign-off when review completes | Phase 0 acceptance; required before Phase 6 privileged/runtime implementation | Start review while engineering proceeds |
-| 2 | User-controlled email inbox and real SMS-capable phone for one approved development enrollment/sign-in/removal ceremony | Confirmation/recovery delivery, MFA behavior and device-delivery evidence | After provider sandbox and webhook validation |
+| 2 | User-controlled email inbox and real SMS-capable phone for one approved disposable production enrollment/sign-in/removal ceremony | Confirmation/recovery delivery, MFA behavior and device-delivery evidence when no provider sandbox is available | After provider and webhook validation |
 | 3 | Provider test-account access and administrator consent for initial IdP, SIEM and connector targets | Prove real integrations; manifests and mocked adapters cannot be certified | Before each provider vertical slice |
 | 4 | Two or more consenting pilot users and an organization/workgroup scenario | Family/Professional/Team/Business collaboration, sharing, offboarding and acceptance evidence | After internal negative and E2E tests |
 | 5 | Windows/macOS test devices, Vlightsoft signing/notarization identities, Chrome/Edge publisher accounts | Desktop parity and signed distribution; real authenticator tests | Before client release |
@@ -33,6 +33,18 @@ No subscriptions, reviewer bookings, customer invitations or production charges 
 
 ## Current blocker and limitations
 
-Development Sent key, sandbox setting and SMS hook signing secret are saved. The Send SMS hook remains disabled. Direct Sent webhook-list validation returned HTTP 403 with a gateway/Cloudflare envelope. A successful authorized provider API path is needed before webhook registration and delivery validation. The response alone does not establish key validity or invalidity.
+The Sent key and SMS hook signing secret previously saved in development have
+not been copied into production. Production phone Auth is disabled, the Send
+SMS hook is not registered, and the server-side activation flag remains off.
+Direct Sent webhook-list validation returned HTTP 403 with a gateway/Cloudflare
+envelope. A successful authorized provider API path and one explicitly approved
+real-number ceremony are needed before production activation. The response
+alone does not establish key validity or invalidity.
+
+The connected Sent account API now returns the expected `passkey-x`
+organization context, a positive effective balance and `KYC_COMPLETED`
+onboarding status. This proves account access, not message delivery, webhook
+registration, sender approval or final `ONBOARDED` status. No production SMS
+was sent during this checkpoint.
 
 Only recoverable old-chat requirements can be accounted for; see `chat-requirements-register.md`. Keep unverified additions open rather than assuming the ZIP contains them.

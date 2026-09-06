@@ -32,6 +32,9 @@ function sentResult(payload: SentResponse): { messageId: string | null; requestI
 Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
 
+  // Deploying the receiver must never activate real message delivery.
+  if (Deno.env.get("SENT_DM_SMS_ENABLED") !== "true") return json(503, { error: "sms_disabled" });
+
   let hookId: string | null = null;
   try {
     const rawBody = await request.text();

@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { fromBase64Url, toBase64Url, toPostgresBytea, unwrapKey, wrapKey } from "@/lib/crypto/vault";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { downloadBlob } from "@/lib/browser/download";
 
 export type VaultAttachment = {
   id: string;
@@ -97,7 +98,9 @@ export async function downloadEncryptedAttachment(vault: WorkspaceVault, attachm
   const { data, error } = await supabase.storage.from("vault-attachments").download(attachment.storagePath);
   if (error) throw error;
   const plaintext = await unwrapKey(vault.key, { algorithm: "AES-256-GCM", nonce: attachment.nonce, ciphertext: toBase64Url(new Uint8Array(await data.arrayBuffer())) }, context);
-  const url = URL.createObjectURL(new Blob([Uint8Array.from(plaintext).buffer], { type: attachment.mimeType }));
-  const anchor = document.createElement("a"); anchor.href = url; anchor.download = attachment.name; anchor.click();
-  URL.revokeObjectURL(url); plaintext.fill(0);
+  try {
+    downloadBlob(new Blob([Uint8Array.from(plaintext).buffer], { type: attachment.mimeType }), attachment.name);
+  } finally {
+    plaintext.fill(0);
+  }
 }

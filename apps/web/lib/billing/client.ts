@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 
-export type PlanCode = "free" | "personal" | "family" | "team" | "business";
+export type PlanCode = "free" | "personal" | "family" | "professional" | "team" | "business";
 export type PublicPlanCode = PlanCode | "professional" | "enterprise";
 export type SubscriptionStatus = "none" | "trialing" | "active" | "past_due" | "unpaid" | "canceled" | "incomplete" | "incomplete_expired" | "paused";
 export type BillingInterval = "month" | "year";
@@ -48,7 +48,32 @@ export type PublicCatalogPlan = {
   prices: PublicPlanPrice[];
 };
 
+export const publicCatalogEnabled = process.env.NEXT_PUBLIC_PLAN_CATALOG_ENABLED === "true";
+
 export const billingEnabled = process.env.NEXT_PUBLIC_BILLING_ENABLED === "true";
+export const stripeTestMode = process.env.NEXT_PUBLIC_STRIPE_TEST_MODE === "true";
+
+const PENDING_PLAN_KEY = "passkey-x:pending-plan";
+const SELF_SERVE_PLANS = new Set<Exclude<PlanCode, "free">>([
+  "personal", "family", "professional", "team", "business",
+]);
+
+export function rememberPlanSelection(plan: PublicPlanCode) {
+  if (typeof window === "undefined" || plan === "free" || plan === "enterprise") return;
+  if (SELF_SERVE_PLANS.has(plan)) window.localStorage.setItem(PENDING_PLAN_KEY, plan);
+}
+
+export function readPlanSelection(): Exclude<PlanCode, "free"> | null {
+  if (typeof window === "undefined") return null;
+  const plan = window.localStorage.getItem(PENDING_PLAN_KEY);
+  return plan && SELF_SERVE_PLANS.has(plan as Exclude<PlanCode, "free">)
+    ? plan as Exclude<PlanCode, "free">
+    : null;
+}
+
+export function clearPlanSelection() {
+  if (typeof window !== "undefined") window.localStorage.removeItem(PENDING_PLAN_KEY);
+}
 
 export const FREE_ENTITLEMENT: TenantEntitlement = {
   plan_code: "free",
@@ -73,7 +98,7 @@ export async function loadTenantEntitlement(tenantId: string): Promise<TenantEnt
 }
 
 export async function loadPublicPlanCatalog(): Promise<PublicCatalogPlan[]> {
-  if (!supabase) return [];
+  if (!publicCatalogEnabled || !supabase) return [];
   const { data: planRows, error: planError } = await supabase.from("plan_catalog")
     .select("catalog_version,plan_code,display_name,audience,summary,billing_model,min_seats,max_seats,trial_days,is_featured,sort_order,commercial_status")
     .eq("status", "published")
@@ -141,8 +166,17 @@ export async function beginCheckout(
   plan: Exclude<PlanCode, "free">,
   interval: BillingInterval,
   currency: BillingCurrency,
+  quantity = 1,
 ): Promise<string> {
-  const response = await invokeBilling<{ url: string }>({ action: "checkout", tenantId, plan, interval, currency });
+  const response = await invokeBilling<{ url: string }>({
+    action: "checkout",
+    tenantId,
+    plan,
+    interval,
+    currency,
+    quantity,
+    requestId: crypto.randomUUID(),
+  });
   return response.url;
 }
 

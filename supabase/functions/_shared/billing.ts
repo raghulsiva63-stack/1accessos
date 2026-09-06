@@ -1,7 +1,7 @@
 import Stripe from "npm:stripe@22.4.0";
 import { createClient } from "npm:@supabase/supabase-js@2.115.0";
 
-export type BillingPlan = "personal" | "family" | "team" | "business";
+export type BillingPlan = "personal" | "family" | "professional" | "team" | "business";
 export type BillingInterval = "month" | "year";
 export type BillingCurrency = "inr" | "usd";
 
@@ -12,9 +12,33 @@ export type PriceChoice = {
   priceId: string;
 };
 
-const PLANS: BillingPlan[] = ["personal", "family", "team", "business"];
+const PLANS: BillingPlan[] = ["personal", "family", "professional", "team", "business"];
 const INTERVALS: BillingInterval[] = ["month", "year"];
 const CURRENCIES: BillingCurrency[] = ["inr", "usd"];
+const EXPECTED_UNIT_AMOUNTS: Record<string, number> = {
+  passkey_x_personal_month_inr_v22: 9_900,
+  passkey_x_personal_month_usd_v22: 199,
+  passkey_x_personal_year_inr_v22: 99_000,
+  passkey_x_personal_year_usd_v22: 1_990,
+  passkey_x_family_month_inr_v22: 24_900,
+  passkey_x_family_month_usd_v22: 499,
+  passkey_x_family_year_inr_v22: 249_000,
+  passkey_x_family_year_usd_v22: 4_990,
+  passkey_x_professional_month_inr_v22: 19_900,
+  passkey_x_professional_month_usd_v22: 399,
+  passkey_x_professional_year_inr_v22: 199_000,
+  passkey_x_professional_year_usd_v22: 3_990,
+  passkey_x_team_month_inr_v22: 29_900,
+  passkey_x_team_month_usd_v22: 599,
+  passkey_x_team_year_inr_v22: 299_000,
+  passkey_x_team_year_usd_v22: 5_990,
+  passkey_x_business_month_inr_v22: 49_900,
+  passkey_x_business_month_usd_v22: 999,
+  passkey_x_business_year_inr_v22: 499_000,
+  passkey_x_business_year_usd_v22: 9_990,
+};
+
+export const EXPECTED_PRICE_COUNT = PLANS.length * INTERVALS.length * CURRENCIES.length;
 
 export function required(name: string): string {
   const value = Deno.env.get(name)?.trim();
@@ -105,6 +129,63 @@ export function priceChoices(): PriceChoice[] {
   return result;
 }
 
+export function requireCompletePriceCatalog(): PriceChoice[] {
+  const choices = priceChoices();
+  if (choices.length !== EXPECTED_PRICE_COUNT || new Set(choices.map((entry) => entry.priceId)).size !== EXPECTED_PRICE_COUNT) {
+    throw new Error("billing_not_configured");
+  }
+  return choices;
+}
+
+export function checkoutQuantity(value: unknown, minimumQuantity: number, maximumQuantity: number): number {
+  const quantity = typeof value === "number" ? value : Number(value);
+  if (
+    !Number.isSafeInteger(minimumQuantity)
+    || !Number.isSafeInteger(maximumQuantity)
+    || minimumQuantity < 1
+    || maximumQuantity < minimumQuantity
+    || !Number.isSafeInteger(quantity)
+    || quantity < minimumQuantity
+    || quantity > maximumQuantity
+  ) {
+    throw new Error("invalid_quantity");
+  }
+  return quantity;
+}
+
+export function priceLookupKey(choice: Omit<PriceChoice, "priceId">): string {
+  return `passkey_x_${choice.plan}_${choice.interval}_${choice.currency}_v22`;
+}
+
+export async function validateStripePrice(stripe: Stripe, choice: PriceChoice, expectedLivemode: boolean) {
+  const price = await stripe.prices.retrieve(choice.priceId, { expand: ["product"] });
+  const product = typeof price.product === "string" ? null : price.product;
+  const lookupKey = priceLookupKey(choice);
+  const environment = expectedLivemode ? "production" : "sandbox";
+  if (
+    !price.active
+    || price.type !== "recurring"
+    || !price.recurring
+    || price.unit_amount !== EXPECTED_UNIT_AMOUNTS[lookupKey]
+    || price.livemode !== expectedLivemode
+    || price.currency !== choice.currency
+    || price.recurring.interval !== choice.interval
+    || price.lookup_key !== lookupKey
+    || price.metadata.environment !== environment
+    || price.metadata.passkey_x_catalog_version !== "2026-09-v2.2"
+    || price.metadata.passkey_x_plan !== choice.plan
+    || price.metadata.passkey_x_interval !== choice.interval
+    || price.metadata.passkey_x_currency !== choice.currency
+    || !product
+    || !product.active
+    || product.livemode !== expectedLivemode
+    || product.metadata.environment !== environment
+    || product.metadata.passkey_x_catalog_version !== "2026-09-v2.2"
+    || product.metadata.passkey_x_plan !== choice.plan
+  ) throw new Error("billing_not_configured");
+  return price;
+}
+
 export function findPrice(
   plan: unknown,
   interval: unknown,
@@ -142,7 +223,7 @@ export async function requireTenantManager(request: Request, tenantId: string) {
 
 export function safeCode(reason: unknown): string {
   const message = reason instanceof Error ? reason.message : String(reason ?? "unknown");
-  if (/^(unauthorized|forbidden|invalid_tenant|invalid_request|billing_not_configured|subscription_exists|customer_missing)$/u.test(message)) return message;
+  if (/^(unauthorized|forbidden|invalid_tenant|invalid_request|invalid_quantity|billing_not_configured|subscription_exists|customer_missing)$/u.test(message)) return message;
   if (message.startsWith("missing:")) return "billing_not_configured";
   return "billing_unavailable";
 }
