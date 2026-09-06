@@ -23,7 +23,7 @@ assert.match(sqlTest, /Published catalog mutation unexpectedly succeeded/u);
 assert.match(catalogClient, /loadPublicPlanCatalog/u);
 assert.match(publicSite, /Product[\s\S]*Teams[\s\S]*Business[\s\S]*Security[\s\S]*Pricing/u);
 assert.match(publicSite, /Choose Team for one workgroup\. Choose Business for an organization\./u);
-assert.match(publicSite, /paid checkout remains safely disabled/iu);
+assert.match(publicSite, /Sales-assisted plan.*self-service checkout is unavailable/iu);
 assert.doesNotMatch(page, /const BILLING_PLANS/u);
 assert.match(scope, /not.*declaration.*Phase 6/isu);
 assert.match(traceability, /SaaS\/AI Manager[\s\S]*Engineering control-plane checkpoint complete/u);

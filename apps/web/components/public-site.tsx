@@ -38,7 +38,7 @@ function PlanCard({ plan, currency, interval, office = false }: { plan: PublicCa
     <div className="public-plan-meta"><span><Users /> {seats}</span>{plan.trialDays > 0 && <span><Sparkles /> {plan.trialDays}-day trial policy</span>}</div>
     <a className={plan.featured ? "public-plan-action primary" : "public-plan-action"} href="#access" onClick={() => rememberPlanSelection(plan.code)}>{plan.code === "enterprise" ? "Request an enterprise pilot" : plan.code === "free" ? "Start free" : `Choose ${plan.name}`} <ArrowRight /></a>
     <ul>{plan.features.map((feature) => <li key={feature}><Check /> <span>{feature}</span></li>)}</ul>
-    {plan.commercialStatus !== "active" && <p className="public-plan-status">Launch catalog · paid checkout remains safely disabled</p>}
+    {plan.commercialStatus !== "active" && <p className="public-plan-status">Sales-assisted plan · self-service checkout is unavailable for this package</p>}
   </article>;
 }
 
