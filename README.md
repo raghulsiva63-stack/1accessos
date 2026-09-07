@@ -42,3 +42,9 @@ npm --prefix apps/cli test
 ```
 
 Only synthetic credentials may be used in development and automated tests.
+
+## Production documentation
+
+- [REST API quickstart and secure data-push examples](docs/api/README.md)
+- [OpenAPI 3.1 production contract](docs/api/openapi.yaml)
+- [Production configuration and release checklist](docs/operations/production-configuration.md)
