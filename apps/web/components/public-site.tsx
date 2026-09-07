@@ -61,7 +61,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
   const officePlans = useMemo(() => plans.filter((plan) => ["team", "business"].includes(plan.code)), [plans]);
   const enterprise = plans.find((plan) => plan.code === "enterprise");
 
-  const links = <><a href="#product">Product</a>{publicCatalogEnabled && <><a href="#teams">Teams</a><a href="#business">Business</a></>}<a href="#security">Security</a><a href="#pricing">Pricing</a></>;
+  const links = <><a href="#product">Product</a>{publicCatalogEnabled && <><a href="#teams">Teams</a><a href="#business">Business</a></>}<a href="#security">Security</a><a href="#pricing">Pricing</a><a href="/api-docs">API</a></>;
 
   return <main className="public-site">
     <header className="public-header">
@@ -110,6 +110,6 @@ export function PublicSite({ children }: { children: ReactNode }) {
       </>}
     </section>
 
-    <footer className="public-footer"><div><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={55} /><p>Private access for people, teams, and machines.</p></div><div><strong>Product</strong><a href="#security">Security</a><a href="#pricing">Pricing</a><a href="#access">Sign in</a></div><div><strong>Company</strong><span>Vlightsoft</span><span>passkey-x.com</span></div><small>© 2026 Vlightsoft. Passkey-X launch catalog v2.2.</small></footer>
+    <footer className="public-footer"><div><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={55} /><p>Private access for people, teams, and machines.</p></div><div><strong>Product</strong><a href="#security">Security</a><a href="#pricing">Pricing</a><a href="/api-docs">API documentation</a><a href="#access">Sign in</a></div><div><strong>Company</strong><span>Vlightsoft</span><span>passkey-x.com</span></div><small>© 2026 Vlightsoft. Passkey-X launch catalog v2.2.</small></footer>
   </main>;
 }
