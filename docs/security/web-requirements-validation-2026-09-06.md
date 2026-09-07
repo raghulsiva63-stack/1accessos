@@ -2,6 +2,8 @@
 
 Date: 2026-09-06
 
+Updated: 2026-09-07
+
 Authority: VLight Vault Suite Functional and Technical Specifications v2.2
 
 Targets: `https://passkey-x.com`, Supabase `wkkmyacbhqloubtwvjom`, Stripe test mode
@@ -12,15 +14,17 @@ Targets: `https://passkey-x.com`, Supabase `wkkmyacbhqloubtwvjom`, Stripe test m
 production claim.**
 
 The reported recovery-key and package-selection defects are fixed in the
-candidate source. The onboarding state machine now preserves recovery material
-during same-account reauthentication instead of remounting vault setup. The
-Stripe test restricted key,
-replacement webhook secret and all 20 Price IDs are installed, and billing is
-activated for the production-site deployment. Customer Portal and old-webhook
-cleanup were reported complete by the account owner but could not be read back
-through the connected Stripe capability. Production custom SMTP is enabled,
-but the Dashboard readback shows no sender address; therefore branded delivery
-from `noreply@passkey-x.com` cannot yet be claimed.
+current production source. The onboarding state machine preserves recovery
+material during same-account reauthentication instead of remounting vault
+setup. The Stripe test restricted key, replacement webhook secret and all 20
+Price IDs are installed, and billing is activated for the production-site
+deployment. Customer Portal and old-webhook cleanup were reported complete by
+the account owner but could not be read back through the connected Stripe
+capability. Supabase production now has Turnstile enabled with the matching
+secret and has a tenant-credential encryption master key. Custom SMTP is
+enabled, but Supabase requires the SMTP password to be re-entered before the
+sender address and standard ZeptoMail username can be saved; branded delivery
+from `noreply@passkey-x.com` therefore remains unverified.
 
 This report distinguishes source/schema foundations from production acceptance.
 An unchecked external ceremony, provider connection, independent review, or
@@ -32,9 +36,9 @@ missing workflow is not converted into a pass by a successful build.
 |---|---|---|
 | Recovery-key download during first vault setup | Fixed. Same-user `SIGNED_IN` and token-refresh events preserve the pending setup; the download anchor stays attached for the click, its object URL remains valid for 60 seconds, failures are shown, and vault bootstrap is impossible until download succeeds and the user confirms the saved file. | Awaiting a disposable-user browser download/recovery ceremony after UAT publication. Existing vault recovery keys cannot be re-displayed because the service never stores their plaintext. |
 | Login, signup and forgot-password | Reworked into distinct, CAPTCHA-ready flows with normalized email, password confirmation, enumeration-safe reset messaging and an explicit account-login/vault-password boundary. | Awaiting real confirmation and password-reset email ceremonies after UAT publication. |
-| Package buttons | Fixed. A Personal, Family, Professional, Team or Business selection survives the sign-in/vault-unlock boundary and opens the selected plan in Plans & billing. | Public production still runs the previous deploy, which says paid plans are unavailable. Checkout activation is blocked by the runtime items below. |
+| Package buttons | Fixed. A Personal, Family, Professional, Team or Business selection survives the sign-in/vault-unlock boundary and opens the selected plan in Plans & billing. | The current production deployment contains the candidate source and billing is activated in Stripe test mode. Authenticated Checkout/Portal/webhook acceptance remains open. |
 | Package catalog | Seven published packages, 24 public price rows (four Free display rows plus 20 paid catalog rows), and 48 display entitlements are installed. Five Stripe test Products and all 20 paid recurring Prices were independently read back and matched for amount, currency, interval, lookup key and metadata. | Database/catalog, restricted test key, webhook secret and all 20 runtime Price-ID secrets are ready; billing is active. No billing customer or billing event exists yet, so Checkout/Portal/webhook E2E remains open. |
-| Branded email | Signup, confirmation redirect, login-password reset, and account-security notification paths are wired to Supabase Auth. Custom SMTP is enabled with the configured provider host. | The saved sender-address readback is empty and real delivery is not verified. A code path cannot prove that `noreply@passkey-x.com` is accepted, signed, delivered, bounced and recoverable. |
+| Branded email | Signup, confirmation redirect, login-password reset, and account-security notification paths are wired to Supabase Auth. Custom SMTP is enabled with the configured ZeptoMail host, SSL port and sender name. | The saved sender address and SMTP username remain empty because Supabase requires the SMTP password for the update. Real delivery is not verified. A code path cannot prove that `noreply@passkey-x.com` is accepted, signed, delivered, bounced and recoverable. |
 | Account deletion | Implemented internally with typed confirmation, fresh-session enforcement, retryable request state, storage/database cleanup and Auth-user deletion. | Personal-account UAT is ready. Shared-tenant owner transfer/blocking and rollback/retry ceremonies still require disposable users. |
 | Customer SMS notifications | Implemented internally as opt-in, write-only tenant credential setup, organization/profile scoping, phone verification, idempotent production sends and signed delivery-state ingestion. | Requires one consenting phone and a Sent sender profile that is authorized to deliver to it. The global Supabase Auth SMS hook remains separate and disabled. |
 
@@ -72,8 +76,8 @@ user ceremony has accepted it.
 
 ## Verified candidate evidence
 
-- Repository checks: 18 package tests, 3 CLI tests and 21 auth/security tests pass.
-- Web checks: production Next.js build, TypeScript, lint and 25 web tests pass.
+- Repository checks: 18 package tests, 3 CLI tests and 15 auth/security tests pass.
+- Web checks: production Next.js build, TypeScript, lint and 23 web tests pass.
 - Production database: the v2.2 web control-plane migrations are applied. All
   18 new tables have RLS; direct browser roles have no privileges on the five
   secret-bearing tables.
@@ -86,6 +90,11 @@ user ceremony has accepted it.
 - Production billing secrets/config: all 20 Stripe Price IDs, the replacement
   webhook signing secret, restricted test key, `STRIPE_LIVEMODE=false`, the
   production origin and `BILLING_ENABLED=true` are installed.
+- Production authentication: Turnstile is enabled in Supabase Auth with its
+  matching secret. The public site key is present in the web deployment.
+- Production tenant credentials: a generated `TENANT_CREDENTIAL_MASTER_KEY`
+  is installed in Supabase Edge Function secrets; its value is not recorded in
+  this report.
 - Supabase security advisor: leaked-password protection is disabled and requires
   an eligible Supabase plan. It also reports five authenticated
   `SECURITY DEFINER` RPCs. Those RPCs are intentional transactional boundaries:
@@ -93,23 +102,27 @@ user ceremony has accepted it.
   manager/Business access (or ownership for AI audit completion), and exposes no
   underlying secret-table grant. The five no-policy notices are intentional
   fail-closed backend-only tables.
-- Netlify UAT publication and live browser verification are the next release
-  actions for this candidate.
+- Netlify production deploy `6a9d55de2aaf03fcfe3c9d7b` is ready at
+  `https://passkey-x.com` and was published on 2026-09-06. Netlify processed
+  the security headers and server function, and its deploy secret scan found no
+  matches. The deploy is an API upload without a Git commit reference.
+- Public-browser verification confirms the access page and Turnstile disclosure
+  load. Authenticated signup/recovery download, email delivery and billing
+  ceremonies remain open.
 
 ## Required runtime completion
 
 1. Run authenticated Stripe test Checkout, Portal, webhook and cancellation
    ceremonies. Customer Portal and previous-webhook cleanup were reported
    complete by the account owner but still require observed end-to-end proof.
-2. Finish production custom SMTP with a verified sending domain, SMTP host,
-   port, username and password, sender `noreply@passkey-x.com`, and sender name
-   `Passkey-X`. Custom SMTP is enabled, but the sender-address field reads back
-   empty. Correct that field, verify SPF, DKIM and DMARC, then run confirmation,
+2. Finish production custom SMTP by re-entering the ZeptoMail SMTP password in
+   the secure Supabase form, saving sender `noreply@passkey-x.com` and username
+   `emailapikey`, and verifying SPF, DKIM and DMARC. Then run confirmation,
    password-reset, security-notification and bounce tests with a disposable
    inbox.
-3. The Turnstile site key is present in the web candidate. Install its matching
-   secret in Supabase Auth Attack Protection and save the provider selection
-   before claiming CAPTCHA enforcement.
+3. Turnstile is enabled in Supabase Auth and the matching public site key is in
+   the web deployment. Complete one live challenge plus email/password ceremony
+   before accepting end-to-end CAPTCHA enforcement.
 4. The customer notifications panel accepts each tenant's own Sent credential,
    validates its organization/profile scope, verifies a notification phone and
    performs real production sends. Run one consenting-device ceremony before
@@ -122,11 +135,11 @@ user ceremony has accepted it.
 
 ## Safe deployment order
 
-1. Publish the candidate to Netlify as the controlled UAT build.
-2. Verify the deployed commit, public catalog, function routing and response
-   headers.
-3. Save the matching Turnstile secret through the secure Supabase form, then
-   confirm CAPTCHA enforcement.
+1. Netlify UAT publication is complete; preserve the ready production deploy
+   until a newer source artifact is built from current GitHub `main`.
+2. Verify the public catalog, function routing and response headers after every
+   future deploy.
+3. Complete the live Turnstile challenge and email/password ceremony.
 4. Run disposable-user signup, confirmation, recovery-key download, vault
    recovery and deletion tests.
 5. Run Stripe test Checkout success, 3DS, decline, webhook replay, portal and
