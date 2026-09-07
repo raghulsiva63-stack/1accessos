@@ -1,16 +1,31 @@
 openapi: 3.1.0
 info:
-  title: Passkey-X API
-  version: 0.4.0
-  description: Ciphertext-only vault and privacy-minimized SaaS metadata API contract for Passkey-X by Vlightsoft. Plaintext vault and connector secrets are prohibited.
+  title: Passkey-X Production API
+  version: 1.0.0
+  description: |
+    Production REST contract for Passkey-X by Vlightsoft. User routes require a
+    Supabase Auth access token and enforce tenant/workspace Row Level Security.
+    Vault writes accept client-encrypted ciphertext only. Never submit plaintext
+    passwords, private keys, access tokens, recovery keys, page/form content, or raw AI prompts.
 servers:
-  - url: https://egqgzkirazabocqwdlfp.supabase.co/functions/v1/v1
-    description: Development API
+  - url: https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1
+    description: Production
 security:
   - bearerAuth: []
+tags:
+  - { name: System }
+  - { name: Vault }
+  - { name: Access }
+  - { name: SaaS }
+  - { name: Billing }
+  - { name: Notifications }
+  - { name: Account }
+  - { name: Provider callbacks }
 paths:
-  /health:
+  /v1/health:
     get:
+      tags: [System]
+      security: []
       operationId: getHealth
       responses:
         '200':
@@ -20,168 +35,120 @@ paths:
               schema:
                 type: object
                 required: [status]
-                properties:
-                  status: { const: ok }
-  /connectors/catalog:
+                properties: { status: { const: ok } }
+  /v1/item-types:
     get:
-      operationId: listConnectorCatalog
-      description: Lists Phase 5 target manifests with minimum scopes and honest maturity labels. A catalog row is not proof of a working production adapter.
+      tags: [System]
+      operationId: listItemTypes
       responses:
-        '200':
-          description: Published connector contracts
+        '200': { description: Supported encrypted item types }
         '401': { $ref: '#/components/responses/Error' }
-  /connectors:
+  /v1/workspaces:
     get:
-      operationId: listTenantConnectors
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
+      tags: [Vault]
+      operationId: listWorkspaces
       responses:
-        '200':
-          description: Tenant connector health, granted scopes, and token-lifecycle metadata; credential references are excluded.
+        '200': { description: Workspaces available to the authenticated identity }
+        '401': { $ref: '#/components/responses/Error' }
+  /v1/workspaces/{workspace_id}/members:
+    parameters: [{ $ref: '#/components/parameters/WorkspacePathId' }]
+    get:
+      tags: [Vault]
+      operationId: listWorkspaceMembers
+      responses:
+        '200': { description: Members visible under workspace RLS }
         '403': { $ref: '#/components/responses/Error' }
-  /connectors/{connector_id}/reconcile:
-    parameters:
-      - name: connector_id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
+  /v1/vault-items:
+    get:
+      tags: [Vault]
+      operationId: listVaultItems
+      parameters: [{ $ref: '#/components/parameters/WorkspaceId' }]
+      responses:
+        '200': { description: Encrypted item heads and revisions }
+        '403': { $ref: '#/components/responses/Error' }
     post:
-      operationId: reconcileConnector
-      description: Requires a production-verified adapter and configured server runtime. Manifest-only connectors are rejected.
-      responses:
-        '409': { $ref: '#/components/responses/Error' }
-        '503': { $ref: '#/components/responses/Error' }
-  /saas/dashboard:
-    get:
-      operationId: getSaasDashboard
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
-      responses:
-        '200':
-          description: Privacy-minimized application, account, connector, recommendation, and savings aggregates.
-        '403': { $ref: '#/components/responses/Error' }
-  /saas/applications:
-    get:
-      operationId: listSaasApplications
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
-      responses:
-        '200':
-          description: SaaS and AI inventory without page, form, vault, credential, or raw-prompt content.
-        '403': { $ref: '#/components/responses/Error' }
-  /saas/recommendations:
-    get:
-      operationId: listSaasRecommendations
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
-      responses:
-        '200':
-          description: Proposal-first license, renewal, ownership, drift, duplicate-tool, and budget findings.
-        '403': { $ref: '#/components/responses/Error' }
-  /saas/recommendations/refresh:
-    post:
-      operationId: refreshSaasRecommendations
+      tags: [Vault]
+      operationId: createVaultItem
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [tenant_id]
-              properties:
-                tenant_id: { type: string, format: uuid }
+            schema: { $ref: '#/components/schemas/CreateVaultItem' }
       responses:
-        '200':
-          description: Deterministic proposals refreshed; no connector mutation is executed.
+        '201': { description: Encrypted item created }
         '403': { $ref: '#/components/responses/Error' }
-  /workspaces:
-    get:
-      operationId: listWorkspaces
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /v1/vault-items/{item_id}:
+    parameters: [{ $ref: '#/components/parameters/ItemPathId' }]
+    patch:
+      tags: [Vault]
+      operationId: updateVaultItem
+      parameters:
+        - { $ref: '#/components/parameters/IfMatch' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EncryptedItemRevision' }
       responses:
-        '200':
-          description: Active workspace ciphertext and caller membership
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [workspaces]
-                properties:
-                  workspaces:
-                    type: array
-                    items: { $ref: '#/components/schemas/Workspace' }
-        '401': { $ref: '#/components/responses/Error' }
-  /workspaces/{workspace_id}/members:
-    parameters:
-      - $ref: '#/components/parameters/WorkspacePathId'
-    get:
-      operationId: listWorkspaceMembers
+        '200': { description: Encrypted revision created }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Vault]
+      operationId: deleteVaultItem
+      parameters:
+        - { $ref: '#/components/parameters/IfMatch' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
       responses:
-        '200':
-          description: Members visible under workspace RLS
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [members]
-                properties:
-                  members:
-                    type: array
-                    items: { $ref: '#/components/schemas/WorkspaceMember' }
-        '403': { $ref: '#/components/responses/Error' }
-  /missions:
+        '204': { description: Encrypted item tombstoned }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/sync/changes:
     get:
+      tags: [Vault]
+      operationId: getSyncChanges
+      parameters:
+        - { $ref: '#/components/parameters/WorkspaceId' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200': { description: Ordered metadata-only changes }
+  /v1/missions:
+    get:
+      tags: [Access]
       operationId: listMissions
-      parameters:
-        - $ref: '#/components/parameters/WorkspaceId'
+      parameters: [{ $ref: '#/components/parameters/WorkspaceId' }]
       responses:
-        '200':
-          description: Encrypted Mission definitions and their permitted item identifiers
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [missions]
-                properties:
-                  missions:
-                    type: array
-                    items: { $ref: '#/components/schemas/Mission' }
-  /access-requests:
+        '200': { description: Encrypted mission definitions }
+  /v1/access-requests:
     get:
+      tags: [Access]
       operationId: listAccessRequests
-      parameters:
-        - $ref: '#/components/parameters/WorkspaceId'
+      parameters: [{ $ref: '#/components/parameters/WorkspaceId' }]
       responses:
-        '200':
-          description: Requests visible under requester or manager RLS
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [requests]
-                properties:
-                  requests:
-                    type: array
-                    items: { $ref: '#/components/schemas/AccessRequest' }
+        '200': { description: Requests visible under RLS }
     post:
+      tags: [Access]
       operationId: createAccessRequest
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/CreateAccessRequest' }
       responses:
-        '201': { description: Encrypted request created }
+        '201': { description: Encrypted access request created }
         '422': { $ref: '#/components/responses/Error' }
-  /access-requests/{request_id}/decision:
+  /v1/access-requests/{request_id}/decision:
     parameters:
       - name: request_id
         in: path
         required: true
         schema: { type: string, format: uuid }
     post:
+      tags: [Access]
       operationId: decideAccessRequest
       requestBody:
         required: true
@@ -194,158 +161,158 @@ paths:
               properties:
                 decision: { type: string, enum: [approved, denied] }
       responses:
-        '200': { description: Approval decision recorded atomically }
+        '200': { description: Decision recorded atomically }
         '403': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
-  /access-grants:
+  /v1/access-grants:
     get:
+      tags: [Access]
       operationId: listAccessGrants
-      parameters:
-        - $ref: '#/components/parameters/WorkspaceId'
+      parameters: [{ $ref: '#/components/parameters/WorkspaceId' }]
       responses:
-        '200':
-          description: Active and historical timeboxed grants visible under RLS
-        '403': { $ref: '#/components/responses/Error' }
-  /vault-items:
+        '200': { description: Time-boxed grants visible under RLS }
+  /v1/connectors/catalog:
     get:
-      operationId: listVaultItems
-      parameters:
-        - $ref: '#/components/parameters/WorkspaceId'
-        - $ref: '#/components/parameters/Cursor'
+      tags: [SaaS]
+      operationId: listConnectorCatalog
+      description: Catalog entries describe contracts and maturity; they do not prove a live certified adapter.
       responses:
-        '200':
-          description: Encrypted item heads
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: '#/components/schemas/VaultItem' }
-                  next_cursor: { type: [string, 'null'] }
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-    post:
-      operationId: createVaultItem
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateVaultItem' }
+        '200': { description: Published connector catalog }
+  /v1/connectors:
+    get:
+      tags: [SaaS]
+      operationId: listTenantConnectors
+      parameters: [{ $ref: '#/components/parameters/TenantId' }]
       responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/VaultItem' }
-        '409': { $ref: '#/components/responses/Error' }
-        '422': { $ref: '#/components/responses/Error' }
-  /vault-items/{item_id}:
+        '200': { description: Tenant connector status without credential material }
+  /v1/connectors/{connector_id}/reconcile:
     parameters:
-      - name: item_id
+      - name: connector_id
         in: path
         required: true
         schema: { type: string, format: uuid }
-    get:
-      operationId: getVaultItem
-      responses:
-        '200':
-          description: Encrypted item and head revision
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/VaultItem' }
-        '404': { $ref: '#/components/responses/Error' }
-    patch:
-      operationId: updateVaultItem
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: If-Match
-          in: header
-          required: true
-          schema: { type: string, pattern: '^"[1-9][0-9]*"$' }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/EncryptedRevision' }
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/VaultItem' }
-        '409': { $ref: '#/components/responses/Error' }
-    delete:
-      operationId: deleteVaultItem
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: If-Match
-          in: header
-          required: true
-          schema: { type: string }
-      responses:
-        '204': { description: Tombstone created }
-        '409': { $ref: '#/components/responses/Error' }
-  /sync/changes:
-    get:
-      operationId: getSyncChanges
-      parameters:
-        - $ref: '#/components/parameters/WorkspaceId'
-        - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Ordered metadata-only changes
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [changes, cursor]
-                properties:
-                  changes:
-                    type: array
-                    items: { $ref: '#/components/schemas/SyncChange' }
-                  cursor: { type: string }
-  /api-tokens:
     post:
-      operationId: createApiToken
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+      tags: [SaaS]
+      operationId: reconcileConnector
+      description: Fails closed unless the adapter is production-certified and its runtime is configured.
+      responses:
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/saas/dashboard:
+    get:
+      tags: [SaaS]
+      operationId: getSaasDashboard
+      parameters: [{ $ref: '#/components/parameters/TenantId' }]
+      responses:
+        '200': { description: Privacy-minimized SaaS and AI aggregates }
+  /v1/saas/applications:
+    get:
+      tags: [SaaS]
+      operationId: listSaasApplications
+      parameters: [{ $ref: '#/components/parameters/TenantId' }]
+      responses:
+        '200': { description: "Inventory without raw page, form, vault, credential, or prompt content" }
+  /v1/saas/recommendations:
+    get:
+      tags: [SaaS]
+      operationId: listSaasRecommendations
+      parameters: [{ $ref: '#/components/parameters/TenantId' }]
+      responses:
+        '200': { description: Proposal-first findings }
+  /v1/saas/recommendations/refresh:
+    post:
+      tags: [SaaS]
+      operationId: refreshSaasRecommendations
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [scopes]
-              properties:
-                scopes:
-                  type: array
-                  items: { type: string }
-                expires_at: { type: [string, 'null'], format: date-time }
+              additionalProperties: false
+              required: [tenant_id]
+              properties: { tenant_id: { type: string, format: uuid } }
       responses:
-        '201':
-          description: Token is returned once; only its hash is stored.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [id, token]
-                properties:
-                  id: { type: string, format: uuid }
-                  token: { type: string, writeOnly: true }
+        '200': { description: Proposals refreshed; no provider mutation is executed }
+        '422': { $ref: '#/components/responses/Error' }
+  /billing:
+    post:
+      tags: [Billing]
+      operationId: billingAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BillingRequest' }
+      responses:
+        '200': { description: "Catalog, Checkout URL, or Customer Portal URL" }
+        '400': { $ref: '#/components/responses/Error' }
+  /tenant-sms:
+    post:
+      tags: [Notifications]
+      operationId: tenantSmsAction
+      description: Tenant-manager actions. Provider credentials are write-only after validation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TenantSmsRequest' }
+      responses:
+        '200': { description: Action-specific result }
+        '400': { $ref: '#/components/responses/Error' }
+  /account-lifecycle:
+    post:
+      tags: [Account]
+      operationId: accountLifecycleAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountLifecycleRequest' }
+      responses:
+        '200': { description: Deletion preflight or completed deletion }
+        '409': { $ref: '#/components/responses/Error' }
+  /stripe-webhook:
+    post:
+      tags: [Provider callbacks]
+      security: []
+      operationId: receiveStripeWebhook
+      description: Stripe-managed signed callback; not for customer integrations.
+      responses:
+        '200': { description: Accepted or idempotently ignored }
+        '400': { description: Invalid signature or payload }
+  /sent-webhook:
+    post:
+      tags: [Provider callbacks]
+      security: []
+      operationId: receiveSentWebhook
+      description: Sent-managed signed callback; not for customer integrations.
+      responses:
+        '200': { description: Accepted or idempotently ignored }
+        '400': { description: Invalid signature or payload }
+  /sent-sms-hook:
+    post:
+      tags: [Provider callbacks]
+      security: []
+      operationId: receiveSupabaseSmsHook
+      description: Supabase Auth send-SMS hook; not for customer integrations.
+      responses:
+        '200': { description: OTP submitted to the configured provider }
+        '400': { description: Invalid signature or payload }
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT-or-PAT
+      bearerFormat: Supabase-Auth-JWT
+      description: Supabase Auth user access token. Never use service-role or secret keys in clients.
   parameters:
     TenantId:
       name: tenant_id
+      in: query
+      required: true
+      schema: { type: string, format: uuid }
+    WorkspaceId:
+      name: workspace_id
       in: query
       required: true
       schema: { type: string, format: uuid }
@@ -354,153 +321,118 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
-    WorkspaceId:
-      name: workspace_id
-      in: query
+    ItemPathId:
+      name: item_id
+      in: path
       required: true
       schema: { type: string, format: uuid }
     Cursor:
       name: cursor
       in: query
       required: false
-      schema: { type: string, maxLength: 512 }
+      schema: { type: integer, minimum: 0, default: 0 }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      required: true
+      required: false
+      description: Recommended UUID or stable 16-128 character key for retried writes.
       schema: { type: string, minLength: 16, maxLength: 128 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current integer head revision, quoted or unquoted.
+      schema: { type: string, pattern: '^"?[1-9][0-9]*"?$' }
   schemas:
-    Workspace:
-      type: object
-      additionalProperties: true
-      required: [id, tenant_id, suite, status, current_key_version, encrypted_name]
-      properties:
-        id: { type: string, format: uuid }
-        tenant_id: { type: string, format: uuid }
-        suite: { type: string, enum: [personal, family, professional, team, business] }
-        status: { type: string, enum: [active, archived, closed] }
-        current_key_version: { type: integer, minimum: 1 }
-        key_rotation_required: { type: boolean }
-        caller_role: { type: string, enum: [owner, manager, editor, viewer] }
-        encrypted_name: { type: string, description: PostgreSQL bytea encoding }
-        name_nonce: { type: [string, 'null'], description: PostgreSQL bytea encoding }
-        name_aad_hash: { type: [string, 'null'], description: PostgreSQL bytea encoding }
-    WorkspaceMember:
+    EncryptedItemRevision:
       type: object
       additionalProperties: false
-      required: [identity_id, tenant_id, workspace_id, role, status]
+      required: [nonce, ciphertext, aad_hash]
       properties:
-        identity_id: { type: string, format: uuid }
-        tenant_id: { type: string, format: uuid }
-        workspace_id: { type: string, format: uuid }
-        role: { type: string, enum: [owner, manager, editor, viewer] }
-        status: { type: string, enum: [invited, active, suspended, revoked] }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-    Mission:
-      type: object
-      additionalProperties: true
-      required: [id, tenant_id, workspace_id, definition_nonce, encrypted_definition, definition_aad_hash, status]
-      properties:
-        id: { type: string, format: uuid }
-        tenant_id: { type: string, format: uuid }
-        workspace_id: { type: string, format: uuid }
-        definition_nonce: { type: string, description: PostgreSQL bytea encoding }
-        encrypted_definition: { type: string, description: PostgreSQL bytea encoding }
-        definition_aad_hash: { type: string, description: PostgreSQL bytea encoding }
-        status: { type: string, enum: [active, archived] }
-    AccessRequest:
-      type: object
-      additionalProperties: false
-      required: [id, tenant_id, workspace_id, requester_identity_id, requested_scope, purpose_nonce, encrypted_purpose, purpose_aad_hash, requested_duration_minutes, status, expires_at]
-      properties:
-        id: { type: string, format: uuid }
-        tenant_id: { type: string, format: uuid }
-        workspace_id: { type: string, format: uuid }
-        item_id: { type: [string, 'null'], format: uuid }
-        requester_identity_id: { type: string, format: uuid }
-        requested_scope: { type: string, enum: [use, reveal, edit, manage] }
-        purpose_nonce: { type: string, description: PostgreSQL bytea encoding }
-        encrypted_purpose: { type: string, description: PostgreSQL bytea encoding }
-        purpose_aad_hash: { type: string, description: PostgreSQL bytea encoding }
-        requested_duration_minutes: { type: integer, minimum: 5, maximum: 10080 }
-        status: { type: string, enum: [pending, approved, denied, cancelled, expired] }
-        expires_at: { type: string, format: date-time }
-    CreateAccessRequest:
-      allOf:
-        - $ref: '#/components/schemas/AccessRequest'
-        - type: object
-          properties:
-            requester_identity_id: { readOnly: true }
-            status: { readOnly: true }
-    EncryptedRevision:
-      type: object
-      additionalProperties: false
-      required: [revision, envelope_version, algorithm, key_version, nonce, ciphertext, aad]
-      properties:
-        revision: { type: integer, minimum: 1 }
-        envelope_version: { const: 1 }
-        algorithm: { const: AES-256-GCM }
-        key_version: { type: integer, minimum: 1 }
-        nonce: { type: string, pattern: '^[A-Za-z0-9_-]{16}$' }
-        ciphertext: { type: string, minLength: 22, pattern: '^[A-Za-z0-9_-]+$' }
-        aad:
-          $ref: '#/components/schemas/Aad'
-    Aad:
-      type: object
-      additionalProperties: false
-      required: [tenant_id, workspace_id, item_id, revision, content_type, schema_version]
-      properties:
-        tenant_id: { type: string, format: uuid }
-        workspace_id: { type: string, format: uuid }
-        item_id: { type: string, format: uuid }
-        revision: { type: integer, minimum: 1 }
-        content_type: { type: string, minLength: 3, maxLength: 128 }
-        schema_version: { type: integer, minimum: 1 }
+        nonce: { type: string, description: PostgreSQL bytea text encoding }
+        ciphertext: { type: string, description: PostgreSQL bytea text encoding }
+        aad_hash: { type: string, description: PostgreSQL bytea text encoding }
     CreateVaultItem:
+      allOf:
+        - { $ref: '#/components/schemas/EncryptedItemRevision' }
+        - type: object
+          required: [id, tenant_id, workspace_id, content_type, schema_version]
+          properties:
+            id: { type: string, format: uuid }
+            tenant_id: { type: string, format: uuid }
+            workspace_id: { type: string, format: uuid }
+            content_type:
+              type: string
+              enum: [login, passkey, secure-note, identity, payment-card, recovery-codes, wifi, software-license, api-key, ssh-key, database, certificate, custom-secret]
+            schema_version: { type: integer, minimum: 1 }
+    CreateAccessRequest:
       type: object
-      additionalProperties: false
-      required: [id, tenant_id, workspace_id, content_type, schema_version, revision]
+      additionalProperties: true
+      required: [id, tenant_id, workspace_id, requested_scope, purpose_nonce, encrypted_purpose, purpose_aad_hash, requested_duration_minutes, expires_at]
       properties:
         id: { type: string, format: uuid }
         tenant_id: { type: string, format: uuid }
         workspace_id: { type: string, format: uuid }
-        content_type: { type: string, minLength: 3, maxLength: 128 }
-        schema_version: { type: integer, minimum: 1 }
-        revision: { $ref: '#/components/schemas/EncryptedRevision' }
-    VaultItem:
-      allOf:
-        - $ref: '#/components/schemas/CreateVaultItem'
-        - type: object
-          required: [head_revision, created_at, updated_at]
-          properties:
-            head_revision: { type: integer, minimum: 1 }
-            created_at: { type: string, format: date-time }
-            updated_at: { type: string, format: date-time }
-    SyncChange:
+        item_id: { type: ['string', 'null'], format: uuid }
+        requested_scope: { type: string, enum: [use, reveal, edit, manage] }
+        purpose_nonce: { type: string }
+        encrypted_purpose: { type: string }
+        purpose_aad_hash: { type: string }
+        requested_duration_minutes: { type: integer, minimum: 5, maximum: 10080 }
+        expires_at: { type: string, format: date-time }
+    BillingRequest:
       type: object
-      required: [sequence, entity_type, entity_id, operation, occurred_at]
+      required: [action, tenantId]
       properties:
-        sequence: { type: integer, minimum: 1 }
-        entity_type: { enum: [item, attachment, membership, key_envelope] }
-        entity_id: { type: string, format: uuid }
-        operation: { enum: [create, update, delete, revoke] }
-        entity_version: { type: [integer, 'null'], minimum: 1 }
-        occurred_at: { type: string, format: date-time }
+        action: { type: string, enum: [catalog, checkout, portal] }
+        tenantId: { type: string, format: uuid }
+        plan: { type: string, enum: [personal, family, professional, team, business] }
+        interval: { type: string, enum: [month, year] }
+        currency: { type: string, enum: [inr, usd] }
+        quantity: { type: integer, minimum: 1, maximum: 500 }
+        requestId: { type: string, format: uuid }
+    TenantSmsRequest:
+      type: object
+      required: [action, tenantId]
+      properties:
+        action: { type: string, enum: [status, save_credential, enable, disable, send_verification, verify_phone, send_test] }
+        tenantId: { type: string, format: uuid }
+        apiKey: { type: string, writeOnly: true }
+        senderProfileId: { type: string }
+        phone: { type: string, pattern: '^\+[1-9][0-9]{7,14}$', writeOnly: true }
+        code: { type: string, pattern: '^[0-9]{6}$', writeOnly: true }
+        challengeId: { type: string, format: uuid }
+        eventTypes: { type: array, uniqueItems: true, items: { type: string } }
+    AccountLifecycleRequest:
+      oneOf:
+        - type: object
+          required: [action]
+          properties: { action: { const: preflight } }
+        - type: object
+          required: [action, confirmation]
+          properties:
+            action: { const: delete }
+            confirmation: { const: DELETE MY ACCOUNT }
     Error:
       type: object
       required: [error]
       properties:
         error:
-          type: object
-          required: [code, message, request_id]
-          properties:
-            code: { type: string }
-            message: { type: string }
-            request_id: { type: string }
+          oneOf:
+            - type: object
+              required: [code, message, request_id]
+              properties:
+                code: { type: string }
+                message: { type: string }
+                request_id: { type: string }
+            - type: string
   responses:
     Error:
       description: Safe structured error
+      headers:
+        x-request-id:
+          description: Correlation identifier
+          schema: { type: string }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
