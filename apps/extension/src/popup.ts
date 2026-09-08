@@ -1,4 +1,5 @@
-type Status = { ok: boolean; connected?: boolean; email?: string; unlocked?: boolean; matches?: { id: string; title: string; username: string }[]; workspaces?: { id: string; name: string }[]; ignored?: boolean; candidate?: boolean; error?: string };
+type PendingLogin = { id: string; username: string; origin: string; modes: Record<string, "save" | "update" | "same"> };
+type Status = { ok: boolean; connected?: boolean; email?: string; unlocked?: boolean; matches?: { id: string; title: string; username: string }[]; workspaces?: { id: string; name: string }[]; ignored?: boolean; candidate?: PendingLogin | null; error?: string };
 const get = <T extends Element>(selector: string) => document.querySelector<T>(selector)!;
 const disconnected = get<HTMLElement>("#disconnected");
 const locked = get<HTMLElement>("#locked");
@@ -10,6 +11,7 @@ const empty = get<HTMLElement>("#empty");
 const candidate = get<HTMLElement>("#candidate");
 const message = get<HTMLElement>("#message");
 let tabId = 0, origin = "";
+let pending: PendingLogin | null = null;
 const show = (value = "") => { message.textContent = value; };
 async function request(payload: Record<string, unknown>): Promise<Status> {
   try { return await chrome.runtime.sendMessage({ ...payload, tabId, origin }) as Status; }
@@ -22,6 +24,9 @@ function render(status: Status) {
   unlocked.hidden = !status.unlocked;
   lockButton.hidden = !status.unlocked;
   get<HTMLElement>("#account").textContent = status.email ?? "Account connected";
+  pending = status.candidate ?? null;
+  get<HTMLElement>("#pending-unlock").hidden = !pending;
+  get<HTMLElement>("#pending-unlock").textContent = pending ? `A login for ${new URL(pending.origin).hostname} is waiting. Unlock to review and save it.` : "";
   matches.replaceChildren();
   if (!status.unlocked) return;
   const selector = get<HTMLSelectElement>("#save-workspace");
@@ -33,6 +38,8 @@ function render(status: Status) {
   }
   if ([...selector.options].some(option => option.value === selected)) selector.value = selected;
   get<HTMLButtonElement>("#save").disabled = !selector.options.length;
+  get<HTMLElement>("#candidate-username").textContent = pending?.username || "No username detected";
+  updateSaveAction();
   get<HTMLButtonElement>("#allow").hidden = !status.ignored;
   for (const credential of status.matches ?? []) {
     const button = document.createElement("button"), text = document.createElement("span"), title = document.createElement("strong"), username = document.createElement("span"), action = document.createElement("em");
@@ -43,6 +50,11 @@ function render(status: Status) {
   }
   candidate.hidden = !status.candidate;
   empty.hidden = Boolean((status.matches ?? []).length || status.candidate);
+}
+function updateSaveAction() {
+  const mode = pending?.modes[get<HTMLSelectElement>("#save-workspace").value] ?? "save";
+  get<HTMLElement>("#candidate-title").textContent = mode === "update" ? "Update this password?" : mode === "same" ? "This login is already saved" : "Save this login?";
+  get<HTMLButtonElement>("#save").textContent = mode === "update" ? "Update password" : mode === "same" ? "Keep saved login" : "Save login";
 }
 async function perform(payload: Record<string, unknown>, progress = "", success = "", close = false) {
   show(progress);
@@ -67,7 +79,9 @@ form.addEventListener("submit", event => {
 });
 lockButton.addEventListener("click", () => void perform({ type: "PX_LOCK" }));
 get<HTMLButtonElement>("#disconnect").addEventListener("click", () => void perform({ type: "PX_DISCONNECT" }, "Disconnecting…"));
-get<HTMLButtonElement>("#save").addEventListener("click", () => void perform({ type: "PX_SAVE", workspaceId: get<HTMLSelectElement>("#save-workspace").value }, "Encrypting and saving…", "Login saved."));
+get<HTMLSelectElement>("#save-workspace").addEventListener("change", updateSaveAction);
+get<HTMLButtonElement>("#save").addEventListener("click", () => void perform({ type: "PX_SAVE", candidateId: pending?.id, workspaceId: get<HTMLSelectElement>("#save-workspace").value }, "Encrypting and saving…", "Login saved. It will sync to your web and desktop vaults."));
+get<HTMLButtonElement>("#dismiss").addEventListener("click", () => void perform({ type: "PX_DISMISS", candidateId: pending?.id }, "", "Login discarded."));
 get<HTMLButtonElement>("#never").addEventListener("click", () => void perform({ type: "PX_NEVER" }, "", "Passkey-X will ignore this site."));
 get<HTMLButtonElement>("#allow").addEventListener("click", () => void perform({ type: "PX_ALLOW" }, "", "Passkey-X can offer saves for this site again."));
 void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {

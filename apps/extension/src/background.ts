@@ -42,7 +42,7 @@ type Credential = {
   maxUses?: number;
   useCount?: number;
 };
-type Candidate = { origin: string; url: string; username: string; secret: string };
+type Candidate = { id: string; origin: string; url: string; username: string; secret: string; prompted: boolean };
 type VaultContext = { identityId: string; tenantId: string; workspaceId: string; keyVersion: number; key: Uint8Array; name: string; writable: boolean };
 
 let vaults: VaultContext[] = [];
@@ -58,6 +58,34 @@ function forgetCandidate(tabId: number) {
   const timer = candidateTimers.get(tabId);
   if (timer) clearTimeout(timer);
   candidateTimers.delete(tabId);
+  void chrome.action.setBadgeText({ tabId, text: "" }).catch(() => {});
+}
+
+async function offerSave(tabId: number) {
+  const candidate = candidates.get(tabId);
+  if (!candidate || candidate.prompted) return;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (candidates.get(tabId) !== candidate) return;
+    if (safeOrigin(tab.url ?? "") !== candidate.origin) { forgetCandidate(tabId); return; }
+    if (!tab.active || tab.status === "loading") return;
+    candidate.prompted = true;
+    // Browser-owned UI keeps the save approval and vault password off the website.
+    await chrome.action.openPopup({ windowId: tab.windowId });
+  } catch {
+    // Browsers can deny opening a popup. The SAVE badge remains an explicit fallback.
+  }
+}
+
+function candidateSummary(tabId: number, origin: string) {
+  const candidate = candidates.get(tabId);
+  if (!candidate || candidate.origin !== origin) return null;
+  return { id: candidate.id, username: candidate.username, origin: candidate.origin,
+    modes: Object.fromEntries(vaults.filter(context => context.writable).map(context => {
+      const saved = credentials.find(item => item.source === "workspace" && item.context?.workspaceId === context.workspaceId && safeOrigin(item.url) === candidate.origin && item.username === candidate.username);
+      return [context.workspaceId, saved ? saved.secret === candidate.secret ? "same" : "update" : "save"];
+    })),
+  };
 }
 
 async function isIgnored(origin: string) {
@@ -106,7 +134,9 @@ async function restoreSession() {
 }
 
 async function unlock(vaultPassword: string) {
-  clearVault();
+  // A just-submitted website login can wait in memory while its owner unlocks.
+  // Explicit lock, disconnect, expiry and worker shutdown still erase it.
+  clearVault(false);
   const generation = vaultGeneration;
   if (!(await restoreSession())) throw new Error("Connect this extension to Passkey-X first.");
   const { data: profile, error: profileError } = await supabase.from("account_crypto_profiles").select("identity_id,salt,kdf_parameters,master_nonce,master_wrapped_root").single();
@@ -216,13 +246,29 @@ async function saveCandidate(tabId: number, workspaceId: unknown) {
   requireUnlocked();
   const generation = vaultGeneration;
   const candidate = candidates.get(tabId); if (!candidate) throw new Error("No submitted login is waiting to be saved.");
+  await reloadCredentials();
+  if (generation !== vaultGeneration || candidates.get(tabId) !== candidate) throw new Error("The login request expired. Submit it again.");
   const current = vaults.find(context => context.workspaceId === workspaceId && context.writable);
   if (!current) throw new Error("Choose an authorized writable workspace.");
   const existing = credentials.find((credential) => credential.source === "workspace" && credential.context?.workspaceId === current.workspaceId && credential.username === candidate.username && safeOrigin(credential.url) === candidate.origin);
+  if (existing?.secret === candidate.secret) { forgetCandidate(tabId); return; }
   const itemId = existing?.id ?? crypto.randomUUID(); const revision = (existing?.revision ?? 0) + 1;
-  const payload = { version: 1, title: new URL(candidate.origin).hostname, username: candidate.username, secret: candidate.secret, url: candidate.url, tags: ["browser-save"], updatedAt: new Date().toISOString() };
-  const encrypted = await seal(current.key, encoder.encode(JSON.stringify(payload)), aad(current, itemId, revision));
-  if (generation !== vaultGeneration) throw new Error("The vault was locked before saving.");
+  let previous: Record<string, unknown> = {};
+  if (existing) {
+    const { data, error } = await supabase.from("vault_item_revisions").select("nonce,ciphertext").eq("item_id", existing.id).eq("revision", existing.revision).single();
+    if (error) throw error;
+    const plaintext = await open(current.key, bytea(data.nonce), bytea(data.ciphertext), aad(current, existing.id, existing.revision));
+    try { previous = JSON.parse(new TextDecoder().decode(plaintext)); } finally { plaintext.fill(0); }
+  }
+  if (candidates.get(tabId) !== candidate || generation !== vaultGeneration) throw new Error("The save request expired.");
+  const payload = { ...previous, version: 1, title: previous.title ?? new URL(candidate.origin).hostname, username: candidate.username, secret: candidate.secret, url: candidate.url, tags: previous.tags ?? ["browser-save"], updatedAt: new Date().toISOString() };
+  const plaintext = encoder.encode(JSON.stringify(payload));
+  let encrypted: Awaited<ReturnType<typeof seal>>;
+  try { encrypted = await seal(current.key, plaintext, aad(current, itemId, revision)); }
+  finally { plaintext.fill(0); previous.secret = ""; payload.secret = ""; }
+  if (generation !== vaultGeneration || candidates.get(tabId) !== candidate) throw new Error("The vault was locked or the save request expired.");
+  if (safeOrigin((await chrome.tabs.get(tabId)).url ?? "") !== candidate.origin) throw new Error("The page changed before saving.");
+  if (generation !== vaultGeneration || candidates.get(tabId) !== candidate) throw new Error("The save request expired.");
   const args = { p_item_id: itemId, p_expected_revision: existing?.revision, p_tenant_id: current.tenantId, p_workspace_id: current.workspaceId, p_content_type: "login", p_schema_version: 1, p_nonce: toBytea(encrypted.nonce), p_ciphertext: toBytea(encrypted.ciphertext), p_aad_hash: toBytea(encrypted.aadHash) };
   const result = existing ? await supabase.rpc("update_vault_item", { p_item_id: args.p_item_id, p_expected_revision: args.p_expected_revision!, p_nonce: args.p_nonce, p_ciphertext: args.p_ciphertext, p_aad_hash: args.p_aad_hash }) : await supabase.rpc("create_vault_item", { p_item_id: args.p_item_id, p_tenant_id: args.p_tenant_id, p_workspace_id: args.p_workspace_id, p_content_type: args.p_content_type, p_schema_version: args.p_schema_version, p_nonce: args.p_nonce, p_ciphertext: args.p_ciphertext, p_aad_hash: args.p_aad_hash });
   if (result.error) throw result.error;
@@ -231,7 +277,7 @@ async function saveCandidate(tabId: number, workspaceId: unknown) {
 
 function safeOrigin(value: string) { try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.origin : ""; } catch { return ""; } }
 function matches(origin: string) { return credentials.filter((credential) => safeOrigin(credential.url) === origin).map(({ key: id, title, username, source }) => ({ id, title: source === "capsule" ? `${title} · shared` : title, username })); }
-function clearVault() { vaultGeneration++; clearTimeout(idleTimer); for (const context of vaults) context.key.fill(0); vaults = []; accountRoot?.fill(0); accountRoot = null; for (const credential of credentials) credential.secret = ""; credentials = []; for (const tabId of [...candidates.keys()]) forgetCandidate(tabId); }
+function clearVault(forgetPending = true) { vaultGeneration++; clearTimeout(idleTimer); for (const context of vaults) context.key.fill(0); vaults = []; accountRoot?.fill(0); accountRoot = null; for (const credential of credentials) credential.secret = ""; credentials = []; if (forgetPending) for (const tabId of [...candidates.keys()]) forgetCandidate(tabId); }
 async function disconnect() {
   locallyDisconnected = true;
   clearVault();
@@ -301,16 +347,22 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     try {
       if (vaults.length && Date.now() - lastActivity >= IDLE_MS) clearVault();
       if (request.type === "PX_CANDIDATE") {
-        if (!vaults.length || sender.tab?.id === undefined || !sender.tab.url) { sendResponse({ ok: true, ignored: true }); return; }
+        if (sender.tab?.id === undefined || !sender.tab.url || !(await restoreSession())) { sendResponse({ ok: true, ignored: true }); return; }
         const origin = safeOrigin(sender.tab.url);
         if (!origin || request.origin !== origin || typeof request.username !== "string" || typeof request.secret !== "string" || !request.secret) throw new Error("Rejected untrusted login candidate.");
         const generation = vaultGeneration;
         if (await isIgnored(origin) || generation !== vaultGeneration) { sendResponse({ ok: true, ignored: true }); return; }
+        if (credentials.some(item => item.source === "workspace" && safeOrigin(item.url) === origin && item.username === request.username && item.secret === request.secret)) { sendResponse({ ok: true, ignored: true }); return; }
+        const pending = candidates.get(sender.tab.id);
+        if (pending?.origin === origin && pending.username === request.username && pending.secret === request.secret) { sendResponse({ ok: true, duplicate: true }); return; }
         forgetCandidate(sender.tab.id);
         const url = new URL(String(request.url));
         // Query strings/fragments can contain site bearer tokens. Save only the login path.
-        candidates.set(sender.tab.id, { origin, url: url.origin + url.pathname, username: request.username, secret: request.secret });
-        candidateTimers.set(sender.tab.id, setTimeout(() => forgetCandidate(sender.tab!.id!), 60_000));
+        candidates.set(sender.tab.id, { id: crypto.randomUUID(), origin, url: url.origin + url.pathname, username: request.username, secret: request.secret, prompted: false });
+        candidateTimers.set(sender.tab.id, setTimeout(() => forgetCandidate(sender.tab!.id!), 120_000));
+        await chrome.action.setBadgeText({ tabId: sender.tab.id, text: "SAVE" });
+        await chrome.action.setBadgeBackgroundColor({ tabId: sender.tab.id, color: "#345bfa" });
+        setTimeout(() => void offerSave(sender.tab!.id!), 700);
         sendResponse({ ok: true }); return;
       }
       const tabId = Number(request.tabId); const origin = safeOrigin(String(request.origin ?? ""));
@@ -327,7 +379,11 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       else if (request.type === "PX_SAVE") {
         const tab = await chrome.tabs.get(tabId);
         if (!origin || safeOrigin(tab.url ?? "") !== origin || candidates.get(tabId)?.origin !== origin) throw new Error("The page changed. Submit the login again.");
+        if (request.candidateId !== candidates.get(tabId)?.id) throw new Error("The login details changed. Review the new save request.");
         await saveCandidate(tabId, request.workspaceId); touchVault();
+      }
+      else if (request.type === "PX_DISMISS") {
+        if (candidates.get(tabId)?.id === request.candidateId) forgetCandidate(tabId);
       }
       else if (request.type === "PX_NEVER" || request.type === "PX_ALLOW") {
         if (!Number.isInteger(tabId) || !origin || safeOrigin((await chrome.tabs.get(tabId)).url ?? "") !== origin) throw new Error("The page changed. Reopen Passkey-X.");
@@ -339,7 +395,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       }
       else if (request.type === "PX_FILL") await fillCredential(tabId, origin, request.id);
       const session = await restoreSession();
-      sendResponse({ ok: true, connected: Boolean(session), email: session?.user.email, unlocked: vaults.length > 0, matches: origin ? matches(origin) : [], workspaces: vaults.filter(context => context.writable).map(context => ({ id: context.workspaceId, name: context.name })), ignored: Boolean(origin && await isIgnored(origin)), candidate: Number.isInteger(tabId) ? Boolean(candidates.get(tabId)) : false });
+      sendResponse({ ok: true, connected: Boolean(session), email: session?.user.email, unlocked: vaults.length > 0, matches: origin ? matches(origin) : [], workspaces: vaults.filter(context => context.writable).map(context => ({ id: context.workspaceId, name: context.name })), ignored: Boolean(origin && await isIgnored(origin)), candidate: Number.isInteger(tabId) ? candidateSummary(tabId, origin) : null });
     } catch (error) { sendResponse({ ok: false, error: error instanceof Error ? error.message : "Passkey-X extension error." }); }
     finally { if (guarded) vaultOperationBusy = false; }
   })();
@@ -376,7 +432,9 @@ chrome.tabs.onRemoved.addListener(forgetCandidate);
 chrome.tabs.onUpdated.addListener((tabId, change) => {
   const candidate = candidates.get(tabId);
   if (change.url && candidate && safeOrigin(change.url) !== candidate.origin) forgetCandidate(tabId);
+  else if (change.status === "complete") void offerSave(tabId);
 });
+chrome.tabs.onActivated.addListener(({ tabId }) => void offerSave(tabId));
 chrome.commands.onCommand.addListener((command) => {
   if (command !== "fill-login" || !vaults.length || vaultOperationBusy || pairingBusy) return;
   vaultOperationBusy = true;

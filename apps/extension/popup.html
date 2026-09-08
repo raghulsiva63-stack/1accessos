@@ -18,6 +18,7 @@
       <section id="locked" hidden>
         <p id="account" class="kicker">Account connected</p>
         <h1>Unlock your vault</h1>
+        <p id="pending-unlock" hidden></p>
         <form id="unlock-form">
           <label>Vault password<input id="vault-password" type="password" autocomplete="off" required maxlength="4096" /></label>
           <button>Unlock locally</button>
@@ -26,13 +27,13 @@
       </section>
       <section id="unlocked" hidden>
         <div class="page"><span id="origin">Current page</span><small>Explicit fill only</small></div>
-        <div id="candidate" hidden><p>Passkey-X detected a submitted login.</p><label>Save in workspace<select id="save-workspace"></select></label><div class="candidate-actions"><button id="save">Encrypt and save</button><button id="never" class="secondary">Never for this site</button></div></div>
+        <div id="candidate" hidden><h1 id="candidate-title">Save this login?</h1><p id="candidate-username"></p><p>Save the details you just submitted? Confirm that the login worked before saving.</p><label>Save in workspace<select id="save-workspace"></select></label><div class="candidate-actions"><button id="save">Save login</button><button id="dismiss" class="secondary">Not now</button><button id="never" class="secondary">Never for this site</button></div></div>
         <button id="allow" class="secondary" hidden>Allow saves on this site again</button>
         <div id="matches"></div>
-        <div id="empty" hidden><strong>No matching login</strong><span>Open the website sign-in form, or save the detected login after submitting it.</span></div>
+        <div id="empty" hidden><strong>No matching login</strong><span>Sign in on this website. Passkey-X will ask whether to save the login.</span></div>
       </section>
       <p id="message" role="status"></p>
-      <footer><a href="https://passkey-x.com/#access" target="_blank" rel="noopener noreferrer">Open web vault ↗</a><p>Vault locks after five minutes of inactivity. Reconnect after restarting your browser.</p></footer>
+      <footer><a href="https://passkey-x.com/#access" target="_blank" rel="noopener noreferrer">Open web vault ↗</a> · <a href="https://passkey-x.com/download" target="_blank" rel="noopener noreferrer">Get desktop app</a><p>Vault locks after five minutes of inactivity. Pending saves expire after two minutes. Reconnect after restarting your browser.</p></footer>
     </main>
     <script type="module" src="/src/popup.ts"></script>
   </body>
