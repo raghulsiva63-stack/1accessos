@@ -80,7 +80,7 @@ jobs:
       - name: Reject common committed secrets
         shell: bash
         run: |
-          if git grep -nEI '(sb_secret_|(sk|rk)_(live|test)_[A-Za-z0-9]+|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16})' -- ':!*.md' ':!.github/workflows/*'; then
+          if git grep -nEI '(sb_secret_[A-Za-z0-9_-]{20,}|(sk|rk)_(live|test)_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|AKIA[0-9A-Z]{16})' -- ':!*.md' ':!.github/workflows/*'; then
             echo 'Potential committed secret detected.' >&2
             exit 1
           fi

@@ -20,13 +20,13 @@ export default function ApiDocsPage() {
   return <main className="api-docs-page">
     <header className="api-docs-header">
       <Link href="/">← Passkey-X</Link>
-      <div><span className="public-kicker">Production API</span><h1>Push encrypted data safely.</h1><p>Use a signed-in user’s short-lived Supabase access token. Tenant and workspace permissions are enforced by Row Level Security.</p></div>
+      <div><span className="public-kicker">Production API</span><h1>Push encrypted data safely.</h1><p>Use the branded Passkey-X API with a signed-in user’s short-lived access token. Tenant and workspace permissions are enforced by Row Level Security.</p></div>
       <div className="api-docs-actions"><a href="/openapi.yaml" download>Download OpenAPI 3.1</a><a href="https://github.com/raghulsiva63-stack/1accessos/blob/main/docs/api/README.md">Developer guide</a></div>
     </header>
     <section className="api-docs-warning"><strong>Zero-knowledge boundary</strong><p>Encrypt vault content in the trusted client before sending it. Never submit plaintext passwords, recovery keys, private keys, provider tokens, raw page/form content, or raw AI prompts.</p></section>
     <section>
       <h2>Production base URL</h2>
-      <pre><code>https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1</code></pre>
+      <pre><code>https://passkey-x.com/api</code></pre>
     </section>
     <section>
       <h2>Authentication headers</h2>
@@ -43,7 +43,7 @@ Idempotency-Key: <UUID>`}</code></pre>
     <section>
       <h2>Encrypted vault example</h2>
       <pre><code>{`curl --request POST \\
-  'https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1/v1/vault-items' \\
+  'https://passkey-x.com/api/v1/vault-items' \\
   --header 'Authorization: Bearer <USER_ACCESS_TOKEN>' \\
   --header 'apikey: <PUBLISHABLE_KEY>' \\
   --header 'Content-Type: application/json' \\
@@ -66,4 +66,3 @@ Idempotency-Key: <UUID>`}</code></pre>
     </section>
   </main>;
 }
-

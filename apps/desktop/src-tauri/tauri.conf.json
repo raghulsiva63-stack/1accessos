@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.vlightsoft.passkeyx",
   "build": {
-    "beforeDevCommand": "npm --prefix ../../web run dev",
-    "beforeBuildCommand": "npm --prefix ../../web run build",
+    "beforeDevCommand": "npm --prefix ../web run dev",
+    "beforeBuildCommand": "node scripts/build-frontend.mjs",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../../web/out"
   },
@@ -21,12 +21,14 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' customprotocol: asset:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; connect-src 'self' ipc: http://ipc.localhost https://egqgzkirazabocqwdlfp.supabase.co wss://egqgzkirazabocqwdlfp.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+      "csp": "default-src 'self' customprotocol: asset:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; connect-src 'self' ipc: http://ipc.localhost https://passkey-x.com https://wkkmyacbhqloubtwvjom.supabase.co wss://wkkmyacbhqloubtwvjom.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["../icons/icon.png"]
+    "icon": [
+      "../icons/icon.png"
+    ]
   }
 }

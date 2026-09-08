@@ -61,7 +61,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
   const officePlans = useMemo(() => plans.filter((plan) => ["team", "business"].includes(plan.code)), [plans]);
   const enterprise = plans.find((plan) => plan.code === "enterprise");
 
-  const links = <><a href="#product">Product</a>{publicCatalogEnabled && <><a href="#teams">Teams</a><a href="#business">Business</a></>}<a href="#security">Security</a><a href="#pricing">Pricing</a><a href="/api-docs">API</a></>;
+  const links = <><a href="#product">Product</a>{publicCatalogEnabled && <><a href="#teams">Teams</a><a href="#business">Business</a></>}<a href="#security">Security</a><a href="#pricing">Pricing</a><a href="/download">Apps</a><a href="/api-docs">API</a></>;
 
   return <main className="public-site">
     <header className="public-header">

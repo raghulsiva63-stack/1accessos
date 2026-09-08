@@ -8,7 +8,7 @@ const candidate = { type: 'PX_CANDIDATE', origin: 'https://example.test', url: '
 const check = (request, sender = page) => allowed(request, sender, id, popup);
 
 test('only the exact extension popup may execute privileged commands', () => {
-  for (const type of ['PX_STATUS','PX_UNLOCK','PX_LOCK','PX_SAVE','PX_NEVER','PX_FILL']) {
+  for (const type of ['PX_STATUS','PX_CONNECT','PX_DISCONNECT','PX_UNLOCK','PX_LOCK','PX_SAVE','PX_NEVER','PX_FILL']) {
     assert.equal(check({type}, {id, url: popup}), true);
     assert.equal(check({type}, page), false);
     assert.equal(check({type}, {id, url: popup, tab: {id: 12}}), false);
@@ -38,4 +38,24 @@ test('fails closed for unknown and malformed requests', () => {
   for (const request of [null, [], 'PX_FILL', {}, {type:'PX_DECRYPT'}, {type:3}]) {
     assert.equal(check(request, {id,url:popup}), false);
   }
+});
+
+const { authorizedPairingMessage } = await import('../src/message-boundary.ts');
+const now = 1_000_000;
+const nonce = 'a'.repeat(64);
+const pending = { nonce, tabId: 7, expiresAt: now + 300_000 };
+const sender = { url: 'https://passkey-x.com/extension/connect?extension_id=' + id, frameId: 0, tab: { id: 7 } };
+const pair = { type: 'PX_PAIR_SESSION', extensionId: id, nonce, accessToken: 'synthetic-access', refreshToken: 'synthetic-refresh' };
+test('pairing accepts only a live one-use request in its originating top-level tab', () => {
+  assert.equal(authorizedPairingMessage(pair, sender, id, pending, now), true);
+  for (const changed of [undefined, {...pending, expiresAt:now}, {...pending, expiresAt:now+300001}, {...pending, nonce:'b'.repeat(64)}, {...pending, tabId:8}]) {
+    assert.equal(authorizedPairingMessage(pair, sender, id, changed, now), false);
+  }
+});
+test('pairing rejects lookalike hosts, HTTP, other routes, iframes and unsolicited tokens', () => {
+  for (const url of ['http://passkey-x.com/extension/connect', 'https://passkey-x.com.evil.test/extension/connect', 'https://evil.test/extension/connect', 'https://www.passkey-x.com/extension/connect', 'https://passkey-x.com/', 'https://passkey-x.com:444/extension/connect']) {
+    assert.equal(authorizedPairingMessage(pair, {...sender,url}, id, pending, now), false);
+  }
+  for (const change of [{frameId:1},{frameId:undefined},{tab:undefined},{tab:{id:8}}]) assert.equal(authorizedPairingMessage(pair, {...sender,...change}, id, pending, now), false);
+  for (const change of [{extensionId:'attacker'}, {nonce:''}, {type:'PX_FILL'}, {accessToken:''}, {refreshToken:'x'.repeat(16385)}]) assert.equal(authorizedPairingMessage({...pair,...change}, sender, id, pending, now), false);
 });

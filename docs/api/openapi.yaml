@@ -3,13 +3,14 @@ info:
   title: Passkey-X Production API
   version: 1.0.0
   description: |
-    Production REST contract for Passkey-X by Vlightsoft. User routes require a
+    Production REST contract for Passkey-X by Vlightsoft. SaaS routes accept
+    privacy-minimized SaaS metadata only. User routes require a
     Supabase Auth access token and enforce tenant/workspace Row Level Security.
     Vault writes accept client-encrypted ciphertext only. Never submit plaintext
     passwords, private keys, access tokens, recovery keys, page/form content, or raw AI prompts.
 servers:
-  - url: https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1
-    description: Production
+  - url: https://passkey-x.com/api
+    description: Branded production API gateway
 security:
   - bearerAuth: []
 tags:
@@ -20,12 +21,10 @@ tags:
   - { name: Billing }
   - { name: Notifications }
   - { name: Account }
-  - { name: Provider callbacks }
 paths:
   /v1/health:
     get:
       tags: [System]
-      security: []
       operationId: getHealth
       responses:
         '200':
@@ -36,6 +35,7 @@ paths:
                 type: object
                 required: [status]
                 properties: { status: { const: ok } }
+        '401': { $ref: '#/components/responses/Error' }
   /v1/item-types:
     get:
       tags: [System]
@@ -271,33 +271,6 @@ paths:
       responses:
         '200': { description: Deletion preflight or completed deletion }
         '409': { $ref: '#/components/responses/Error' }
-  /stripe-webhook:
-    post:
-      tags: [Provider callbacks]
-      security: []
-      operationId: receiveStripeWebhook
-      description: Stripe-managed signed callback; not for customer integrations.
-      responses:
-        '200': { description: Accepted or idempotently ignored }
-        '400': { description: Invalid signature or payload }
-  /sent-webhook:
-    post:
-      tags: [Provider callbacks]
-      security: []
-      operationId: receiveSentWebhook
-      description: Sent-managed signed callback; not for customer integrations.
-      responses:
-        '200': { description: Accepted or idempotently ignored }
-        '400': { description: Invalid signature or payload }
-  /sent-sms-hook:
-    post:
-      tags: [Provider callbacks]
-      security: []
-      operationId: receiveSupabaseSmsHook
-      description: Supabase Auth send-SMS hook; not for customer integrations.
-      responses:
-        '200': { description: OTP submitted to the configured provider }
-        '400': { description: Invalid signature or payload }
 components:
   securitySchemes:
     bearerAuth:

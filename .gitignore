@@ -1,10 +1,14 @@
 node_modules/
+node_modules
+artifacts/
+apps/web/public/downloads/
 .env
 .env.*
 !.env.example
 .DS_Store
 coverage/
 dist/
+dist-test/
 .next/
 out/
 target/

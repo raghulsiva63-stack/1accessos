@@ -1,7 +1,9 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAunqxf4i7u7acU6GhD62Vby2N1sOvLU+ulpM0Kt9fTY3NNlUglwDdpKC7bUrHRoOmGKmV7ffEo42omwH7rTl6NuD/9Nx5X+OxU+QN7iKlHqRjcI5u1Eav4tLZ8Stv+chBvIpNkZnwLpi55yYkCHcWU1T4FFJWzIu3hKvoc4q2NXjguuS7H5F2R4BDck1/kxgsRe7tvpwgWqljsMcm5wkHJadP8S6cPAqKdRKSEs7OonHIHftwmAKEwdadFDVEsonciyz72JUW5UrlajffrSfNxiOKyfulh4nxtjhZs7HB1AfpdGdEtlrgiMl6YW/o6yFUrFhJG6W2hAKn9tNKLrLyWwIDAQAB",
   "name": "Passkey-X",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "minimum_chrome_version": "120",
   "description": "Explicit, zero-knowledge save and fill for your Passkey-X personal vault.",
   "action": {
     "default_popup": "popup.html",
@@ -34,13 +36,17 @@
     }
   },
   "host_permissions": [
-    "https://egqgzkirazabocqwdlfp.supabase.co/*"
+    "https://passkey-x.com/*",
+    "https://wkkmyacbhqloubtwvjom.supabase.co/*"
   ],
+  "externally_connectable": {
+    "matches": ["https://passkey-x.com/*"]
+  },
   "icons": {
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'"
   }
 }
