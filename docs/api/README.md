@@ -3,12 +3,14 @@
 Base URL:
 
 ```text
-https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1
+https://passkey-x.com/api
 ```
 
-The machine-readable contract is [openapi.yaml](./openapi.yaml). It documents every customer-facing Edge Function and the three provider-managed callback endpoints currently deployed in production.
+The machine-readable contract is [openapi.yaml](./openapi.yaml). It documents only customer-facing Passkey-X application endpoints. Supabase's generic Data API and provider-managed callbacks are intentionally excluded.
 
 ## Authentication
+
+### Available now: signed-in user session
 
 1. Sign in through Passkey-X/Supabase Auth.
 2. Read the short-lived user access token from the authenticated session.
@@ -16,6 +18,28 @@ The machine-readable contract is [openapi.yaml](./openapi.yaml). It documents ev
 4. Send the public Supabase publishable key as `apikey: <PUBLISHABLE_KEY>` when your HTTP client does not add it automatically.
 
 Never use a Supabase secret key, legacy service-role key, Stripe key, Sent key, vault password, or recovery key in client code. The user JWT is tenant-scoped by database RLS. A tenant or workspace UUID never grants access by itself.
+
+### Profile-scoped API keys
+
+Profile-scoped keys will be created under **Settings → Developer → API keys**.
+The user selects an organization/profile, name, expiry, and scopes allowed by
+their current role. A key can reduce the user's permission but can never increase
+it. The complete key is shown once; only its prefix and cryptographic verifier are
+stored. Role downgrade, membership removal, expiry, or revocation must take effect
+on the next request.
+
+Planned key request:
+
+```http
+Authorization: Bearer pkx_live_<public-prefix>_<secret>
+Content-Type: application/json
+Idempotency-Key: <UUID>
+```
+
+**Status:** API-key authentication is not available to integrations yet. Continue
+using the signed-in user JWT and publishable-key headers above until the Settings
+generator and dedicated server-side key verifier are deployed and accepted. See
+[the implementation and production checklist](../operations/branded-api-and-profile-keys.md).
 
 ## What external systems can push
 
@@ -37,7 +61,7 @@ Values below are synthetic ciphertext placeholders. Generate UUIDs and ciphertex
 
 ```bash
 curl --request POST \
-  'https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1/v1/vault-items' \
+  'https://passkey-x.com/api/v1/vault-items' \
   --header 'Authorization: Bearer <USER_ACCESS_TOKEN>' \
   --header 'apikey: <PUBLISHABLE_KEY>' \
   --header 'Content-Type: application/json' \
@@ -68,7 +92,7 @@ The API rejects keys such as `password`, `private_key`, `secret_value`, `access_
 ## JavaScript example
 
 ```js
-const baseUrl = "https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1";
+const baseUrl = "https://passkey-x.com/api";
 
 async function pushEncryptedItem({ accessToken, publishableKey, envelope }) {
   const response = await fetch(`${baseUrl}/v1/vault-items`, {
@@ -97,7 +121,7 @@ Read `head_revision`, then send that value in `If-Match`. A concurrent update re
 
 ```bash
 curl --request PATCH \
-  'https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1/v1/vault-items/<ITEM_UUID>' \
+  'https://passkey-x.com/api/v1/vault-items/<ITEM_UUID>' \
   --header 'Authorization: Bearer <USER_ACCESS_TOKEN>' \
   --header 'apikey: <PUBLISHABLE_KEY>' \
   --header 'Content-Type: application/json' \
@@ -112,7 +136,7 @@ Stripe is currently sandbox-only.
 
 ```bash
 curl --request POST \
-  'https://wkkmyacbhqloubtwvjom.supabase.co/functions/v1/billing' \
+  'https://passkey-x.com/api/billing' \
   --header 'Authorization: Bearer <USER_ACCESS_TOKEN>' \
   --header 'apikey: <PUBLISHABLE_KEY>' \
   --header 'Content-Type: application/json' \
@@ -137,8 +161,3 @@ curl --request POST \
 - `5xx`: retry only idempotent requests or writes carrying a stable idempotency key.
 
 Log the `x-request-id`, HTTP status, operation name, and your own correlation ID. Never log request bodies containing ciphertext credentials, tokens, phone numbers, or provider responses.
-
-## Provider callbacks
-
-`/stripe-webhook`, `/sent-webhook`, and `/sent-sms-hook` are provider-managed routes. Do not call them from customer applications. Their configured signatures, replay protection, and idempotency checks are mandatory.
-

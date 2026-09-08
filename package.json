@@ -20,7 +20,9 @@
     "check:phase5": "node scripts/check-phase5.mjs",
     "check:phase6": "node scripts/check-phase6.mjs",
     "check": "node --check packages/crypto/src/index.mjs && node scripts/check-phase0.mjs && node scripts/check-phase1.mjs && node scripts/check-phase2.mjs && node scripts/check-phase3.mjs && node scripts/check-phase4.mjs && node scripts/check-phase5.mjs && node scripts/check-phase6.mjs && node scripts/check-auth-communications.mjs && npm test && npm run test:cli && npm run test:auth",
-    "test:auth": "node --test tests/auth/*.test.mjs"
+    "test:auth": "node --test tests/auth/*.test.mjs",
+    "build:clients": "npm --prefix apps/extension run package:uat && node scripts/prepare-client-downloads.mjs && npm --prefix apps/web run build",
+    "test:clients": "npm run test:extension && node --test apps/web/tests/vault-lifecycle.test.mjs apps/web/tests/offline-worker.test.mjs"
   },
   "workspaces": [
     "packages/*"

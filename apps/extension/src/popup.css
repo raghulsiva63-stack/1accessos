@@ -35,3 +35,13 @@ form button, #save { min-height: 39px; border: 0; border-radius: 7px; color: whi
 #empty span { max-width: 270px; font-size: 11px; line-height: 1.5; }
 #message { min-height: 18px; margin: 10px 0 0; color: #a12944; font-size: 11px; }
 footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #e0e5ef; color: #8993a7; font-size: 9px; line-height: 1.45; }
+
+[hidden] { display: none !important; }
+#empty:not([hidden]) { display: grid; }
+#connect { width: 100%; min-height: 42px; padding: 10px; border: 0; border-radius: 8px; background: #3157d5; color: white; font-weight: 750; }
+#disconnect { margin-top: 14px; min-height: 36px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: white; color: #334155; }
+button:disabled { opacity: .55; cursor: wait; }
+button:focus-visible { outline: 3px solid #4d72ff; outline-offset: 2px; }
+select { width: 100%; min-height: 40px; padding: .5rem; border: 1px solid #526489; border-radius: .5rem; background: #101d38; color: #f1f5ff; font: inherit; }
+footer a { color: #a9c0ff; }
+footer p { margin-bottom: 0; }

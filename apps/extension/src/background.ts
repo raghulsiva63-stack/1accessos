@@ -1,11 +1,32 @@
-import { authorizedExtensionMessage } from "./message-boundary";
+import { authorizedExtensionMessage, authorizedPairingMessage, type PendingPairing } from "./message-boundary";
+import { sessionStorageAdapter } from "./session-storage";
 import { createClient } from "@supabase/supabase-js";
 import { argon2id } from "hash-wasm";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://egqgzkirazabocqwdlfp.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_GxkSBRRftqpxFFGFL9jq6A_ZZiXCagU";
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: true } });
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+if (SUPABASE_URL !== "https://wkkmyacbhqloubtwvjom.supabase.co" || !SUPABASE_KEY?.startsWith("sb_publishable_")) throw new Error("Passkey-X extension production configuration is missing.");
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: {
+  persistSession: true, autoRefreshToken: false, detectSessionInUrl: false,
+  storageKey: "passkeyXSession", storage: sessionStorageAdapter(chrome.storage.session),
+} });
 const encoder = new TextEncoder();
+const PAIRING_KEY = "passkeyXPendingPairing";
+let pairingBusy = false;
+let locallyDisconnected = false;
+let vaultGeneration = 0;
+let vaultOperationBusy = false;
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+let lastActivity = 0;
+const IDLE_MS = 5 * 60_000;
+function touchVault() {
+  lastActivity = Date.now();
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(clearVault, IDLE_MS);
+}
+function requireUnlocked() {
+  if (!vaults.length || Date.now() - lastActivity >= IDLE_MS) { clearVault(); throw new Error("Unlock Passkey-X first."); }
+}
 
 type Credential = {
   key: string;
@@ -22,7 +43,7 @@ type Credential = {
   useCount?: number;
 };
 type Candidate = { origin: string; url: string; username: string; secret: string };
-type VaultContext = { identityId: string; tenantId: string; workspaceId: string; keyVersion: number; key: Uint8Array };
+type VaultContext = { identityId: string; tenantId: string; workspaceId: string; keyVersion: number; key: Uint8Array; name: string; writable: boolean };
 
 let vaults: VaultContext[] = [];
 let accountRoot: Uint8Array | null = null;
@@ -63,6 +84,7 @@ function randomBytes(length: number) { return crypto.getRandomValues(new Uint8Ar
 async function digest(value: string) { return new Uint8Array(await crypto.subtle.digest("SHA-256", buffer(encoder.encode(value)))); }
 
 async function derive(password: string, salt: Uint8Array, profile: { memoryKib: number; iterations: number; parallelism: number; hashLength: number }) {
+  if (!profile || !Number.isInteger(profile.memoryKib) || profile.memoryKib < 65_536 || profile.memoryKib > 262_144 || !Number.isInteger(profile.iterations) || profile.iterations < 3 || profile.iterations > 10 || !Number.isInteger(profile.parallelism) || profile.parallelism < 1 || profile.parallelism > 4 || profile.hashLength !== 32 || salt.length !== 16) throw new Error("Unsupported vault encryption profile. Open the web vault for help.");
   return new Uint8Array(await argon2id({ password: password.normalize("NFKC"), salt, parallelism: profile.parallelism, iterations: profile.iterations, memorySize: profile.memoryKib, hashLength: profile.hashLength, outputType: "binary" }));
 }
 async function open(keyBytes: Uint8Array, nonce: Uint8Array, ciphertext: Uint8Array, aad: string) {
@@ -76,39 +98,61 @@ async function seal(keyBytes: Uint8Array, plaintext: Uint8Array, aad: string) {
 }
 function aad(context: VaultContext, itemId: string, revision: number) { return `1accessos:item:v1:${context.tenantId}:${context.workspaceId}:${itemId}:${revision}:login:1`; }
 
-async function unlock(email: string, loginPassword: string, vaultPassword: string) {
-  lock();
-  const { error: authError } = await supabase.auth.signInWithPassword({ email, password: loginPassword });
-  if (authError) throw authError;
+async function restoreSession() {
+  if (locallyDisconnected) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session) { clearVault(); return null; }
+  return data.session;
+}
+
+async function unlock(vaultPassword: string) {
+  clearVault();
+  const generation = vaultGeneration;
+  if (!(await restoreSession())) throw new Error("Connect this extension to Passkey-X first.");
   const { data: profile, error: profileError } = await supabase.from("account_crypto_profiles").select("identity_id,salt,kdf_parameters,master_nonce,master_wrapped_root").single();
   if (profileError) throw profileError;
   const master = await derive(vaultPassword, bytea(profile.salt), profile.kdf_parameters as { memoryKib: number; iterations: number; parallelism: number; hashLength: number });
   let root: Uint8Array;
   try { root = await open(master, bytea(profile.master_nonce), bytea(profile.master_wrapped_root), "1accessos:account-root:v1"); }
   finally { master.fill(0); }
-  const { data: memberships, error: membershipError } = await supabase.from("workspace_memberships").select("tenant_id,workspace_id,created_at").eq("identity_id", profile.identity_id).eq("status", "active").order("created_at");
+  const { data: memberships, error: membershipError } = await supabase.from("workspace_memberships").select("tenant_id,workspace_id,role,created_at").eq("identity_id", profile.identity_id).eq("status", "active").order("created_at");
   if (membershipError || !memberships?.length) { root.fill(0); throw membershipError ?? new Error("No active workspace is available."); }
   const { data: envelopes, error: envelopeError } = await supabase.from("key_envelopes").select("tenant_id,workspace_id,key_version,nonce,wrapped_key").eq("recipient_identity_id", profile.identity_id).eq("key_kind", "workspace").is("revoked_at", null).order("key_version", { ascending: false });
   if (envelopeError) { root.fill(0); throw envelopeError; }
-  const latest = new Map<string, NonNullable<typeof envelopes>[number]>();
-  for (const envelope of envelopes ?? []) if (envelope.workspace_id && !latest.has(envelope.workspace_id)) latest.set(envelope.workspace_id, envelope);
   const opened: VaultContext[] = [];
   try {
+    const { data: workspaceRows, error: workspaceError } = await supabase.from("workspaces")
+      .select("id,tenant_id,suite,encrypted_name,name_nonce,name_aad_hash,current_key_version,key_rotation_required")
+      .in("id", memberships.map(row => row.workspace_id)).eq("status", "active");
+    if (workspaceError) throw workspaceError;
     for (const membership of memberships) {
-      const envelope = latest.get(membership.workspace_id);
-      if (!envelope) continue;
-      opened.push({
+      const workspace = workspaceRows?.find(row => row.id === membership.workspace_id && row.tenant_id === membership.tenant_id);
+      const envelope = envelopes?.find(row => row.workspace_id === membership.workspace_id && row.tenant_id === membership.tenant_id && row.key_version === workspace?.current_key_version);
+      if (!workspace || !envelope) continue;
+      const context: VaultContext = {
         identityId: profile.identity_id,
         tenantId: membership.tenant_id,
         workspaceId: membership.workspace_id,
         keyVersion: envelope.key_version,
         key: await open(root, bytea(envelope.nonce), bytea(envelope.wrapped_key), "1accessos:workspace:v1"),
-      });
+        name: workspace.suite === "personal" ? "Personal vault" : `${workspace.suite} workspace`,
+        writable: ["owner", "manager", "editor"].includes(membership.role) && !workspace.key_rotation_required,
+      };
+      opened.push(context);
+      if (workspace.encrypted_name && workspace.name_nonce && workspace.name_aad_hash) {
+        const nameAad = `1accessos:workspace-name:v1:${workspace.tenant_id}:${workspace.id}`;
+        if (base64url(await digest(nameAad)) !== base64url(bytea(workspace.name_aad_hash))) throw new Error("Workspace name authentication failed.");
+        const name = await open(context.key, bytea(workspace.name_nonce), bytea(workspace.encrypted_name), nameAad);
+        try { context.name = new TextDecoder().decode(name); } finally { name.fill(0); }
+      }
     }
     if (!opened.length) throw new Error("No authorized workspace key is available.");
+    if (generation !== vaultGeneration) throw new Error("Vault unlock was cancelled.");
     vaults = opened;
     accountRoot = root;
     await reloadCredentials();
+    if (generation !== vaultGeneration) throw new Error("Vault unlock was cancelled.");
+    touchVault();
   } catch (error) {
     for (const context of opened) context.key.fill(0);
     root.fill(0);
@@ -120,6 +164,7 @@ async function unlock(email: string, loginPassword: string, vaultPassword: strin
 
 async function reloadCredentials() {
   if (!vaults.length || !accountRoot) return;
+  const generation = vaultGeneration;
   const workspaceIds = vaults.map((context) => context.workspaceId);
   const { data: items, error } = await supabase.from("vault_items").select("id,tenant_id,workspace_id,head_revision").in("workspace_id", workspaceIds).eq("content_type", "login").is("deleted_at", null);
   if (error) throw error;
@@ -132,9 +177,11 @@ async function reloadCredentials() {
     const current = vaults.find((context) => context.tenantId === revision.tenant_id && context.workspaceId === revision.workspace_id);
     if (!current) return null;
     const plaintext = await open(current.key, bytea(revision.nonce), bytea(revision.ciphertext), aad(current, revision.item_id, revision.revision));
-    const payload = JSON.parse(new TextDecoder().decode(plaintext)) as { title: string; username?: string; secret?: string; url?: string };
-    plaintext.fill(0);
-    return { key: `workspace:${revision.item_id}`, id: revision.item_id, revision: revision.revision, title: payload.title, username: payload.username ?? "", secret: payload.secret ?? "", url: payload.url ?? "", source: "workspace" as const, context: current };
+    try {
+      const payload = JSON.parse(new TextDecoder().decode(plaintext)) as { title: string; username?: string; secret?: string; url?: string; archived?: boolean };
+      if (payload.archived || typeof payload.secret !== "string" || typeof payload.title !== "string") return null;
+      return { key: `workspace:${revision.item_id}`, id: revision.item_id, revision: revision.revision, title: payload.title, username: typeof payload.username === "string" ? payload.username : "", secret: payload.secret, url: typeof payload.url === "string" ? payload.url : "", source: "workspace" as const, context: current };
+    } finally { plaintext.fill(0); }
   }))).filter((credential): credential is NonNullable<typeof credential> => Boolean(credential?.secret));
 
   const { data: capsules, error: capsuleError } = await supabase.from("access_capsules")
@@ -157,16 +204,25 @@ async function reloadCredentials() {
       } finally { plaintext.fill(0); }
     } finally { shareKey.fill(0); }
   }))).filter((credential): credential is NonNullable<typeof credential> => Boolean(credential));
+  if (generation !== vaultGeneration) {
+    for (const credential of [...workspaceCredentials, ...capsuleCredentials]) credential.secret = "";
+    throw new Error("The vault was locked during synchronization.");
+  }
+  for (const credential of credentials) credential.secret = "";
   credentials = [...workspaceCredentials, ...capsuleCredentials];
 }
 
-async function saveCandidate(tabId: number) {
-  if (!vaults.length) throw new Error("Unlock Passkey-X first.");
+async function saveCandidate(tabId: number, workspaceId: unknown) {
+  requireUnlocked();
+  const generation = vaultGeneration;
   const candidate = candidates.get(tabId); if (!candidate) throw new Error("No submitted login is waiting to be saved.");
-  const existing = credentials.find((credential) => credential.source === "workspace" && credential.username === candidate.username && safeOrigin(credential.url) === candidate.origin);
-  const current = existing?.context ?? vaults[0]; const itemId = existing?.id ?? crypto.randomUUID(); const revision = (existing?.revision ?? 0) + 1;
+  const current = vaults.find(context => context.workspaceId === workspaceId && context.writable);
+  if (!current) throw new Error("Choose an authorized writable workspace.");
+  const existing = credentials.find((credential) => credential.source === "workspace" && credential.context?.workspaceId === current.workspaceId && credential.username === candidate.username && safeOrigin(credential.url) === candidate.origin);
+  const itemId = existing?.id ?? crypto.randomUUID(); const revision = (existing?.revision ?? 0) + 1;
   const payload = { version: 1, title: new URL(candidate.origin).hostname, username: candidate.username, secret: candidate.secret, url: candidate.url, tags: ["browser-save"], updatedAt: new Date().toISOString() };
   const encrypted = await seal(current.key, encoder.encode(JSON.stringify(payload)), aad(current, itemId, revision));
+  if (generation !== vaultGeneration) throw new Error("The vault was locked before saving.");
   const args = { p_item_id: itemId, p_expected_revision: existing?.revision, p_tenant_id: current.tenantId, p_workspace_id: current.workspaceId, p_content_type: "login", p_schema_version: 1, p_nonce: toBytea(encrypted.nonce), p_ciphertext: toBytea(encrypted.ciphertext), p_aad_hash: toBytea(encrypted.aadHash) };
   const result = existing ? await supabase.rpc("update_vault_item", { p_item_id: args.p_item_id, p_expected_revision: args.p_expected_revision!, p_nonce: args.p_nonce, p_ciphertext: args.p_ciphertext, p_aad_hash: args.p_aad_hash }) : await supabase.rpc("create_vault_item", { p_item_id: args.p_item_id, p_tenant_id: args.p_tenant_id, p_workspace_id: args.p_workspace_id, p_content_type: args.p_content_type, p_schema_version: args.p_schema_version, p_nonce: args.p_nonce, p_ciphertext: args.p_ciphertext, p_aad_hash: args.p_aad_hash });
   if (result.error) throw result.error;
@@ -175,7 +231,62 @@ async function saveCandidate(tabId: number) {
 
 function safeOrigin(value: string) { try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.origin : ""; } catch { return ""; } }
 function matches(origin: string) { return credentials.filter((credential) => safeOrigin(credential.url) === origin).map(({ key: id, title, username, source }) => ({ id, title: source === "capsule" ? `${title} · shared` : title, username })); }
-function lock() { for (const context of vaults) context.key.fill(0); vaults = []; accountRoot?.fill(0); accountRoot = null; for (const credential of credentials) credential.secret = ""; credentials = []; for (const tabId of candidates.keys()) forgetCandidate(tabId); void supabase.auth.signOut(); }
+function clearVault() { vaultGeneration++; clearTimeout(idleTimer); for (const context of vaults) context.key.fill(0); vaults = []; accountRoot?.fill(0); accountRoot = null; for (const credential of credentials) credential.secret = ""; credentials = []; for (const tabId of [...candidates.keys()]) forgetCandidate(tabId); }
+async function disconnect() {
+  locallyDisconnected = true;
+  clearVault();
+  await chrome.storage.session.remove(PAIRING_KEY);
+  const { error } = await supabase.auth.signOut({ scope: "local" });
+  // Always clear this browser even if network revocation is unavailable.
+  await chrome.storage.session.remove("passkeyXSession");
+  if (error) throw new Error("Local session removed. Server sign-out failed; revoke this session in account settings.");
+}
+
+async function beginPairing() {
+  const nonce = Array.from(randomBytes(32), byte => byte.toString(16).padStart(2, "0")).join("");
+  const url = new URL("https://passkey-x.com/extension/connect");
+  url.searchParams.set("extension_id", chrome.runtime.id);
+  url.hash = nonce;
+  const tab = await chrome.tabs.create({ url: url.href });
+  if (tab.id === undefined) throw new Error("Unable to open the connection page.");
+  await chrome.storage.session.set({ [PAIRING_KEY]: { nonce, tabId: tab.id, expiresAt: Date.now() + 300_000 } });
+}
+
+async function fillCredential(tabId: number, origin: string, id: unknown) {
+  requireUnlocked();
+  const generation = vaultGeneration;
+  if (!(await restoreSession())) throw new Error("Connect Passkey-X again.");
+  // Refresh RLS-filtered memberships/items before releasing any cached secret.
+  const { data: memberships, error } = await supabase.from("workspace_memberships")
+    .select("workspace_id").eq("identity_id", vaults[0]?.identityId).eq("status", "active");
+  if (error) throw new Error("Unable to verify workspace access.");
+  const allowed = new Set((memberships ?? []).map(row => row.workspace_id));
+  for (const context of vaults) if (!allowed.has(context.workspaceId)) context.key.fill(0);
+  vaults = vaults.filter(context => allowed.has(context.workspaceId));
+  if (!vaults.length) { clearVault(); throw new Error("Workspace access is no longer available."); }
+  await reloadCredentials();
+  const credential = credentials.find(item => item.key === id && safeOrigin(item.url) === origin);
+  if (!credential) throw new Error("That login is no longer available for this page.");
+  const tab = await chrome.tabs.get(tabId);
+  if (safeOrigin(tab.url ?? "") !== origin) throw new Error("The page changed. Open Passkey-X again.");
+  if (generation !== vaultGeneration) throw new Error("The vault was locked before filling.");
+  if (credential.source === "capsule" && credential.capsuleId) {
+    const { data: uses, error: useError } = await supabase.rpc("consume_access_capsule", { p_capsule_id: credential.capsuleId });
+    if (useError) throw new Error("That Access Capsule is no longer available.");
+    credential.useCount = uses;
+  }
+  if (generation !== vaultGeneration) throw new Error("The vault was locked before filling.");
+  try {
+    const result = await chrome.tabs.sendMessage(tabId, { type: "PX_FILL", origin, username: credential.username, secret: credential.secret }, { frameId: 0 });
+    if (!result?.ok) throw new Error("No visible login form was found on this page.");
+    touchVault();
+  } finally {
+    if (credential.source === "capsule" && credential.maxUses && (credential.useCount ?? 0) >= credential.maxUses) {
+      credential.secret = "";
+      credentials = credentials.filter(item => item !== credential);
+    }
+  }
+}
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   if (!authorizedExtensionMessage(message, sender, chrome.runtime.id, chrome.runtime.getURL("popup.html"))) {
@@ -183,66 +294,100 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return false;
   }
   const request = message as Record<string, unknown>;
+  const guarded = ["PX_UNLOCK", "PX_SAVE", "PX_FILL"].includes(String(request.type));
+  if (guarded && (vaultOperationBusy || pairingBusy)) { sendResponse({ ok: false, error: "Another vault operation is running. Try again shortly." }); return false; }
+  if (guarded) vaultOperationBusy = true;
   void (async () => {
     try {
+      if (vaults.length && Date.now() - lastActivity >= IDLE_MS) clearVault();
       if (request.type === "PX_CANDIDATE") {
-        if (sender.tab?.id === undefined || !sender.tab.url) throw new Error("A top-level tab is required.");
+        if (!vaults.length || sender.tab?.id === undefined || !sender.tab.url) { sendResponse({ ok: true, ignored: true }); return; }
         const origin = safeOrigin(sender.tab.url);
         if (!origin || request.origin !== origin || typeof request.username !== "string" || typeof request.secret !== "string" || !request.secret) throw new Error("Rejected untrusted login candidate.");
-        if (await isIgnored(origin)) { sendResponse({ ok: true, ignored: true }); return; }
+        const generation = vaultGeneration;
+        if (await isIgnored(origin) || generation !== vaultGeneration) { sendResponse({ ok: true, ignored: true }); return; }
         forgetCandidate(sender.tab.id);
-        candidates.set(sender.tab.id, { origin, url: String(request.url), username: request.username, secret: request.secret });
+        const url = new URL(String(request.url));
+        // Query strings/fragments can contain site bearer tokens. Save only the login path.
+        candidates.set(sender.tab.id, { origin, url: url.origin + url.pathname, username: request.username, secret: request.secret });
         candidateTimers.set(sender.tab.id, setTimeout(() => forgetCandidate(sender.tab!.id!), 60_000));
         sendResponse({ ok: true }); return;
       }
       const tabId = Number(request.tabId); const origin = safeOrigin(String(request.origin ?? ""));
-      if (request.type === "PX_UNLOCK") await unlock(String(request.email), String(request.loginPassword), String(request.vaultPassword));
-      else if (request.type === "PX_LOCK") lock();
-      else if (request.type === "PX_SAVE") await saveCandidate(tabId);
-      else if (request.type === "PX_NEVER") { if (!Number.isInteger(tabId) || !origin) throw new Error("A supported page is required."); await ignoreOrigin(origin); forgetCandidate(tabId); }
-      else if (request.type === "PX_FILL") {
-        if (!vaults.length || !Number.isInteger(tabId) || !origin) throw new Error("Unlock Passkey-X on a supported page.");
-        const credential = credentials.find((item) => item.key === request.id && safeOrigin(item.url) === origin); if (!credential) throw new Error("That login does not match this page.");
-        if (credential.source === "capsule" && credential.capsuleId) {
-          const { data: uses, error } = await supabase.rpc("consume_access_capsule", { p_capsule_id: credential.capsuleId });
-          if (error) throw new Error("That Access Capsule is no longer available.");
-          credential.useCount = uses;
-        }
-        await chrome.tabs.sendMessage(tabId, { type: "PX_FILL", origin, username: credential.username, secret: credential.secret }, { frameId: 0 });
-        if (credential.source === "capsule" && credential.maxUses && (credential.useCount ?? 0) >= credential.maxUses) {
-          credential.secret = "";
-          credentials = credentials.filter((item) => item !== credential);
+      if (request.type === "PX_CONNECT") await beginPairing();
+      else if (request.type === "PX_UNLOCK") {
+        if (typeof request.vaultPassword !== "string" || !request.vaultPassword || request.vaultPassword.length > 4096) throw new Error("Enter your vault password.");
+        await unlock(request.vaultPassword);
+      }
+      else if (request.type === "PX_LOCK") clearVault();
+      else if (request.type === "PX_DISCONNECT") {
+        if (pairingBusy) throw new Error("Wait for the connection to finish, then disconnect.");
+        await disconnect();
+      }
+      else if (request.type === "PX_SAVE") {
+        const tab = await chrome.tabs.get(tabId);
+        if (!origin || safeOrigin(tab.url ?? "") !== origin || candidates.get(tabId)?.origin !== origin) throw new Error("The page changed. Submit the login again.");
+        await saveCandidate(tabId, request.workspaceId); touchVault();
+      }
+      else if (request.type === "PX_NEVER" || request.type === "PX_ALLOW") {
+        if (!Number.isInteger(tabId) || !origin || safeOrigin((await chrome.tabs.get(tabId)).url ?? "") !== origin) throw new Error("The page changed. Reopen Passkey-X.");
+        if (request.type === "PX_NEVER") { await ignoreOrigin(origin); forgetCandidate(tabId); }
+        else {
+          const state = await chrome.storage.local.get("ignoredOrigins");
+          await chrome.storage.local.set({ ignoredOrigins: (Array.isArray(state.ignoredOrigins) ? state.ignoredOrigins : []).filter(value => value !== origin) });
         }
       }
-      sendResponse({ ok: true, unlocked: vaults.length > 0, matches: origin ? matches(origin) : [], candidate: Number.isInteger(tabId) ? Boolean(candidates.get(tabId)) : false });
+      else if (request.type === "PX_FILL") await fillCredential(tabId, origin, request.id);
+      const session = await restoreSession();
+      sendResponse({ ok: true, connected: Boolean(session), email: session?.user.email, unlocked: vaults.length > 0, matches: origin ? matches(origin) : [], workspaces: vaults.filter(context => context.writable).map(context => ({ id: context.workspaceId, name: context.name })), ignored: Boolean(origin && await isIgnored(origin)), candidate: Number.isInteger(tabId) ? Boolean(candidates.get(tabId)) : false });
     } catch (error) { sendResponse({ ok: false, error: error instanceof Error ? error.message : "Passkey-X extension error." }); }
+    finally { if (guarded) vaultOperationBusy = false; }
   })();
   return true;
 });
 
-chrome.runtime.onSuspend.addListener(lock);
+chrome.runtime.onMessageExternal.addListener((message: unknown, sender, sendResponse) => {
+  if (pairingBusy || vaultOperationBusy) { sendResponse({ ok: false, error: "Passkey-X is busy. Try again shortly." }); return false; }
+  pairingBusy = true;
+  void (async () => {
+    try {
+      const pending = (await chrome.storage.session.get(PAIRING_KEY))[PAIRING_KEY] as PendingPairing | undefined;
+      if (!authorizedPairingMessage(message, sender, chrome.runtime.id, pending)) throw new Error("Connection request expired or is untrusted. Start again from the extension.");
+      // Consume before authentication so concurrent messages/replays cannot reuse it.
+      await chrome.storage.session.remove(PAIRING_KEY);
+      const request = message as Record<string, string>;
+      const { data: verified, error: verifyError } = await supabase.auth.getUser(request.accessToken);
+      if (verifyError || !verified.user) throw new Error("The Passkey-X session is invalid.");
+      const assurance = await supabase.auth.mfa.getAuthenticatorAssuranceLevel(request.accessToken);
+      if (assurance.error || !assurance.data || (assurance.data.nextLevel === "aal2" && assurance.data.currentLevel !== "aal2")) throw new Error("Complete your account's second verification step before connecting.");
+      clearVault();
+      const { data, error } = await supabase.auth.setSession({ access_token: request.accessToken, refresh_token: request.refreshToken });
+      if (error || !data.session || data.user?.id !== verified.user.id) { await disconnect().catch(() => {}); throw new Error("Unable to establish the Passkey-X session."); }
+      locallyDisconnected = false;
+      sendResponse({ ok: true, email: data.user.email ?? "" });
+    } catch (error) { sendResponse({ ok: false, error: error instanceof Error ? error.message : "Unable to connect Passkey-X." }); }
+    finally { pairingBusy = false; }
+  })();
+  return true;
+});
+supabase.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") clearVault(); });
+chrome.runtime.onSuspend.addListener(clearVault);
 chrome.tabs.onRemoved.addListener(forgetCandidate);
 chrome.tabs.onUpdated.addListener((tabId, change) => {
   const candidate = candidates.get(tabId);
   if (change.url && candidate && safeOrigin(change.url) !== candidate.origin) forgetCandidate(tabId);
 });
 chrome.commands.onCommand.addListener((command) => {
-  if (command !== "fill-login" || !vaults.length) return;
-  void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
-    if (!tab?.id || !tab.url) return;
-    const origin = safeOrigin(tab.url); const credential = matches(origin)[0];
-    if (!origin || !credential) return;
-    const secret = credentials.find((item) => item.key === credential.id);
-    if (!secret) return;
-    if (secret.source === "capsule" && secret.capsuleId) {
-      const { data: uses, error } = await supabase.rpc("consume_access_capsule", { p_capsule_id: secret.capsuleId });
-      if (error) return;
-      secret.useCount = uses;
-    }
-    await chrome.tabs.sendMessage(tab.id, { type: "PX_FILL", origin, username: secret.username, secret: secret.secret }, { frameId: 0 });
-    if (secret.source === "capsule" && secret.maxUses && (secret.useCount ?? 0) >= secret.maxUses) {
-      secret.secret = "";
-      credentials = credentials.filter((item) => item !== secret);
-    }
-  });
+  if (command !== "fill-login" || !vaults.length || vaultOperationBusy || pairingBusy) return;
+  vaultOperationBusy = true;
+  void (async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id === undefined || !tab.url) return;
+      const origin = safeOrigin(tab.url); const credential = matches(origin)[0];
+      if (origin && credential) await fillCredential(tab.id, origin, credential.id);
+    } catch {
+      // No secret/error details in logs. Open the popup for a visible retry.
+    } finally { vaultOperationBusy = false; }
+  })();
 });

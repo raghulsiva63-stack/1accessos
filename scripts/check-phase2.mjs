@@ -43,7 +43,7 @@ for (const surface of ["Encrypted collaboration", "Access Capsule", "Mission Mod
 
 for (const endpoint of ["/workspaces", "/missions", "/access-requests", "/access-grants"]) {
   assert.match(api, new RegExp(endpoint.replaceAll("/", "\\/")), `API handler missing ${endpoint}`);
-  assert.match(openapi, new RegExp(`  ${endpoint.replaceAll("/", "\\/")}`), `OpenAPI path missing ${endpoint}`);
+  assert.match(openapi, new RegExp(`  /v1${endpoint.replaceAll("/", "\\/")}`), `OpenAPI path missing ${endpoint}`);
 }
 assert.match(api, /Only ciphertext envelopes are accepted/);
 assert.doesNotMatch(api, /SUPABASE_SERVICE_ROLE_KEY/);

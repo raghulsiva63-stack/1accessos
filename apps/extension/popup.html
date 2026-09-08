@@ -9,24 +9,30 @@
   <body>
     <main>
       <header><img src="/icons/icon-128.png" alt="" /><div><strong>Passkey-X</strong><span>by Vlightsoft</span></div><button id="lock" hidden>Lock</button></header>
-      <section id="signed-out">
+      <section id="disconnected">
         <p class="kicker">Private browser access</p>
+        <h1>Connect Passkey-X</h1>
+        <p>Sign in on passkey-x.com, complete CAPTCHA, then approve this browser extension.</p>
+        <button id="connect">Connect securely</button>
+      </section>
+      <section id="locked" hidden>
+        <p id="account" class="kicker">Account connected</p>
         <h1>Unlock your vault</h1>
-        <form id="login-form">
-          <label>Email<input id="email" type="email" autocomplete="email" required /></label>
-          <label>Login password<input id="login-password" type="password" autocomplete="current-password" required /></label>
-          <label>Vault password<input id="vault-password" type="password" autocomplete="current-password" required minlength="12" /></label>
-          <button>Sign in and unlock</button>
+        <form id="unlock-form">
+          <label>Vault password<input id="vault-password" type="password" autocomplete="off" required maxlength="4096" /></label>
+          <button>Unlock locally</button>
         </form>
+        <button id="disconnect" class="secondary">Disconnect account</button>
       </section>
       <section id="unlocked" hidden>
         <div class="page"><span id="origin">Current page</span><small>Explicit fill only</small></div>
-        <div id="candidate" hidden><p>Passkey-X detected a submitted login.</p><div class="candidate-actions"><button id="save">Encrypt and save</button><button id="never" class="secondary">Never for this site</button></div></div>
+        <div id="candidate" hidden><p>Passkey-X detected a submitted login.</p><label>Save in workspace<select id="save-workspace"></select></label><div class="candidate-actions"><button id="save">Encrypt and save</button><button id="never" class="secondary">Never for this site</button></div></div>
+        <button id="allow" class="secondary" hidden>Allow saves on this site again</button>
         <div id="matches"></div>
         <div id="empty" hidden><strong>No matching login</strong><span>Open the website sign-in form, or save the detected login after submitting it.</span></div>
       </section>
       <p id="message" role="status"></p>
-      <footer>Submitted candidates expire after 60 seconds. Vault secrets are cleared when locked or the service worker stops.</footer>
+      <footer><a href="https://passkey-x.com/#access" target="_blank" rel="noopener noreferrer">Open web vault ↗</a><p>Vault locks after five minutes of inactivity. Reconnect after restarting your browser.</p></footer>
     </main>
     <script type="module" src="/src/popup.ts"></script>
   </body>
