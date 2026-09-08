@@ -41,7 +41,7 @@ function harness({ initial = {}, signOutFails = false, rejectUser = false, requi
     throw new Error('Unexpected import '+name);
   },chrome,crypto:webcrypto,TextEncoder,TextDecoder,URL,Uint8Array,Map,Set,Date,Error,Number,String,Boolean,JSON,clearTimeout,setTimeout:(callback,ms)=>{const timer=setTimeout(callback,ms);timer.unref();return timer;}});
   const send = (name,message,sender) => new Promise(resolve=>events[name](message,sender,resolve));
-  return {values,calls,options,events,send,command:message=>send('message',message,{id,url:'chrome-extension://'+id+'/popup.html'})};
+  return {values,calls,options,events,auth,send,command:message=>send('message',message,{id,url:'chrome-extension://'+id+'/popup.html'})};
 }
 async function pair(h) {
   assert.equal((await h.command({type:'PX_CONNECT'})).ok,true);
@@ -98,6 +98,22 @@ test('connected locked extension holds a pending login only in memory until expl
 
 const candidate = {type:'PX_CANDIDATE',origin:'https://example.invalid',url:'https://example.invalid/login',username:'synthetic',secret:'synthetic-secret'};
 const pageSender = {id,url:'https://example.invalid/login',frameId:0,tab:{id:9,url:'https://example.invalid/login'}};
+test('locking while a candidate checks the account prevents late password retention',async()=>{
+  const h=harness(); await pair(h);
+  let release, entered;
+  const waiting=new Promise(resolve=>{entered=resolve;});
+  const gate=new Promise(resolve=>{release=resolve;});
+  const original=h.auth.getSession;
+  let first=true;
+  h.auth.getSession=async()=>{if(first){first=false;entered();await gate;}return original();};
+  const incoming=h.send('message',candidate,pageSender);
+  await waiting;
+  await h.command({type:'PX_LOCK'});
+  release();
+  assert.equal((await incoming).ignored,true);
+  assert.equal((await h.command({type:'PX_STATUS',tabId:9,origin:candidate.origin})).candidate,null);
+  assert.equal(h.calls.some(c=>c[0]==='badge'&&c[1]==='SAVE'),false);
+});
 test('automatic prompt opens once after navigation and duplicate events do not create a second request',async()=>{
   const h=harness(); await pair(h);
   await h.send('message',candidate,pageSender);

@@ -1,4 +1,4 @@
-# Passkey-X extension 0.2.0 — feature test cases
+# Passkey-X extension 0.3.0 — feature test cases
 
 ## Execution rules
 
@@ -39,13 +39,13 @@ UAT and must not be marked passed based only on source inspection.
 | E28 | Restart browser | Reconnect required; no persistent login/vault material | Automated empty-session harness + manual pending |
 | E29 | Disconnect normally | Only extension session revoked; local record removed | Automated with mocked Auth |
 | E30 | Disconnect while offline | Local account removed; revocation failure clearly reported | Automated with mocked Auth |
-| E31 | Submit website login while locked | Candidate ignored | Automated |
+| E31 | Submit website login while connected but locked | Memory-only candidate can wait for unlock; no write without approval | Automated + manual pending |
 | E32 | Submit on Passkey-X vault/login page | Vault/login password never offered for capture | Automated source guard + manual pending |
 | E33 | Save new submitted login while unlocked | Client-encrypted item created; browser can read it after refresh | Manual pending |
 | E34 | Submit changed secret for same username/origin | Existing item revised using expected revision | Manual pending |
 | E35 | Concurrent web update before extension save | Revision conflict reported; existing item preserved | Manual pending |
 | E36 | Choose Never for this site | Subsequent captures ignored; only origin preference persisted | Manual pending |
-| E37 | Wait more than 60 seconds / close tab | Pending candidate no longer offered | Manual pending |
+| E37 | Wait more than two minutes / close tab | Pending candidate no longer offered | Manual pending |
 | E38 | Navigate to another origin before save/fill | Rejected; no credential leaks | Automated authority checks + manual pending |
 | E39 | Save URL containing query/fragment tokens | Saved URL contains only origin and path | Automated source guard + manual pending |
 | E40 | Fill exact visible top-level login form | Username/password filled; form never auto-submitted | Manual pending |
@@ -61,6 +61,13 @@ UAT and must not be marked passed based only on source inspection.
 | E50 | Offline save/fill or provider failure | No false success; no authorization bypass | Manual pending |
 | E51 | Keyboard-only popup and web flow | Labels, focus, disabled busy controls and status are usable | Manual pending |
 | E52 | Inspect logs/storage/package for synthetic secrets | No login/vault plaintext in logs or persistent storage; only expected browser-session tokens | Manual pending |
+
+| E53 | Submit an SPA login by clicking Sign in or pressing Enter | Automatic prompt offered once; repeated submit events do not duplicate it | Automated + browser pending |
+| E54 | Browser denies automatic popup | SAVE badge remains; manual opening permits review | Automated + browser pending |
+| E55 | Dismiss while locked | Candidate erased without requiring vault unlock | Automated message boundary + UI pending |
+| E56 | Lock while account check is in flight | Late candidate cannot restore the submitted password | Automated |
+| E57 | A second login replaces the first before Save | Stale candidate approval rejected | Automated |
+| E58 | Update a login with custom title, notes and tags | Existing metadata survives the new encrypted revision | Manual pending |
 
 ## Cross-product regression gates
 

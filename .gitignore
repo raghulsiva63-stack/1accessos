@@ -18,6 +18,8 @@ apps/desktop/src-tauri/gen/
 .supabase/
 supabase/.temp/
 *.log
+__pycache__/
+*.pyc
 *.pem
 *.key
 *.p12

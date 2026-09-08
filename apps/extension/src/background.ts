@@ -347,12 +347,12 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     try {
       if (vaults.length && Date.now() - lastActivity >= IDLE_MS) clearVault();
       if (request.type === "PX_CANDIDATE") {
-        if (sender.tab?.id === undefined || !sender.tab.url || !(await restoreSession())) { sendResponse({ ok: true, ignored: true }); return; }
+        const generation = vaultGeneration;
+        if (sender.tab?.id === undefined || !sender.tab.url || !(await restoreSession()) || generation !== vaultGeneration) { sendResponse({ ok: true, ignored: true }); return; }
         const origin = safeOrigin(sender.tab.url);
         if (!origin || request.origin !== origin || typeof request.username !== "string" || typeof request.secret !== "string" || !request.secret) throw new Error("Rejected untrusted login candidate.");
-        const generation = vaultGeneration;
         if (await isIgnored(origin) || generation !== vaultGeneration) { sendResponse({ ok: true, ignored: true }); return; }
-        if (credentials.some(item => item.source === "workspace" && safeOrigin(item.url) === origin && item.username === request.username && item.secret === request.secret)) { sendResponse({ ok: true, ignored: true }); return; }
+        if (credentials.some(item => item.source === "workspace" && safeOrigin(item.url) === origin && item.username === request.username && item.secret === request.secret)) { forgetCandidate(sender.tab.id); sendResponse({ ok: true, ignored: true }); return; }
         const pending = candidates.get(sender.tab.id);
         if (pending?.origin === origin && pending.username === request.username && pending.secret === request.secret) { sendResponse({ ok: true, duplicate: true }); return; }
         forgetCandidate(sender.tab.id);

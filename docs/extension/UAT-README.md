@@ -1,15 +1,15 @@
-# Passkey-X extension 0.2.0 — UAT installation
+# Passkey-X extension 0.3.0 — UAT installation
 
 ## Prerequisites
 
-- Current Chrome or Edge, version 120 or later.
+- Current Chrome or Edge, version 127 or later.
 - An existing Passkey-X test account with a completed encrypted vault and saved
   recovery file. Use synthetic logins for testing.
 - The production `/extension/connect` page must be deployed from this release.
 
 ## Install the UAT package
 
-1. Extract `passkey-x-extension-0.2.0-uat.zip` into a dedicated folder.
+1. Extract `passkey-x-extension-0.3.0-uat.zip` into a dedicated folder.
 2. Open `chrome://extensions` or `edge://extensions`.
 3. Turn on Developer mode. Choose **Load unpacked**, then select the extracted
    folder containing `manifest.json`.
@@ -20,14 +20,28 @@
 6. Close the connection tab. Open the popup and enter the separate vault password.
 7. Use the test cases in `test-cases.md`, recording Chrome and Edge separately.
 
+## Update from 0.2.0
+
+Replace the extracted files and choose Reload on the extension management page.
+Chrome/Edge may request approval for the added tabs permission used to bind the
+automatic prompt to the active page. Reconnect if requested. Vault items already
+saved on the server remain available.
+
 ## Everyday operations
 
 - **Fill:** visit the exact saved origin, open the popup and select a login, or
   press Alt+Shift+X to fill the first match. The extension never submits the form.
-- **Save/update:** unlock first, submit a website login, then reopen the popup
-  within 60 seconds and select **Encrypt and save**. Matching origin + username
-  updates the existing item in the selected writable workspace; otherwise it
-  creates one there. Select the destination before saving.
+- **Save/update:** connect once, then submit a website login. The popup opens
+  automatically when the tab finishes loading, or the **SAVE** badge remains if
+  the browser blocks the popup. A candidate can wait while the vault is locked;
+  unlock and review it within two minutes, confirm the login worked, then choose
+  a writable workspace and **Save login** or **Update password**. Only approval
+  writes an encrypted item. Updates preserve existing notes, title and tags.
+- **Not now:** discards the pending login, including while the vault is locked.
+  Closing the tab, moving to another origin, locking or disconnecting also clears
+  it. Worker restart can clear it before the two-minute limit.
+- **Already saved:** matching origin + username + password skips the prompt when
+  unlocked. Duplicate submit/click events never create multiple requests.
 - **Never:** select **Never for this site** to stop offering saves for that origin.
   Use **Allow saves on this site again** to reverse that preference.
 - **Lock:** use the popup Lock button. Five minutes of inactivity and a worker
@@ -62,5 +76,6 @@ The package command writes the UAT ZIP and SHA-256 under `artifacts/`.
 UAT packaging does not publish to Chrome Web Store or Edge Add-ons. Publisher
 accounts, final store IDs, store review/disclosures and independent security
 review must be completed before claiming a public store release. Physical
-passkey ceremonies require a supported user device. Mobile/desktop clients are
-separate releases and are not implemented by this extension change.
+passkey ceremonies require a supported user device. Native desktop preview installers are available at `/download`. The extension
+handles websites and web apps; other native applications require separate OS
+autofill integration and are not monitored by this release.
