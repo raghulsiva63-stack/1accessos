@@ -1,34 +1,27 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Passkey-X",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.vlightsoft.passkeyx",
   "build": {
-    "beforeDevCommand": "npm --prefix ../web run dev",
     "beforeBuildCommand": "node scripts/build-frontend.mjs",
-    "devUrl": "http://localhost:3000",
-    "frontendDist": "../../web/out"
+    "frontendDist": "../launcher"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Passkey-X",
-        "width": 1240,
-        "height": 820,
-        "minWidth": 860,
-        "minHeight": 620,
-        "resizable": true
-      }
-    ],
+    "windows": [],
+    "withGlobalTauri": false,
     "security": {
-      "csp": "default-src 'self' customprotocol: asset:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; connect-src 'self' ipc: http://ipc.localhost https://passkey-x.com https://wkkmyacbhqloubtwvjom.supabase.co wss://wkkmyacbhqloubtwvjom.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+      "capabilities": [],
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://passkey-x.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": [
-      "../icons/icon.png"
-    ]
+    "shortDescription": "Your Passkey-X vault in a dedicated desktop app",
+    "category": "Productivity",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "macOS": { "minimumSystemVersion": "12.0", "signingIdentity": "-" },
+    "windows": { "nsis": { "installMode": "currentUser", "displayLanguageSelector": false } }
   }
 }
