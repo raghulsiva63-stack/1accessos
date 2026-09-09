@@ -1,0 +1,41 @@
+name: Passkey-X Android preview
+on:
+  push:
+    branches: [main, 'codex/distinct-native-clients*']
+    paths: ['apps/mobile/**', '.github/workflows/android-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/mobile/android
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Check origin, secret and pending-request boundaries
+        run: bash scripts/check-core.sh
+      - name: Build and lint Android preview
+        run: gradle --no-daemon :app:assemblePreview :app:lintPreview
+      - name: Collect signed preview with checksums
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_RUN: ${{ github.run_id }}
+        run: python3 scripts/collect-release.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: passkey-x-android-preview
+          path: apps/mobile/android/artifacts/*
+          if-no-files-found: error
+          retention-days: 30

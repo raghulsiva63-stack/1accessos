@@ -13,7 +13,7 @@ const desktop = [
 
 export default function DownloadPage() {
   return <main className="clients-page">
-    <header className="clients-header"><Link href="/" aria-label="Passkey-X home"><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={48} priority /></Link><Link href="/#access">Open web vault ↗</Link></header>
+    <header className="clients-header"><Link href="/" aria-label="Passkey-X home"><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={48} priority /></Link><Link href="/login">Open web vault ↗</Link></header>
     <section className="clients-hero"><span className="public-kicker">Your vault, within reach</span><h1>Make yourself<br />at home. Everywhere.</h1><p>Your encrypted vault on your computer. A helpful save prompt in your browser. The same account across your devices.</p><nav className="clients-quick-links" aria-label="Choose your app"><a className="client-primary" href="#desktop">Get the desktop app</a><a className="client-secondary" href="#browser">Get the browser extension</a><a className="client-secondary" href="#install-steps">Install on your phone</a></nav></section>
 
     <section id="desktop" className="clients-section" aria-labelledby="desktop-heading">

@@ -2,8 +2,9 @@ use tauri::{Manager, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri_plugin_opener::OpenerExt;
+use tauri::tray::TrayIconBuilder;
 
-const VAULT: &str = "https://passkey-x.com/#access";
+const VAULT: &str = "https://passkey-x.com/app/desktop";
 const DOWNLOADS: &str = "https://passkey-x.com/download";
 const LOCK: &str = "window.dispatchEvent(new Event('passkey-x:lock'));";
 
@@ -31,11 +32,28 @@ fn lock(app: &tauri::AppHandle) {
     }
 }
 
+fn show(app: &tauri::AppHandle, compact: Option<bool>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        if let Some(compact) = compact {
+            let _ = window.set_size(tauri::LogicalSize::new(if compact { 480.0 } else { 1240.0 }, 820.0));
+        }
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.eval("window.dispatchEvent(new Event('passkey-x:open-quick-access'));");
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle();
+            let quick = MenuItem::with_id(handle, "quick", "Quick access", true, Some("CmdOrCtrl+K"))?;
+            let add = MenuItem::with_id(handle, "add", "Add a login", true, Some("CmdOrCtrl+Shift+N"))?;
+            let compact = MenuItem::with_id(handle, "compact", "Compact window", true, None::<&str>)?;
+            let full = MenuItem::with_id(handle, "full", "Full workspace", true, None::<&str>)?;
+            let hide = MenuItem::with_id(handle, "hide", "Lock and hide", true, None::<&str>)?;
             let lock_item = MenuItem::with_id(handle, "lock", "Lock vault", true, Some("CmdOrCtrl+L"))?;
             let reload = MenuItem::with_id(handle, "reload", "Reload vault", true, Some("CmdOrCtrl+R"))?;
             let browser = MenuItem::with_id(handle, "browser", "Open in browser", true, None::<&str>)?;
@@ -43,6 +61,7 @@ pub fn run() {
             let help = MenuItem::with_id(handle, "connection", "Connection help", true, None::<&str>)?;
             let menu = Menu::with_items(handle, &[
                 &Submenu::with_items(handle, "Passkey-X", true, &[
+                    &quick, &add, &compact, &full, &hide, &PredefinedMenuItem::separator(handle)?,
                     &lock_item, &reload, &PredefinedMenuItem::separator(handle)?,
                     &browser, &extension, &help, &PredefinedMenuItem::separator(handle)?,
                     &PredefinedMenuItem::quit(handle, None)?,
@@ -55,11 +74,22 @@ pub fn run() {
                 ])?,
             ])?;
             app.set_menu(menu)?;
+            let tray_menu = Menu::with_items(handle, &[
+                &MenuItem::with_id(handle, "quick", "Open quick access", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "compact", "Open compact window", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "lock", "Lock vault", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "quit", "Quit Passkey-X", true, None::<&str>)?,
+            ])?;
+            // Some Linux desktops have no tray host. The app still works and closes normally.
+            let has_tray = if let Some(icon) = app.default_window_icon() {
+                TrayIconBuilder::new().icon(icon.clone()).tooltip("Passkey-X — quick access")
+                    .menu(&tray_menu).show_menu_on_left_click(true).build(app).is_ok()
+            } else { false };
             let navigation_app = handle.clone();
             let new_window_app = handle.clone();
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Passkey-X")
-                .inner_size(1240.0, 820.0).min_inner_size(860.0, 620.0)
+                .inner_size(1240.0, 820.0).min_inner_size(380.0, 620.0)
                 .devtools(false)
                 .on_navigation(move |url| {
                     if official(url) || launcher(url) { return true; }
@@ -91,11 +121,25 @@ pub fn run() {
                 if matches!(event, WindowEvent::Focused(false) | WindowEvent::CloseRequested { .. }) {
                     lock(&focus_app);
                 }
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    if has_tray {
+                        api.prevent_close();
+                        if let Some(window) = focus_app.get_webview_window("main") { let _ = window.hide(); }
+                    }
+                }
             });
             Ok(())
         })
         .on_menu_event(|app, event| {
             match event.id().as_ref() {
+                "quick" => show(app, None),
+                "compact" => show(app, Some(true)),
+                "full" => show(app, Some(false)),
+                "add" => {
+                    if let Some(window) = app.get_webview_window("main") { let _ = window.eval("window.dispatchEvent(new Event('passkey-x:add-login'));"); }
+                },
+                "hide" => { lock(app); if let Some(window) = app.get_webview_window("main") { let _ = window.hide(); } },
+                "quit" => { lock(app); app.exit(0); },
                 "lock" => lock(app),
                 "reload" => {
                     lock(app);

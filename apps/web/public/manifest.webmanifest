@@ -3,14 +3,14 @@
   "short_name": "Passkey-X",
   "description": "Zero-knowledge password and credential vault by Vlightsoft.",
   "id": "/",
-  "start_url": "/#access",
+  "start_url": "/app/mobile",
   "scope": "/",
   "lang": "en",
   "categories": ["productivity", "security"],
   "display": "standalone",
   "background_color": "#050b1f",
   "theme_color": "#2555ff",
-  "shortcuts": [{ "name": "Open vault", "url": "/#access", "icons": [{ "src": "/favicon.png", "sizes": "192x192" }] }],
+  "shortcuts": [{ "name": "Open vault", "url": "/app/mobile", "icons": [{ "src": "/favicon.png", "sizes": "192x192" }] }],
   "icons": [
     {
       "src": "/brand/passkey-x-app-icon.png",

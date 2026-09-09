@@ -2,7 +2,7 @@ name: Passkey-X desktop packages
 
 on:
   push:
-    branches: [main, 'codex/desktop-autosave*']
+    branches: [main, 'codex/desktop-autosave*', 'codex/distinct-native-clients*']
     paths: ['apps/desktop/**', '.github/workflows/desktop-release.yml']
   workflow_dispatch:
 

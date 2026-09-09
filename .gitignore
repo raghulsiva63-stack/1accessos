@@ -25,3 +25,10 @@ __pycache__/
 *.p12
 *.pfx
 passkey-x-recovery-key.json
+apps/mobile/android/.gradle/
+apps/mobile/android/**/build/
+apps/mobile/android/local.properties
+*.jks
+*.keystore
+
+*.tsbuildinfo

@@ -42,6 +42,12 @@ export function downloadBlob(
     throw new Error("A safe download filename is required.");
   }
 
+  if (!options.documentObject && typeof window !== "undefined" && window.location.origin === "https://passkey-x.com" && window.PasskeyXNative) {
+    if (blob.size > 25_000_000) throw new Error("Use the web vault in your browser to export files larger than 25 MB.");
+    window.dispatchEvent(new CustomEvent("passkey-x:android-export", { detail: { blob, filename } }));
+    return;
+  }
+
   const documentObject: DownloadDocument = options.documentObject
     ?? (document as unknown as DownloadDocument);
   const urlObject: DownloadUrl = options.urlObject ?? URL;
