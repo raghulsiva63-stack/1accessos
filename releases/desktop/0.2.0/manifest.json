@@ -1,0 +1,74 @@
+{
+  "version": "0.2.0",
+  "channel": "preview",
+  "commit": "b62a119ade1e2d8e3555332b40eda5db2a313992",
+  "run": "34277522356",
+  "platforms": [
+    {
+      "version": "0.2.0",
+      "platform": "windows-x64",
+      "filename": "passkey-x-desktop-0.2.0-windows-x64.exe",
+      "sha256": "8b2e8d9cf128b2cc8fc3dd9c9c127a4be72c8229d212e6c2a9e396cea458e22a",
+      "bytes": 1947283,
+      "commit": "b62a119ade1e2d8e3555332b40eda5db2a313992",
+      "run": "34277522356",
+      "signing": "unsigned",
+      "url": "/downloads/desktop/0.2.0/passkey-x-desktop-0.2.0-windows-x64.exe",
+      "parts": [
+        "windows-x64/part-000.bin",
+        "windows-x64/part-001.bin",
+        "windows-x64/part-002.bin",
+        "windows-x64/part-003.bin"
+      ]
+    },
+    {
+      "version": "0.2.0",
+      "platform": "macos-universal",
+      "filename": "passkey-x-desktop-0.2.0-macos-universal.dmg",
+      "sha256": "ed8ad403c8c79fa894c8b1b34cd8b91eaa203b62cfac327cce8c9a9e41ca8eb4",
+      "bytes": 7813263,
+      "commit": "b62a119ade1e2d8e3555332b40eda5db2a313992",
+      "run": "34277522356",
+      "signing": "ad-hoc, not notarized",
+      "url": "/downloads/desktop/0.2.0/passkey-x-desktop-0.2.0-macos-universal.dmg",
+      "parts": [
+        "macos-universal/part-000.bin",
+        "macos-universal/part-001.bin",
+        "macos-universal/part-002.bin",
+        "macos-universal/part-003.bin",
+        "macos-universal/part-004.bin",
+        "macos-universal/part-005.bin",
+        "macos-universal/part-006.bin",
+        "macos-universal/part-007.bin",
+        "macos-universal/part-008.bin",
+        "macos-universal/part-009.bin",
+        "macos-universal/part-010.bin",
+        "macos-universal/part-011.bin",
+        "macos-universal/part-012.bin",
+        "macos-universal/part-013.bin",
+        "macos-universal/part-014.bin"
+      ]
+    },
+    {
+      "version": "0.2.0",
+      "platform": "linux-x64",
+      "filename": "passkey-x-desktop-0.2.0-linux-x64.deb",
+      "sha256": "8ebef90f6cc820c1af1bd20f61469dc4c4842a800b35ab880ee528c218628bc8",
+      "bytes": 4113496,
+      "commit": "b62a119ade1e2d8e3555332b40eda5db2a313992",
+      "run": "34277522356",
+      "signing": "unsigned",
+      "url": "/downloads/desktop/0.2.0/passkey-x-desktop-0.2.0-linux-x64.deb",
+      "parts": [
+        "linux-x64/part-000.bin",
+        "linux-x64/part-001.bin",
+        "linux-x64/part-002.bin",
+        "linux-x64/part-003.bin",
+        "linux-x64/part-004.bin",
+        "linux-x64/part-005.bin",
+        "linux-x64/part-006.bin",
+        "linux-x64/part-007.bin"
+      ]
+    }
+  ]
+}

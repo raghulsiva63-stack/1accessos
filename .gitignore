@@ -12,10 +12,14 @@ dist-test/
 .next/
 out/
 target/
+apps/desktop/src-tauri/icons/
+apps/desktop/src-tauri/gen/
 .turbo/
 .supabase/
 supabase/.temp/
 *.log
+__pycache__/
+*.pyc
 *.pem
 *.key
 *.p12

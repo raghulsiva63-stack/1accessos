@@ -6,11 +6,11 @@ This continuation starts from verified GitHub main `85ac304240702a7c127bd0ee2c72
 
 | Client | Implemented | Release status |
 |---|---|---|
-| Chrome / Edge extension 0.2.0 | Dedicated account pairing, MFA verification, local vault unlock, exact-origin fill, workspace-selected save/update, ignored-site controls, shared-capsule use checks, lock/disconnect | Unpacked preview ZIP; store submission and browser UAT remain |
+| Chrome / Edge extension 0.3.0 | Dedicated account pairing, MFA verification, local vault unlock, exact-origin fill, automatic save/update prompts with explicit workspace approval, ignored-site controls, shared-capsule use checks, lock/disconnect | Unpacked preview ZIP; store submission and browser UAT remain |
 | Android | Installable web app, existing web vault screens, mobile navigation, background/idle lock, safe offline screen, update handling | Install from Chrome after web deployment |
 | iPhone / iPad | Same installable web app and vault protections | Safari Add to Home Screen after deployment; device UAT remains |
 | Windows / macOS / Linux | Installable web app in its own window | Browser installation after deployment |
-| Native desktop shell | Corrected Tauri build paths and backend CSP; domain-bound browser passkeys disabled in native builds | Source preparation only; native toolchains, CORS/CAPTCHA integration, signing and runtime tests remain |
+| Native desktop 0.2.0 | Live canonical HTTPS vault, restricted native shell, native lock/reload/edit menus and safe export downloads | Windows x64 EXE, universal macOS DMG and Linux x64 DEB preview builds; publisher signing and real-device UAT remain |
 
 Native Android/iOS binaries, OS autofill providers, native biometric vault unlock, native passkey-provider integration, signed desktop installers and app-store releases are **not complete**. The installed web app does not register as an operating-system password provider.
 

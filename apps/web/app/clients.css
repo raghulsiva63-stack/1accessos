@@ -14,6 +14,25 @@
 .client-card { padding: 2.1rem; border: 1px solid #dce3f0; border-radius: 1.5rem; background: #fff; display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; }
 .client-tag { color: #395cae; background: #edf2ff; border-radius: 2rem; padding: .4rem .7rem; font-size: .75rem; font-weight: 750; letter-spacing: .03em; }
 .client-card h2 { font-size: 1.7rem; font-weight: 750; letter-spacing: -.04em; line-height: 1.2; margin: .5rem 0 0; }
+.client-card h3 { font-size: 1.4rem; font-weight: 750; letter-spacing: -.035em; line-height: 1.3; margin: .5rem 0 0; }
+.clients-quick-links { display: flex; flex-wrap: wrap; gap: .85rem 1.2rem; align-items: center; justify-content: center; margin-top: 2rem; }
+.client-secondary { min-height: 48px; display: inline-flex; align-items: center; color: #3658b4; font-weight: 650; }
+.clients-section { max-width: 1180px; margin: 0 auto 4rem; padding: 0 2rem; scroll-margin-top: 2rem; }
+.clients-section-heading { max-width: 750px; margin: 0 auto 2rem; text-align: center; }
+.clients-section-heading h2 { font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.2; font-weight: 780; letter-spacing: -.045em; margin: 1.1rem 0; }
+.clients-section-heading > p { color: #54647f; line-height: 1.75; }
+.clients-section .client-grid { padding: 0; }
+.client-desktop-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.client-desktop-grid .client-card { padding: 1.6rem; }
+.client-desktop-grid .client-primary { margin-top: auto; width: 100%; }
+.client-desktop-grid .client-caption { margin-top: 0; }
+.client-platform { font-size: .85rem; }
+.client-release-note { color: #54647f; font-size: .9rem; line-height: 1.7; margin-top: 1.5rem; }
+.client-release-note p + p { margin-top: .6rem; }
+.client-release-note > a { display: inline-block; margin-top: .6rem; }
+.client-extension-feature { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; padding: 2.5rem; }
+.client-extension-feature > div { display: flex; flex-direction: column; align-items: flex-start; gap: 1.2rem; }
+.client-extension-feature h2 { font-size: clamp(2rem, 4vw, 2.6rem); }
 .client-card p { color: #54647f; line-height: 1.65; margin: 0; }
 .client-card ol { margin: 0 0 1rem; padding-left: 1.2rem; display: grid; gap: .75rem; line-height: 1.7; color: #465773; }
 .client-card > .client-caption { margin-top: auto; }
@@ -33,6 +52,9 @@
 .mobile-view-picker { display: none; }
 .client-header-link { display: inline-grid; place-items: center; min-height: 40px; min-width: 40px; color: #4767a0; }
 .client-header-link svg { width: 18px; height: 18px; }
+@media (min-width: 701px) and (max-width: 900px) {
+  .client-desktop-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 700px) {
   .clients-header, .clients-footer { padding: 1.1rem 1.2rem; }
   .clients-header img { width: 145px; }
@@ -41,6 +63,9 @@
   .clients-hero > p { font-size: 1rem; }
   .client-grid { grid-template-columns: 1fr; padding: 0 1.1rem; }
   .client-card { padding: 1.5rem; }
+  .clients-section { padding: 0 1.1rem; margin-bottom: 3rem; }
+  .client-desktop-grid, .client-extension-feature { grid-template-columns: 1fr; }
+  .client-extension-feature { gap: 2rem; padding: 1.5rem; }
   .clients-details { padding: 0 1.2rem; margin-top: 3rem; }
   .clients-details > div { grid-template-columns: 1fr; gap: 1rem; }
   .clients-footer { flex-wrap: wrap; }

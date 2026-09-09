@@ -9,11 +9,15 @@ function visible(input: HTMLInputElement) {
 }
 
 function fields(root: ParentNode = document, filling = false) {
-  const password = [...root.querySelectorAll<HTMLInputElement>('input[type="password"]')].find(input => visible(input) && (!filling || input.autocomplete !== "new-password"));
+  const passwords = [...root.querySelectorAll<HTMLInputElement>('input[type="password"]')].filter(visible);
+  const fresh = passwords.filter(input => input.autocomplete === "new-password");
+  const password = filling ? passwords.find(input => input.autocomplete !== "new-password") : fresh[0] ?? passwords[0];
   if (!password) return null;
+  if (!filling && fresh.length > 1 && fresh.some(input => input.value !== password.value)) return null;
   const form = password.form ?? root;
-  if (filling && password.form && safeOrigin(password.form.action) !== location.origin) return null;
-  const username = [...form.querySelectorAll<HTMLInputElement>('input[type="email"],input[autocomplete="username"],input[type="text"]')].find(visible);
+  if (password.form && safeOrigin(password.form.action) !== location.origin) return null;
+  const usernames = [...form.querySelectorAll<HTMLInputElement>('input[type="email"],input[autocomplete="username"],input[type="text"]')].filter(visible);
+  const username = usernames.find(input => input.autocomplete === "username") ?? usernames.find(input => input.type === "email") ?? usernames[0];
   return { username, password };
 }
 
@@ -24,11 +28,26 @@ function setValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-document.addEventListener("submit", (event) => {
-  if (window.top !== window || !safeOrigin(location.href) || ["passkey-x.com", "www.passkey-x.com"].includes(location.hostname)) return;
-  const found = fields(event.target instanceof HTMLFormElement ? event.target : document);
+function capture(event: Event, root: ParentNode) {
+  if (!event.isTrusted || window.top !== window || !safeOrigin(location.href) || ["passkey-x.com", "www.passkey-x.com"].includes(location.hostname)) return;
+  const found = fields(root);
   if (!found?.password.value) return;
   void chrome.runtime.sendMessage({ type: "PX_CANDIDATE", origin: location.origin, url: location.origin + location.pathname, username: found.username?.value ?? "", secret: found.password.value }).catch(() => { /* Extension was reloaded or is unavailable. */ });
+}
+
+document.addEventListener("submit", event => capture(event, event.target instanceof HTMLFormElement ? event.target : document), true);
+// Many modern sign-in screens use a button and fetch(), without submitting a form.
+document.addEventListener("click", event => {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest<HTMLButtonElement | HTMLInputElement>('button,input[type="submit"],input[type="image"],[role="button"]');
+  if (!button || button.disabled) return;
+  const label = (button.getAttribute("aria-label") || button.textContent || button.value || "").trim();
+  if (button.type !== "submit" && !/^(sign[\s-]?in|log[\s-]?in|continue|sign[\s-]?up|create\s+(account|password)|register|change\s+password|save\s+password|reset\s+password)\b/iu.test(label)) return;
+  capture(event, button.form ?? button.closest('form,[role="form"]') ?? document);
+}, true);
+document.addEventListener("keydown", event => {
+  if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement) || !["password", "email", "text"].includes(event.target.type)) return;
+  capture(event, event.target.form ?? document);
 }, true);
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {

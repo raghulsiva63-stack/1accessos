@@ -1,5 +1,6 @@
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import './prepare-desktop-downloads.mjs';
 
 const root = new URL('../', import.meta.url);
 const manifest = JSON.parse(await readFile(new URL('apps/extension/public/manifest.json', root), 'utf8'));
