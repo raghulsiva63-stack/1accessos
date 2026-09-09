@@ -77,8 +77,8 @@ jobs:
           npm ci
           npm exec --offline tauri -- --version
           node -e "JSON.parse(require('node:fs').readFileSync('src-tauri/tauri.conf.json','utf8'))"
-      - name: Test immutable desktop release publishing
-        run: node --test apps/desktop/tests/*.test.mjs
+      - name: Verify desktop installer checksums
+        run: node scripts/prepare-desktop-downloads.mjs
       - name: Reject common committed secrets
         shell: bash
         run: |

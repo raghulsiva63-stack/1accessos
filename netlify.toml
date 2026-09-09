@@ -30,13 +30,6 @@
   NEXT_PUBLIC_PLAN_CATALOG_ENABLED = "false"
   NEXT_PUBLIC_STRIPE_TEST_MODE = "true"
 
-# Public installer files live in a dedicated bucket with no client write policy.
-[[redirects]]
-  from = "/downloads/desktop/*"
-  to = "https://wkkmyacbhqloubtwvjom.supabase.co/storage/v1/object/public/passkey-x-client-releases/desktop/:splat"
-  status = 200
-  force = true
-
 # Customer-facing REST boundary. Only supported Passkey-X application routes are
 # exposed; provider callbacks and Supabase's generic Data API are not proxied.
 [[redirects]]

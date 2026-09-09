@@ -1,40 +1,35 @@
-"""Verify downloaded CI artifacts and prepare a finite release publishing request.
+"""Verify CI artifacts and stage checksum-pinned static desktop release assets.
 
-Input directory: windows-x64/, macos-universal/, linux-x64/, each containing the
-files from one checksum-verified GitHub Actions artifact. The release token and
-temporary configuration are written only to an explicitly chosen scratch folder.
+Verify each downloaded GitHub artifact ZIP against GitHub's archive digest first.
+Extract into windows-x64/, macos-universal/, linux-x64/ below the input directory.
+No publishing credentials or backend services are needed.
 """
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
-import secrets
-import shutil
-import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("artifacts", type=Path)
-parser.add_argument("output", type=Path)
 parser.add_argument("--commit", required=True)
 parser.add_argument("--run", required=True)
 args = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
-output = args.output.resolve()
-if output == root or root in output.parents:
-    raise SystemExit("Keep temporary publishing credentials outside the repository.")
-if output.exists():
-    raise SystemExit("Choose a new output directory; existing releases are not replaced.")
-lock_hash = hashlib.sha256((root / "apps/desktop/src-tauri/Cargo.lock").read_bytes()).hexdigest()
+# Git's Windows checkout can use CRLF. Compare normalized text, preserving every
+# dependency, checksum and version in the locked build input.
+lock_hash = hashlib.sha256((root / "apps/desktop/src-tauri/Cargo.lock").read_text().encode()).hexdigest()
 version = json.loads((root / "apps/desktop/src-tauri/tauri.conf.json").read_text())["version"]
-files, platforms = [], []
+output = root / "releases/desktop" / version
+if output.exists():
+    raise SystemExit("A versioned release already exists. Do not replace published installers.")
+platforms = []
 for platform, suffix in [("windows-x64", ".exe"), ("macos-universal", ".dmg"), ("linux-x64", ".deb")]:
     directory = args.artifacts / platform
     release = json.loads((directory / "release.json").read_text())
     filename = f"passkey-x-desktop-{version}-{platform}{suffix}"
     if (release["version"], release["platform"], release["filename"], release["commit"], str(release["run"])) != (version, platform, filename, args.commit, args.run):
         raise SystemExit(f"Unexpected build provenance for {platform}")
-    if hashlib.sha256((directory / "Cargo.lock").read_bytes()).hexdigest() != lock_hash:
+    if hashlib.sha256((directory / "Cargo.lock").read_text().encode()).hexdigest() != lock_hash:
         raise SystemExit(f"Dependency lockfile differs for {platform}")
     body = (directory / filename).read_bytes()
     checksum = hashlib.sha256(body).hexdigest()
@@ -42,19 +37,19 @@ for platform, suffix in [("windows-x64", ".exe"), ("macos-universal", ".dmg"), (
         raise SystemExit(f"Installer checksum/size mismatch for {platform}")
     if (directory / (filename + ".sha256")).read_text() != f"{checksum}  {filename}\n":
         raise SystemExit(f"Checksum sidecar mismatch for {platform}")
-    platforms.append({**release, "url": f"/downloads/desktop/{version}/{filename}"})
-    for name in [filename, filename + ".sha256"]:
-        data = (directory / name).read_bytes()
-        files.append({"filename": name, "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data), "objectPath": f"desktop/{version}/{name}"})
-output.mkdir(mode=0o700, parents=True)
-for platform in platforms:
-    for name in [platform["filename"], platform["filename"] + ".sha256"]:
-        shutil.copyfile(args.artifacts / platform["platform"] / name, output / name)
-token = secrets.token_hex(32)
-token_path = output / "release-token"
-with open(token_path, "x", opener=lambda path, flags: os.open(path, flags, 0o600)) as handle:
-    handle.write(token)
-config = {"token_sha256": hashlib.sha256(token.encode()).hexdigest(), "expires_at": int((time.time() + 1800) * 1000), "files": files}
-(output / "release-config.json").write_text(json.dumps(config, indent=2) + "\n")
-(output / "desktop-release.json").write_text(json.dumps({"version": version, "channel": "preview", "commit": args.commit, "run": args.run, "platforms": platforms}, indent=2) + "\n")
-print(f"Verified {len(platforms)} platforms. Prepared six immutable files in {output}.")
+    platforms.append(({**release, "url": f"/downloads/desktop/{version}/{filename}"}, body))
+output.mkdir(parents=True)
+manifest = {"version": version, "channel": "preview", "commit": args.commit, "run": args.run, "platforms": []}
+for release, body in platforms:
+    directory = output / release["platform"]
+    directory.mkdir()
+    parts = []
+    # Bounded blobs allow repository connectors to transport installers without
+    # oversized requests. Builds reconstruct and verify the complete installer.
+    for index, start in enumerate(range(0, len(body), 524288)):
+        name = f"part-{index:03d}.bin"
+        (directory / name).write_bytes(body[start:start + 524288])
+        parts.append(f"{release['platform']}/{name}")
+    manifest["platforms"].append({**release, "parts": parts})
+(output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+print(f"Verified and staged {len(platforms)} desktop installers at {output}.")
