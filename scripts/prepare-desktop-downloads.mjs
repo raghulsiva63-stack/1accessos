@@ -2,7 +2,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
 const root = new URL('../', import.meta.url);
-const { version } = JSON.parse(await readFile(new URL('releases/desktop/current.json', root), 'utf8'));
+const { desktop: version } = JSON.parse(await readFile(new URL('apps/web/lib/client-releases.json', root), 'utf8'));
 if (!/^\d+\.\d+\.\d+$/u.test(version)) throw new Error('Invalid desktop version');
 const source = new URL(`releases/desktop/${version}/`, root);
 const manifest = JSON.parse(await readFile(new URL('manifest.json', source), 'utf8'));

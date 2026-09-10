@@ -65,7 +65,10 @@ public class AutofillSystemTest {
             PendingAutofill candidate = PendingAutofill.STORE.get(saveId);
             assertNotNull(candidate); assertEquals("save", candidate.kind); assertEquals("uat-user", candidate.username()); assertEquals("changed-synthetic-password-43", candidate.password());
             assertTrue(PendingAutofill.STORE.remaining(saveId) <= 120_000);
-            device.pressBack(); device.waitForIdle();
+            // The explicit close action avoids treating IME dismissal as activity cancellation.
+            waitFor(By.desc("App menu")).click();
+            waitFor(By.text("Cancel / close")).click();
+            device.wait(Until.gone(By.desc("App menu")), 10_000);
             assertNull("Cancelling discards the pending login", PendingAutofill.STORE.get(saveId));
             instrumentation.removeMonitor(saveMonitor);
         } finally { shell("settings delete secure autofill_service"); }

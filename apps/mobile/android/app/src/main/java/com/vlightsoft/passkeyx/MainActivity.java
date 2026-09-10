@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
         LinearLayout bar = new LinearLayout(this);
         TextView title = new TextView(this); title.setText("Passkey-X · Android"); title.setTextSize(16); title.setPadding(20, 14, 0, 14);
         bar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        Button menu = new Button(this); menu.setText("App menu"); bar.addView(menu); root.addView(bar);
+        Button menu = new Button(this); menu.setText("App menu"); menu.setContentDescription("App menu"); bar.addView(menu); root.addView(bar);
         menu.setOnClickListener(view -> new AlertDialog.Builder(this).setTitle("Passkey-X Android").setItems(new String[]{"Autofill settings", "Lock vault", "Reload", "Open web vault in browser", "Cancel / close"}, (dialog, which) -> {
             if (which == 0) enableAutofill();
             if (which == 1) lockVault();

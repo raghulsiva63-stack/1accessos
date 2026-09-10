@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import releases from "@/lib/client-releases.json";
 import { KeyRound, ShieldCheck, Smartphone } from "lucide-react";
 import { nativeAvailable, nativeRequest, validNativeContext, type NativeContext } from "@/lib/browser/native-autofill";
 import { createVaultItem, updateVaultItem, type VaultItem, type WorkspaceVault } from "@/lib/vault/items";
@@ -16,7 +17,7 @@ export function NativeAutofillSetup({ native }: { native: boolean }) {
     check(); window.addEventListener("focus", check);
     return () => { active = false; window.removeEventListener("focus", check); };
   }, [native]);
-  return <section><Smartphone /><h3>{enabled ? "Android autofill is on" : "Passwords in your apps"}</h3><p>{native ? "Enable Passkey-X in Android’s autofill settings. Compatible native apps can then offer Fill and Save. You choose every credential and confirm each save." : "This home-screen web app gives you quick vault access. Install the Android preview for password save prompts and autofill in compatible native apps."}</p>{native ? <button onClick={() => void nativeRequest("enableAutofill").catch(reason => setMessage(reason.message))}>{enabled ? "Manage autofill settings" : "Enable Android autofill"}</button> : <Link href="/download#android">Get Android autofill</Link>}<small>iPhone system autofill is not available in this release.</small>{message && <p role="status">{message}</p>}</section>;
+  return <section><Smartphone /><h3>{enabled ? "Android autofill is on" : "Passwords in your apps"}</h3><p>{native ? "Enable Passkey-X in Android’s autofill settings. Compatible native apps can then offer Fill and Save. You choose every credential and confirm each save." : "This home-screen web app gives you quick vault access. Native Android autofill is being prepared as a separate app."}</p>{native ? <button onClick={() => void nativeRequest("enableAutofill").catch(reason => setMessage(reason.message))}>{enabled ? "Manage autofill settings" : "Enable Android autofill"}</button> : <Link href="/download#android">{releases.android ? "Get Android autofill" : "View Android app details"}</Link>}<small>iPhone system autofill is not available in this release.</small>{message && <p role="status">{message}</p>}</section>;
 }
 
 export function NativeAutofillReview({ vault, items, onSaved }: { vault: WorkspaceVault; items: VaultItem[]; onSaved: () => Promise<void> }) {

@@ -74,5 +74,6 @@ public final class AutofillActivity extends MainActivity {
         reply(reply, requestId, null, "This action does not match the active request.");
     }
     @Override protected void onStop() { clearConfirmation(); super.onStop(); if (!isChangingConfigurations()) PendingAutofill.STORE.remove(operationId); }
+    @Override public void finish() { clearConfirmation(); PendingAutofill.STORE.remove(operationId); super.finish(); }
     @Override protected void onDestroy() { clearConfirmation(); if (isFinishing()) PendingAutofill.STORE.remove(operationId); super.onDestroy(); }
 }
