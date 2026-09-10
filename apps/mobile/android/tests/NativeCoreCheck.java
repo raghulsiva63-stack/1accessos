@@ -15,6 +15,9 @@ public final class NativeCoreCheck {
         check(NativePolicy.newPassword(new String[]{"new-password"}));
         check(!NativePolicy.newPassword(new String[]{"password"}));
         check(NativePolicy.password(null, 0x81)); check(NativePolicy.password(null, 0x12)); check(!NativePolicy.password(null, 0x21));
+        check(!NativePolicy.password(new String[]{"one-time-code"}, 0x12));
+        check(!NativePolicy.password(new String[]{"oneTimePassword"}, 0));
+        check(!NativePolicy.password(new String[]{"smsOTPCode", "password"}, 0x81));
         check(NativePolicy.username(new String[]{"emailAddress"}, 0)); check(!NativePolicy.username(null, 1));
         check(NativePolicy.validSecret("", "synthetic-password")); check(!NativePolicy.validSecret("", "")); check(!NativePolicy.validSecret("a", "x".repeat(4097)));
         AtomicLong clock = new AtomicLong(1000); ArrayList<String> disposed = new ArrayList<>();

@@ -42,6 +42,7 @@ final class FormFields {
     }
     private static void collect(AssistStructure.ViewNode node, boolean web, int depth, int[] budget, List<AssistStructure.ViewNode> nodes) {
         if (node == null || depth > 40 || --budget[0] < 0) return;
+        if (node.getVisibility() != View.VISIBLE) return;
         // Native apps only. Unverified web domains and embedded web forms are never treated as app credentials.
         web |= node.getWebDomain() != null || node.getHtmlInfo() != null || "android.webkit.WebView".equals(node.getClassName());
         if (!web && node.getVisibility() == View.VISIBLE && node.getAutofillId() != null && node.getAutofillType() == View.AUTOFILL_TYPE_TEXT) nodes.add(node);

@@ -28,7 +28,14 @@ final class NativePolicy {
         return false;
     }
     static boolean password(String[] hints, int inputType) {
-        if (hints != null) for (String hint : hints) if (hint != null && hint.toLowerCase(Locale.ROOT).replace("-", "").endsWith("password")) return true;
+        if (hints != null) for (String hint : hints) if (hint != null) {
+            String normalized = hint.toLowerCase(Locale.ROOT).replace("-", "");
+            if (normalized.contains("otp") || normalized.equals("onetimecode") || normalized.equals("onetimepassword")) return false;
+        }
+        if (hints != null) for (String hint : hints) if (hint != null) {
+            String normalized = hint.toLowerCase(Locale.ROOT).replace("-", "");
+            if (normalized.equals("password") || normalized.equals("currentpassword") || normalized.equals("newpassword")) return true;
+        }
         int variation = inputType & 0xfff;
         return variation == 0x81 || variation == 0x91 || variation == 0xe1 || variation == 0x12;
     }
