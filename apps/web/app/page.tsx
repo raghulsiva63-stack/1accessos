@@ -20,7 +20,9 @@ import { Label } from "@/components/ui/label";
 import { OrganizationView } from "@/components/organization-view";
 import { SaasAiManager } from "@/components/saas-ai-manager";
 import { AutomationsView } from "@/components/automations-view";
-import { PublicSite } from "@/components/public-site";
+import { ClientAuthFrame, CompanionHome } from "@/components/client-experience";
+import { NativeAutofillReview } from "@/components/native-autofill";
+import { useClientMode, type ClientMode } from "@/lib/browser/client-mode";
 import { TurnstileCheck } from "@/components/turnstile-check";
 import { AccountDeletionCard } from "@/components/account-deletion-card";
 import { NotificationsView } from "@/components/notifications-view";
@@ -157,6 +159,7 @@ function customerError(reason: unknown, fallback: string) {
 }
 
 export default function Home() {
+  const clientMode = useClientMode();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<CryptoProfile | null>(null);
   const [rootKey, setRootKey] = useState<Uint8Array | null>(null);
@@ -216,16 +219,16 @@ export default function Home() {
     return () => { active = false; };
   }, [sessionUserId, mfaState]);
 
-  if (loading) return <main className="center-screen"><div className="loading-ring" aria-label="Loading Passkey-X" /></main>;
+  if (loading || !clientMode) return <main className="center-screen"><div className="loading-ring" aria-label="Loading Passkey-X" /></main>;
   if (!isSupabaseConfigured) return <ConfigurationNotice />;
   if (accountRecovery && session) return <AccountPasswordReset email={session.user.email ?? "your account"} onComplete={() => { setAccountRecovery(false); void supabase?.auth.signOut(); }} />;
   if (error) return <FatalNotice message={error} />;
   if (session && mfaState === "checking") return <main className="center-screen"><div className="loading-ring" aria-label="Checking account security" /></main>;
   if (session && mfaState === "required") return <MfaChallenge onComplete={() => setMfaState("satisfied")} />;
-  if (!session) return <AuthScreen />;
+  if (!session) return <AuthScreen clientMode={clientMode} />;
   if (!profile) return <VaultSetup email={session.user.email ?? "your account"} onComplete={setProfile} />;
   if (!rootKey) return <UnlockScreen profile={profile} email={session.user.email ?? ""} onUnlock={(key) => { if (document.hidden || activeUserId.current !== sessionUserId) key.fill(0); else setRootKey(key); }} onProfileChange={setProfile} />;
-  return <VaultShell email={session.user.email ?? ""} profile={profile} rootKey={rootKey} onLock={() => { rootKey.fill(0); setRootKey(null); }} />;
+  return <VaultShell clientMode={clientMode} email={session.user.email ?? ""} profile={profile} rootKey={rootKey} onLock={() => { rootKey.fill(0); setRootKey(null); }} />;
 }
 
 function MfaChallenge({ onComplete }: { onComplete: () => void }) {
@@ -288,7 +291,7 @@ function FatalNotice({ message }: { message: string }) {
   return <main className="center-screen"><Card className="auth-card"><CardHeader><Brand /><CardTitle>Passkey-X could not open</CardTitle><CardDescription>{message}</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={() => supabase?.auth.signOut()}>Sign out</Button></CardContent></Card></main>;
 }
 
-function AuthScreen() {
+function AuthScreen({ clientMode }: { clientMode: ClientMode }) {
   const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -380,7 +383,7 @@ function AuthScreen() {
     : "Account login and vault unlock are separate security steps.";
   const turnstileAction = mode === "signin" ? "auth-signin" : mode === "signup" ? "auth-signup" : "auth-reset";
 
-  return <PublicSite><Card className="auth-card"><CardHeader><p className="eyebrow">{mode === "signin" ? "Welcome back" : mode === "signup" ? "Create your private vault" : "Account recovery"}</p><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>
+  return <ClientAuthFrame mode={clientMode}><Card className="auth-card"><CardHeader><p className="eyebrow">{mode === "signin" ? "Welcome back" : mode === "signup" ? "Create your private vault" : "Account recovery"}</p><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>
     {mode === "forgot" ? <form className="form-stack" onSubmit={requestPasswordReset}>
       <div><Label htmlFor="reset-email">Email</Label><Input id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
       <TurnstileCheck action={turnstileAction} resetKey={captchaReset} onToken={setCaptchaToken} onProblem={() => setMessage("The security check could not load. Refresh the page and try again.")} />
@@ -398,7 +401,7 @@ function AuthScreen() {
       <Button type="button" variant="ghost" disabled={busy} onClick={() => switchMode(mode === "signin" ? "signup" : "signin")}>{mode === "signin" ? "New to Passkey-X? Create account" : "I already have an account"}</Button>
     </form>}
     {mode === "signin" && passkeysEnabled && <div className="passkey-signin"><span>or</span><Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => void signInWithPasskey()}><Fingerprint /> Sign in with a passkey</Button><small>Account authentication only. Your separate vault password is still required.</small></div>}
-  </CardContent></Card></PublicSite>;
+  </CardContent></Card></ClientAuthFrame>;
 }
 
 function AccountPasswordReset({ email, onComplete }: { email: string; onComplete: () => void }) {
@@ -614,7 +617,7 @@ function UnlockScreen({ profile, email, onUnlock, onProfileChange }: { profile: 
   return <main className="center-screen unlock-bg"><Card className="auth-card"><CardHeader><Brand /><div className="vault-icon"><LockKeyhole /></div><CardTitle>{recovering ? "Recover your vault" : "Unlock your vault"}</CardTitle><CardDescription>{recovering ? "Use the downloadable recovery key and set a new vault password." : email}</CardDescription></CardHeader><CardContent>{recovering ? <form className="form-stack" onSubmit={recover}><div><Label htmlFor="recovery-key">Recovery key</Label><Input id="recovery-key" autoComplete="off" required value={recovery} onChange={(event) => setRecovery(event.target.value)} placeholder="PX-RK1-…" /></div><div><Label htmlFor="new-vault-password">New vault password</Label><Input id="new-vault-password" type="password" minLength={12} autoComplete="new-password" required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><div><Label htmlFor="new-vault-confirm">Confirm new password</Label><Input id="new-vault-confirm" type="password" minLength={12} autoComplete="new-password" required value={confirm} onChange={(event) => setConfirm(event.target.value)} /></div>{message && <p className="form-message" role="alert">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Recovering…" : "Recover and unlock"}</Button><Button type="button" variant="ghost" onClick={() => { setRecovering(false); setMessage(""); }}>Back to password</Button></form> : <form className="form-stack" onSubmit={unlock}><div><Label htmlFor="unlock-password">Vault master password</Label><Input id="unlock-password" type="password" autoFocus autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></div>{message && <p className="form-message" role="alert">{message}</p>}<Button size="lg" disabled={busy}>{busy ? "Unlocking…" : "Unlock vault"}</Button><Button type="button" variant="ghost" onClick={() => { setRecovering(true); setMessage(""); }}>Use recovery key</Button><Button type="button" variant="ghost" onClick={() => supabase!.auth.signOut()}>Use another account</Button></form>}</CardContent></Card></main>;
 }
 
-function VaultShell({ email, profile, rootKey, onLock }: { email: string; profile: CryptoProfile; rootKey: Uint8Array; onLock: () => void }) {
+function VaultShell({ clientMode, email, profile, rootKey, onLock }: { clientMode: ClientMode; email: string; profile: CryptoProfile; rootKey: Uint8Array; onLock: () => void }) {
   const [view, setView] = useState<View>(() => readPlanSelection() ? "billing" : "home");
   const requests = useRef(new WorkspaceRequestGate());
   const workspaceLoadVersion = useRef(0);
@@ -741,15 +744,38 @@ function VaultShell({ email, profile, rootKey, onLock }: { email: string; profil
     return watchVaultLifetime({ documentObject: document, windowObject: window, onLock: autoLock });
   }, []);
   useEffect(() => () => workspaces.forEach(entry => entry.key.fill(0)), [workspaces]);
+  const companion = ["mobile", "desktop", "android"].includes(clientMode);
+  const quickAccess = useEffectEvent(() => {
+    if (!companion) return;
+    setView("home"); setSelected(null); setEditor(null);
+    requestAnimationFrame(() => window.dispatchEvent(new Event("passkey-x:quick-access")));
+  });
+  const addFromShortcut = useEffectEvent(() => { if (companion) { setView("vault"); setEditor("new"); } });
+  useEffect(() => {
+    const open = () => quickAccess();
+    const add = () => addFromShortcut();
+    const keydown = (event: KeyboardEvent) => {
+      if (!companion || !event.isTrusted || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+      if (event.key.toLowerCase() === "k") { event.preventDefault(); quickAccess(); }
+      if (event.key.toLowerCase() === "n" && event.shiftKey) { event.preventDefault(); addFromShortcut(); }
+      if (event.key.toLowerCase() === "l") { event.preventDefault(); autoLock(); }
+    };
+    window.addEventListener("passkey-x:open-quick-access", open);
+    window.addEventListener("passkey-x:add-login", add);
+    document.addEventListener("keydown", keydown);
+    return () => { window.removeEventListener("passkey-x:open-quick-access", open); window.removeEventListener("passkey-x:add-login", add); document.removeEventListener("keydown", keydown); };
+  }, [companion]);
   const planLabel = entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1);
-  return <main className="vault-app">
+  return <main className={`vault-app client-${clientMode}`}>
     <aside className="vault-sidebar"><Brand /><nav>{NAV_SECTIONS.map((section) => <div className="nav-section" key={section.label}><span className="nav-section-label">{section.label}</span>{section.views.map((viewId) => { const entry = NAV.find((candidate) => candidate.id === viewId)!; const Icon = entry.icon; return <button key={entry.id} data-mobile-primary={["home", "vault", "generator", "account-security", "settings"].includes(entry.id)} className={`nav-item ${view === entry.id ? "active" : ""}`} onClick={() => { setView(entry.id); setSelected(null); }}><Icon /> {entry.label}{entry.id === "vault" && <span>{items.length}</span>}</button>; })}</div>)}</nav><div className="plan-chip"><Sparkles /><div><strong>{planLabel}</strong><span>{entitlement.ai_credits_remaining} private AI credits</span></div></div><div className="sidebar-account"><div className="avatar">{initials}</div><div><strong>{email.split("@")[0]}</strong><span>{vault?.name ?? "Opening workspace"}</span></div><MoreHorizontal /></div></aside>
-    <section className="vault-content"><header><div><p className="eyebrow">Passkey-X / {vault?.suite ?? "Personal"}</p><h1>{view === "home" ? "Good to see you" : NAV.find((entry) => entry.id === view)?.label}</h1><select className="mobile-view-picker" aria-label="Go to section" value={view} onChange={event => { setView(event.target.value as View); setSelected(null); }}>{NAV.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></div><div className="header-actions"><Link className="client-header-link" href="/download" aria-label="Get Passkey-X apps"><Download /></Link>{workspaces.length > 0 && <select className="workspace-switcher" aria-label="Current workspace" value={vault?.workspaceId ?? ""} onChange={(event) => void switchWorkspace(event.target.value)}>{workspaces.map((entry) => <option key={entry.workspaceId} value={entry.workspaceId}>{entry.name}</option>)}</select>}<Button variant="outline" onClick={lockVault}><LockKeyhole /> Lock</Button><Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void signOut()}><LogOut /></Button></div></header>
+    <section className="vault-content"><header><div><p className="eyebrow">Passkey-X {clientMode === "desktop" ? "Desktop" : clientMode === "android" || clientMode === "mobile" ? "Mobile" : ""} / {vault?.suite ?? "Personal"}</p><h1>{view === "home" ? companion ? "Your everyday vault" : "Good to see you" : NAV.find((entry) => entry.id === view)?.label}</h1><select className="mobile-view-picker" aria-label="Go to section" value={view} onChange={event => { setView(event.target.value as View); setSelected(null); }}>{NAV.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></div><div className="header-actions"><Link className="client-header-link" href="/download" aria-label="Get Passkey-X apps"><Download /></Link>{workspaces.length > 0 && <select className="workspace-switcher" aria-label="Current workspace" value={vault?.workspaceId ?? ""} onChange={(event) => void switchWorkspace(event.target.value)}>{workspaces.map((entry) => <option key={entry.workspaceId} value={entry.workspaceId}>{entry.name}</option>)}</select>}<Button variant="outline" onClick={lockVault}><LockKeyhole /> Lock</Button><Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void signOut()}><LogOut /></Button></div></header>
       {error && <div className="vault-error" role="alert">{error}<button aria-label="Dismiss" onClick={() => setError("")}><X /></button></div>}
       {notice && <div className="vault-notice" role="status">{notice}<button aria-label="Dismiss" onClick={() => setNotice("")}><X /></button></div>}
       {(pendingLink || pendingOrganizationInvite) && <div className="secure-link-banner"><span className="feature-icon">{pendingLink?.kind === "capsule" ? <Share2 /> : <UserPlus />}</span><div><strong>{pendingOrganizationInvite ? "Organization invitation" : pendingLink?.kind === "invite" ? "Workspace invitation" : "Access Capsule"}</strong><p>{pendingOrganizationInvite ? "This one-time link adds your verified account to the organization directory. It does not grant vault access or deliver encryption keys." : "This link is addressed to your verified email. Its 256-bit secret stayed in the URL fragment and was not sent to the server."}</p></div><Button disabled={accepting} onClick={() => void acceptPendingLink()}>{accepting ? "Accepting…" : "Review and accept"}</Button></div>}
       {loading ? <div className="vault-loading"><div className="loading-ring" /><p>Decrypting your workspace on this device…</p></div> : <>
-        {view === "home" && <Dashboard items={items} trash={trash} health={health} entitlement={entitlement} onOpenVault={openVault} onNew={() => { setEditor("new"); setView("vault"); }} />}
+        {clientMode === "android" && vault && <NativeAutofillReview key={vault.workspaceId} vault={vault} items={items} onSaved={() => refresh(vault)} />}
+        {view === "home" && companion && <CompanionHome mode={clientMode} items={items} onSelect={item => { setView("vault"); setSelected(item); setRevealed(false); }} onNew={() => { setView("vault"); setEditor("new"); }} onVault={() => openVault()} onGenerator={() => setView("generator")} onSecurity={() => setView("security")} onRefresh={async () => { if (vault) { try { await refresh(vault); } catch { setError("Could not refresh. Check your connection and try again."); } } }} />}
+        {view === "home" && !companion && <Dashboard items={items} trash={trash} health={health} entitlement={entitlement} onOpenVault={openVault} onNew={() => { setEditor("new"); setView("vault"); }} />}
         {view === "vault" && vault && <VaultView vault={vault} items={visibleItems} allItems={items} trash={trash} filter={filter} query={query} selected={selected} revealed={revealed} onQuery={setQuery} onFilter={setFilter} onNew={() => setEditor("new")} onSelect={(item) => { setSelected(item); setRevealed(false); setHistory(null); }} onReveal={() => setRevealed(!revealed)} onClose={() => setSelected(null)} onEdit={(item) => setEditor(item)} onDelete={removeItem} onRestore={restoreItem} onToggle={toggle} onHistory={showHistory} />}
         {view === "workspaces" && vault && <WorkspacesView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} workspaces={workspaces} vault={vault} onSelect={switchWorkspace} onReload={reloadWorkspaces} />}
         {view === "organization" && vault && <OrganizationView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}

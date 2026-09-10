@@ -1,0 +1,16 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:label="Passkey-X Preview" android:icon="@drawable/ic_passkey"
+        android:theme="@style/AppTheme" android:allowBackup="false" android:fullBackupContent="false"
+        android:usesCleartextTraffic="false" android:supportsRtl="true">
+        <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity android:name=".AutofillActivity" android:exported="false" android:excludeFromRecents="true" android:windowSoftInputMode="adjustResize" />
+        <service android:name=".PasskeyAutofillService" android:exported="true"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE" android:label="Passkey-X">
+            <intent-filter><action android:name="android.service.autofill.AutofillService" /></intent-filter>
+            <meta-data android:name="android.autofill" android:resource="@xml/autofill_service" />
+        </service>
+    </application>
+</manifest>

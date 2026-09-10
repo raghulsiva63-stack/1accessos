@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { nativeAvailable, nativeRequest } from "@/lib/browser/native-autofill";
 
 type InstallPrompt = Event & {
   prompt: () => Promise<void>;
@@ -13,6 +14,23 @@ export function AppRuntime() {
   const [offline, setOffline] = useState(false);
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [nativeMessage, setNativeMessage] = useState("");
+  useEffect(() => {
+    const exportFile = (event: Event) => {
+      if (!nativeAvailable()) return;
+      const { blob, filename } = (event as CustomEvent<{ blob: Blob; filename: string }>).detail;
+      if (!(blob instanceof Blob) || blob.size > 25_000_000 || typeof filename !== "string") return;
+      const reader = new FileReader();
+      reader.onerror = () => setNativeMessage("The export could not open. Try again.");
+      reader.onload = () => {
+        const base64 = String(reader.result).split(",", 2)[1];
+        void nativeRequest("export", { filename, base64 }).then(() => setNativeMessage("Choose a location in Android to save your file.")).catch(reason => setNativeMessage(reason.message));
+      };
+      reader.readAsDataURL(blob);
+    };
+    window.addEventListener("passkey-x:android-export", exportFile);
+    return () => window.removeEventListener("passkey-x:android-export", exportFile);
+  }, []);
   useEffect(() => {
     const installAvailable = (event: Event) => {
       event.preventDefault(); pendingInstallPrompt = event as InstallPrompt;
@@ -36,7 +54,7 @@ export function AppRuntime() {
       installing = registration?.installing ?? null;
       installing?.addEventListener("statechange", changed);
     };
-    if ("serviceWorker" in navigator && window.isSecureContext && !window.__TAURI_INTERNALS__) {
+    if ("serviceWorker" in navigator && window.isSecureContext && !window.__TAURI_INTERNALS__ && !window.PasskeyXNative) {
       void navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).then(value => {
         if (!alive) return;
         registration = value; changed();
@@ -62,6 +80,7 @@ export function AppRuntime() {
     waiting.postMessage({ type: "PX_ACTIVATE_UPDATE" });
   }
   return <>
+    {nativeMessage && <div className="app-update-banner" role="status">{nativeMessage}<button onClick={() => setNativeMessage("")}>Dismiss</button></div>}
     {offline && <div className="app-connection-banner" role="status">You’re offline. Reconnect to sync changes or unlock your vault.</div>}
     {waiting && <div className="app-update-banner" role="status"><span>An app update is ready. Save your changes before restarting.</span><button onClick={update} disabled={updating}>{updating ? "Restarting…" : "Lock and restart"}</button></div>}
   </>;
@@ -93,7 +112,7 @@ export function InstallAction() {
     finally { pendingInstallPrompt = null; setPrompt(null); }
   }
   return <div className="install-action">
-    {installed ? <Link className="client-primary" href="/#access">Open your vault</Link> : prompt ? <button className="client-primary" onClick={() => void install()}>Install Passkey-X</button> : <a className="client-primary" href="#install-steps">How to install</a>}
+    {installed ? <Link className="client-primary" href="/app/mobile">Open your vault</Link> : prompt ? <button className="client-primary" onClick={() => void install()}>Install Passkey-X</button> : <a className="client-primary" href="#install-steps">How to install</a>}
     <p role="status">{message || (installed ? "Passkey-X is running as an installed app." : "One account. Your encrypted vault on every device.")}</p>
   </div>;
 }

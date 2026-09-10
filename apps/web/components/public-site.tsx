@@ -36,7 +36,7 @@ function PlanCard({ plan, currency, interval, office = false }: { plan: PublicCa
     <p className="public-plan-summary">{plan.summary}</p>
     <PlanPrice plan={plan} currency={currency} interval={interval} />
     <div className="public-plan-meta"><span><Users /> {seats}</span>{plan.trialDays > 0 && <span><Sparkles /> {plan.trialDays}-day trial policy</span>}</div>
-    <a className={plan.featured ? "public-plan-action primary" : "public-plan-action"} href="#access" onClick={() => rememberPlanSelection(plan.code)}>{plan.code === "enterprise" ? "Request an enterprise pilot" : plan.code === "free" ? "Start free" : `Choose ${plan.name}`} <ArrowRight /></a>
+    <a className={plan.featured ? "public-plan-action primary" : "public-plan-action"} href="/login" onClick={() => rememberPlanSelection(plan.code)}>{plan.code === "enterprise" ? "Request an enterprise pilot" : plan.code === "free" ? "Start free" : `Choose ${plan.name}`} <ArrowRight /></a>
     <ul>{plan.features.map((feature) => <li key={feature}><Check /> <span>{feature}</span></li>)}</ul>
     {plan.commercialStatus !== "active" && <p className="public-plan-status">Sales-assisted plan · self-service checkout is unavailable for this package</p>}
   </article>;
@@ -67,8 +67,8 @@ export function PublicSite({ children }: { children: ReactNode }) {
     <header className="public-header">
       <a className="public-brand" href="#product" aria-label="Passkey-X home"><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={230} height={66} priority /></a>
       <nav aria-label="Main navigation">{links}</nav>
-      <div className="public-header-actions"><a className="public-signin" href="#access">Sign in</a><a className="public-primary-link compact" href="#access">Start free <ArrowRight /></a></div>
-      <details className="public-mobile-menu"><summary aria-label="Open navigation"><Menu /></summary><nav>{links}<a href="#access">Sign in</a></nav></details>
+      <div className="public-header-actions"><a className="public-signin" href="/login">Sign in</a><a className="public-primary-link compact" href="/login">Start free <ArrowRight /></a></div>
+      <details className="public-mobile-menu"><summary aria-label="Open navigation"><Menu /></summary><nav>{links}<a href="/login">Sign in</a></nav></details>
     </header>
 
     <section className="public-hero" id="product">
@@ -76,7 +76,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
         <span className="public-kicker"><ShieldCheck /> Client-side encrypted access</span>
         <h1>Passwords are only the beginning.</h1>
         <p>Passkey-X protects passwords, passkeys, developer secrets, recovery codes, and team access in one zero-knowledge workspace—without giving the service your vault password.</p>
-        <div className="public-hero-actions"><a className="public-primary-link" href="#access">Create your vault <ArrowRight /></a><a className="public-secondary-link" href="#pricing">Compare plans</a></div>
+        <div className="public-hero-actions"><a className="public-primary-link" href="/login">Create your vault <ArrowRight /></a><a className="public-secondary-link" href="#pricing">Compare plans</a></div>
         <div className="public-assurance"><span><Fingerprint /> Separate vault unlock</span><span><ShieldCheck /> Tamper detection</span><span><KeyRound /> Recovery key</span></div>
       </div>
       <div className="public-access" id="access">{children}</div>
@@ -110,6 +110,6 @@ export function PublicSite({ children }: { children: ReactNode }) {
       </>}
     </section>
 
-    <footer className="public-footer"><div><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={55} /><p>Private access for people, teams, and machines.</p></div><div><strong>Product</strong><a href="#security">Security</a><a href="#pricing">Pricing</a><a href="/api-docs">API documentation</a><a href="#access">Sign in</a></div><div><strong>Company</strong><span>Vlightsoft</span><span>passkey-x.com</span></div><small>© 2026 Vlightsoft. Passkey-X launch catalog v2.2.</small></footer>
+    <footer className="public-footer"><div><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={55} /><p>Private access for people, teams, and machines.</p></div><div><strong>Product</strong><a href="#security">Security</a><a href="#pricing">Pricing</a><a href="/api-docs">API documentation</a><a href="/login">Sign in</a></div><div><strong>Company</strong><span>Vlightsoft</span><span>passkey-x.com</span></div><small>© 2026 Vlightsoft. Passkey-X launch catalog v2.2.</small></footer>
   </main>;
 }
