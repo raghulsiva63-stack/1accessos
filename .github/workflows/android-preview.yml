@@ -28,6 +28,17 @@ jobs:
         run: bash scripts/check-core.sh
       - name: Build and lint Android preview
         run: gradle --no-daemon :app:assemblePreview :app:lintPreview
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Exercise Android system fill and save handoffs
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          working-directory: apps/mobile/android
+          script: gradle --no-daemon :fixture:installDebug :app:connectedDebugAndroidTest
       - name: Collect signed preview with checksums
         env:
           RELEASE_COMMIT: ${{ github.sha }}

@@ -10,12 +10,25 @@ import android.view.autofill.AutofillManager;
 import android.view.autofill.AutofillValue;
 import android.widget.RemoteViews;
 import android.widget.Toast;
+import android.os.Handler;
+import android.os.Looper;
+import java.util.Arrays;
 import androidx.webkit.JavaScriptReplyProxy;
 import org.json.JSONObject;
 
 public final class AutofillActivity extends MainActivity {
     private String operationId;
     private boolean confirmationOpen;
+    private AlertDialog confirmation;
+    private char[] fillPassword;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable expireConfirmation = () -> clearConfirmation();
+    private void clearConfirmation() {
+        handler.removeCallbacks(expireConfirmation);
+        if (fillPassword != null) Arrays.fill(fillPassword, '\0');
+        fillPassword = null; confirmationOpen = false;
+        if (confirmation != null) { confirmation.dismiss(); confirmation = null; }
+    }
     @Override protected boolean operationActivity() { return true; }
     @Override public void onCreate(Bundle saved) {
         operationId = getIntent().getStringExtra("operationId");
@@ -41,27 +54,29 @@ public final class AutofillActivity extends MainActivity {
         if (action.equals("fill") && pending.kind.equals("fill") && !confirmationOpen) {
             String username = body.optString("username"), password = body.optString("password");
             if (!NativePolicy.validSecret(username, password)) throw new IllegalArgumentException();
+            fillPassword = password.toCharArray();
             confirmationOpen = true;
-            new AlertDialog.Builder(this).setTitle("Fill this login?")
+            handler.postDelayed(expireConfirmation, PendingAutofill.STORE.remaining(operationId));
+            confirmation = new AlertDialog.Builder(this).setTitle("Fill this login?")
                 .setMessage("Send " + (username.isEmpty() ? "this password" : username) + " to " + pending.appLabel + "?\n\n" + pending.packageName + "\n\nOnly continue if you trust this app with this login.")
                 .setPositiveButton("Fill login", (dialog, which) -> {
                     confirmationOpen = false;
-                    if (!foreground || PendingAutofill.STORE.get(operationId) != pending) { reply(reply, requestId, null, "The request expired."); return; }
+                    if (!foreground || fillPassword == null || PendingAutofill.STORE.get(operationId) != pending) { clearConfirmation(); reply(reply, requestId, null, "The request expired."); return; }
                     RemoteViews presentation = new RemoteViews(getPackageName(), android.R.layout.simple_list_item_1);
                     presentation.setTextViewText(android.R.id.text1, username.isEmpty() ? "Passkey-X login" : username);
-                    Dataset.Builder dataset = new Dataset.Builder(presentation).setValue(pending.passwordId, AutofillValue.forText(password));
+                    Dataset.Builder dataset = new Dataset.Builder(presentation).setValue(pending.passwordId, AutofillValue.forText(new String(fillPassword)));
                     if (pending.usernameId != null) dataset.setValue(pending.usernameId, AutofillValue.forText(username));
                     SaveInfo.Builder save = new SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_PASSWORD, new android.view.autofill.AutofillId[]{pending.passwordId});
                     if (pending.usernameId != null) save.setOptionalIds(new android.view.autofill.AutofillId[]{pending.usernameId});
                     FillResponse response = new FillResponse.Builder().addDataset(dataset.build()).setSaveInfo(save.build()).build();
                     setResult(RESULT_OK, new Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, response));
-                    PendingAutofill.STORE.remove(operationId); reply(reply, requestId, true, null); finish();
-                }).setNegativeButton("Cancel", (dialog, which) -> { confirmationOpen = false; reply(reply, requestId, null, "Autofill cancelled."); })
-                .setOnCancelListener(dialog -> { confirmationOpen = false; reply(reply, requestId, null, "Autofill cancelled."); }).show();
+                    PendingAutofill.STORE.remove(operationId); clearConfirmation(); reply(reply, requestId, true, null); finish();
+                }).setNegativeButton("Cancel", (dialog, which) -> { clearConfirmation(); reply(reply, requestId, null, "Autofill cancelled."); })
+                .setOnCancelListener(dialog -> { clearConfirmation(); reply(reply, requestId, null, "Autofill cancelled."); }).show();
             return;
         }
         reply(reply, requestId, null, "This action does not match the active request.");
     }
-    @Override protected void onStop() { super.onStop(); if (!isChangingConfigurations()) PendingAutofill.STORE.remove(operationId); }
-    @Override protected void onDestroy() { if (isFinishing()) PendingAutofill.STORE.remove(operationId); super.onDestroy(); }
+    @Override protected void onStop() { clearConfirmation(); super.onStop(); if (!isChangingConfigurations()) PendingAutofill.STORE.remove(operationId); }
+    @Override protected void onDestroy() { clearConfirmation(); if (isFinishing()) PendingAutofill.STORE.remove(operationId); super.onDestroy(); }
 }

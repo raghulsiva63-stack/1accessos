@@ -1,0 +1,6 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.vlightsoft.passkeyx.fixture'
+    compileSdk 35
+    defaultConfig { applicationId 'com.vlightsoft.passkeyx.fixture'; minSdk 28; targetSdk 35; versionCode 1; versionName '1.0' }
+}
