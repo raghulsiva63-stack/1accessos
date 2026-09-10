@@ -34,7 +34,11 @@ public final class PasskeyAutofillService extends AutofillService {
             cancellation.setOnCancelListener(() -> PendingAutofill.STORE.remove(id));
             RemoteViews presentation = new RemoteViews(getPackageName(), android.R.layout.simple_list_item_1);
             presentation.setTextViewText(android.R.id.text1, "Unlock Passkey-X to choose a login");
-            response.setAuthentication(fields.ids(), intent(id).getIntentSender(), presentation);
+            Dataset.Builder locked = new Dataset.Builder(presentation)
+                .setValue(fields.password.getAutofillId(), null)
+                .setAuthentication(intent(id).getIntentSender());
+            if (fields.username != null) locked.setValue(fields.username.getAutofillId(), null);
+            response.addDataset(locked.build());
         }
         callback.onSuccess(response.build());
     }

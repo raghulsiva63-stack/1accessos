@@ -4,8 +4,6 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.service.autofill.Dataset;
-import android.service.autofill.FillResponse;
-import android.service.autofill.SaveInfo;
 import android.view.autofill.AutofillManager;
 import android.view.autofill.AutofillValue;
 import android.widget.RemoteViews;
@@ -66,10 +64,8 @@ public final class AutofillActivity extends MainActivity {
                     presentation.setTextViewText(android.R.id.text1, username.isEmpty() ? "Passkey-X login" : username);
                     Dataset.Builder dataset = new Dataset.Builder(presentation).setValue(pending.passwordId, AutofillValue.forText(new String(fillPassword)));
                     if (pending.usernameId != null) dataset.setValue(pending.usernameId, AutofillValue.forText(username));
-                    SaveInfo.Builder save = new SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_PASSWORD, new android.view.autofill.AutofillId[]{pending.passwordId});
-                    if (pending.usernameId != null) save.setOptionalIds(new android.view.autofill.AutofillId[]{pending.usernameId});
-                    FillResponse response = new FillResponse.Builder().addDataset(dataset.build()).setSaveInfo(save.build()).build();
-                    setResult(RESULT_OK, new Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, response));
+                    // Replace the selected locked dataset so Android fills immediately.
+                    setResult(RESULT_OK, new Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, dataset.build()));
                     PendingAutofill.STORE.remove(operationId); clearConfirmation(); reply(reply, requestId, true, null); finish();
                 }).setNegativeButton("Cancel", (dialog, which) -> { clearConfirmation(); reply(reply, requestId, null, "Autofill cancelled."); })
                 .setOnCancelListener(dialog -> { clearConfirmation(); reply(reply, requestId, null, "Autofill cancelled."); }).show();
