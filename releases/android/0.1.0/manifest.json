@@ -1,0 +1,20 @@
+{
+  "version": "0.1.0",
+  "platform": "android",
+  "filename": "passkey-x-android-0.1.0-preview.apk",
+  "bytes": 2716795,
+  "sha256": "50de3effc3bf85c70e668971c60520e36d2140bb229b07da57cacf2855b8a0f1",
+  "commit": "1e5bf745c91de4723bcc78a320c451d074c7f26f",
+  "run": "34483846757",
+  "minAndroid": 9,
+  "signing": "Temporary preview key; not a Play Store release",
+  "url": "/downloads/android/0.1.0/passkey-x-android-0.1.0-preview.apk",
+  "parts": [
+    "part-000.bin",
+    "part-001.bin",
+    "part-002.bin",
+    "part-003.bin",
+    "part-004.bin",
+    "part-005.bin"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "version": "0.3.0",
+  "channel": "preview",
+  "commit": "d7035176a5614ec08a369af33a7ddd87d33ef8ff",
+  "run": "34313882512",
+  "platforms": [
+    {
+      "version": "0.3.0",
+      "platform": "windows-x64",
+      "filename": "passkey-x-desktop-0.3.0-windows-x64.exe",
+      "sha256": "7835b93082d1abadd1e74d81e811d3f4efbe90b0490b5ecd0914dfa9d785a134",
+      "bytes": 2003269,
+      "commit": "d7035176a5614ec08a369af33a7ddd87d33ef8ff",
+      "run": "34313882512",
+      "signing": "unsigned",
+      "url": "/downloads/desktop/0.3.0/passkey-x-desktop-0.3.0-windows-x64.exe"
+    },
+    {
+      "version": "0.3.0",
+      "platform": "macos-universal",
+      "filename": "passkey-x-desktop-0.3.0-macos-universal.dmg",
+      "sha256": "d8498272f6c99736b6017b4c7e5c87a2bc6f9db60a8fd410cd56073360f05249",
+      "bytes": 7943499,
+      "commit": "d7035176a5614ec08a369af33a7ddd87d33ef8ff",
+      "run": "34313882512",
+      "signing": "ad-hoc, not notarized",
+      "url": "/downloads/desktop/0.3.0/passkey-x-desktop-0.3.0-macos-universal.dmg"
+    },
+    {
+      "version": "0.3.0",
+      "platform": "linux-x64",
+      "filename": "passkey-x-desktop-0.3.0-linux-x64.deb",
+      "sha256": "d04a8e382648a752c83b84d0dfe4213ded5f8f4c0290c12efceb7e378ccaa050",
+      "bytes": 4270114,
+      "commit": "d7035176a5614ec08a369af33a7ddd87d33ef8ff",
+      "run": "34313882512",
+      "signing": "unsigned",
+      "url": "/downloads/desktop/0.3.0/passkey-x-desktop-0.3.0-linux-x64.deb"
+    }
+  ]
+}

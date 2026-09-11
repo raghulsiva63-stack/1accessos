@@ -1,0 +1,76 @@
+{
+  "version": "0.3.0",
+  "channel": "preview",
+  "commit": "d7035176a5614ec08a369af33a7ddd87d33ef8ff",
+  "run": "34313882512",
+  "platforms": [
+    {
+      "version": "0.3.0",
+      "platform": "windows-x64",
+      "filename": "passkey-x-desktop-0.3.0-windows-x64.exe",
+      "sha256": "7835b93082d1abadd1e74d81e811d3f4efbe90b0490b5ecd0914dfa9d785a134",
+      "bytes": 2003269,
+      "commit": "d7035176a5614ec08a369af33a7ddd87d33ef8ff",
+      "run": "34313882512",
+      "signing": "unsigned",
+      "url": "/downloads/desktop/0.3.0/passkey-x-desktop-0.3.0-windows-x64.exe",
+      "parts": [
+        "windows-x64/part-000.bin",
+        "windows-x64/part-001.bin",
+        "windows-x64/part-002.bin",
+        "windows-x64/part-003.bin"
+      ]
+    },
+    {
+      "version": "0.3.0",
+      "platform": "macos-universal",
+      "filename": "passkey-x-desktop-0.3.0-macos-universal.dmg",
+      "sha256": "d8498272f6c99736b6017b4c7e5c87a2bc6f9db60a8fd410cd56073360f05249",
+      "bytes": 7943499,
+      "commit": "d7035176a5614ec08a369af33a7ddd87d33ef8ff",
+      "run": "34313882512",
+      "signing": "ad-hoc, not notarized",
+      "url": "/downloads/desktop/0.3.0/passkey-x-desktop-0.3.0-macos-universal.dmg",
+      "parts": [
+        "macos-universal/part-000.bin",
+        "macos-universal/part-001.bin",
+        "macos-universal/part-002.bin",
+        "macos-universal/part-003.bin",
+        "macos-universal/part-004.bin",
+        "macos-universal/part-005.bin",
+        "macos-universal/part-006.bin",
+        "macos-universal/part-007.bin",
+        "macos-universal/part-008.bin",
+        "macos-universal/part-009.bin",
+        "macos-universal/part-010.bin",
+        "macos-universal/part-011.bin",
+        "macos-universal/part-012.bin",
+        "macos-universal/part-013.bin",
+        "macos-universal/part-014.bin",
+        "macos-universal/part-015.bin"
+      ]
+    },
+    {
+      "version": "0.3.0",
+      "platform": "linux-x64",
+      "filename": "passkey-x-desktop-0.3.0-linux-x64.deb",
+      "sha256": "d04a8e382648a752c83b84d0dfe4213ded5f8f4c0290c12efceb7e378ccaa050",
+      "bytes": 4270114,
+      "commit": "d7035176a5614ec08a369af33a7ddd87d33ef8ff",
+      "run": "34313882512",
+      "signing": "unsigned",
+      "url": "/downloads/desktop/0.3.0/passkey-x-desktop-0.3.0-linux-x64.deb",
+      "parts": [
+        "linux-x64/part-000.bin",
+        "linux-x64/part-001.bin",
+        "linux-x64/part-002.bin",
+        "linux-x64/part-003.bin",
+        "linux-x64/part-004.bin",
+        "linux-x64/part-005.bin",
+        "linux-x64/part-006.bin",
+        "linux-x64/part-007.bin",
+        "linux-x64/part-008.bin"
+      ]
+    }
+  ]
+}
