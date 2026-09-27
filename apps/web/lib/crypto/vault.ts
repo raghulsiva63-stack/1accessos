@@ -56,14 +56,42 @@ export function toPostgresBytea(bytes: Uint8Array) {
   return `\\x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
+/** Minimum and maximum Argon2id parameters accepted from stored profiles or files. */
+export const KDF_BOUNDS = {
+  memoryKib: { min: 65_536, max: 1_048_576 },
+  iterations: { min: 3, max: 12 },
+  parallelism: { min: 1, max: 4 },
+} as const;
+
+/**
+ * Rejects KDF parameters that are weaker than the web baseline or large enough to
+ * exhaust the device. Profiles come from the server or from export files, so they are
+ * untrusted input.
+ */
+export function assertKdfProfile(profile: Partial<KdfProfile> | null | undefined): KdfProfile {
+  const memoryKib = Number(profile?.memoryKib);
+  const iterations = Number(profile?.iterations);
+  const parallelism = Number(profile?.parallelism);
+  const hashLength = Number(profile?.hashLength ?? 32);
+  const within = (value: number, bounds: { min: number; max: number }) =>
+    Number.isInteger(value) && value >= bounds.min && value <= bounds.max;
+  if (!within(memoryKib, KDF_BOUNDS.memoryKib) || !within(iterations, KDF_BOUNDS.iterations)
+    || !within(parallelism, KDF_BOUNDS.parallelism) || hashLength !== 32) {
+    throw new Error("The vault key-derivation settings are outside the supported secure range.");
+  }
+  return { algorithm: "ARGON2ID", memoryKib, iterations, parallelism, hashLength: 32 };
+}
+
 export async function deriveMasterKey(
   password: string,
   salt: Uint8Array,
-  profile = WEB_KDF_PROFILE,
+  untrustedProfile: Partial<KdfProfile> = WEB_KDF_PROFILE,
 ) {
   if (password.length < 12) {
     throw new Error("Use at least 12 characters for the vault password.");
   }
+  if (salt.byteLength < 16) throw new Error("The vault key salt is invalid.");
+  const profile = assertKdfProfile(untrustedProfile);
   const result = await argon2id({
     password: password.normalize("NFKC"),
     salt,
