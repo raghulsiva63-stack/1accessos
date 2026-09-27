@@ -3,6 +3,7 @@ import { AppRuntime } from "@/components/app-install";
 import "./globals.css";
 import "./clients.css";
 import "./enterprise.css";
+import "./marketing.css";
 
 export const metadata: Metadata = {
   title: "Passkey-X — Your private digital vault",
