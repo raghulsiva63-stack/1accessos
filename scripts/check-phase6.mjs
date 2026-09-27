@@ -4,7 +4,12 @@ import { readFile } from "node:fs/promises";
 const migration = await readFile("supabase/migrations/20260905042216_phase6_commercial_catalog.sql", "utf8");
 const sqlTest = await readFile("supabase/tests/phase6_commercial_catalog.sql", "utf8");
 const catalogClient = await readFile("apps/web/lib/billing/client.ts", "utf8");
-const publicSite = await readFile("apps/web/components/public-site.tsx", "utf8");
+const publicSite = [
+  await readFile("apps/web/components/public-site.tsx", "utf8"),
+  await readFile("apps/web/components/marketing/pricing-section.tsx", "utf8"),
+].join("\n");
+const marketingNav = await readFile("apps/web/components/marketing/marketing-shell.tsx", "utf8");
+const marketingCatalog = await readFile("apps/web/lib/marketing/catalog.ts", "utf8");
 const page = await readFile("apps/web/app/page.tsx", "utf8");
 const scope = await readFile("docs/phase6/commercial-experience-scope.md", "utf8");
 const traceability = await readFile("docs/phase6/requirements-traceability.md", "utf8");
@@ -21,7 +26,9 @@ assert.match(migration, /stripe_price_id is null/u);
 assert.match(sqlTest, /set local role anon/u);
 assert.match(sqlTest, /Published catalog mutation unexpectedly succeeded/u);
 assert.match(catalogClient, /loadPublicPlanCatalog/u);
-assert.match(publicSite, /Product[\s\S]*Teams[\s\S]*Business[\s\S]*Security[\s\S]*Pricing/u);
+assert.match(marketingNav, /label="Products"[\s\S]*label="Solutions"[\s\S]*href="\/security">Security[\s\S]*href="\/pricing">Pricing/u);
+assert.match(marketingCatalog, /slug: "teams"[\s\S]*slug: "business"/u);
+assert.match(publicSite, /<MarketingHeader \/>[\s\S]*<PricingSection \/>/u);
 assert.match(publicSite, /Choose Team for one workgroup\. Choose Business for an organization\./u);
 assert.match(publicSite, /Sales-assisted plan.*self-service checkout is unavailable/iu);
 assert.doesNotMatch(page, /const BILLING_PLANS/u);
@@ -30,6 +37,6 @@ assert.match(traceability, /SaaS\/AI Manager[\s\S]*Engineering control-plane che
 assert.match(traceability, /Privileged access \+ agent\/machine identity[\s\S]*Not started as a release/u);
 assert.match(traceability, /Revised Engineering Phase Plan v2\.2/u);
 assert.match(traceability, /0 of 9/u);
-assert.doesNotMatch(`${migration}\n${catalogClient}\n${publicSite}`, /(?:sk|rk)_(?:live|test)_/u);
+assert.doesNotMatch(`${migration}\n${catalogClient}\n${publicSite}\n${marketingNav}\n${marketingCatalog}`, /(?:sk|rk)_(?:live|test)_/u);
 
 console.log("Commercial catalog, public navigation, office-package guidance, safe billing boundary, and traceability checks passed.");

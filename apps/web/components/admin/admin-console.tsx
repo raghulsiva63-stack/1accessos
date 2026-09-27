@@ -11,6 +11,7 @@ import { PeoplePanel } from "@/components/admin/people-panel";
 import { PoliciesPanel } from "@/components/admin/policies-panel";
 import { AuditPanel } from "@/components/admin/audit-panel";
 import { AccessReviewPanel } from "@/components/admin/access-review-panel";
+import { IntegrationsPanel } from "@/components/admin/integrations-panel";
 import { OrganizationView } from "@/components/organization-view";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import type { TenantEntitlement } from "@/lib/billing/client";
@@ -18,7 +19,7 @@ import { loadMemberOverview, type MemberOverview } from "@/lib/enterprise/admin"
 import { loadTenantPolicies, type StoredPolicy } from "@/lib/enterprise/policies";
 import type { WorkspaceVault } from "@/lib/vault/items";
 
-export type AdminTab = "overview" | "people" | "policies" | "access" | "audit" | "directory";
+export type AdminTab = "overview" | "people" | "policies" | "access" | "audit" | "integrations" | "directory";
 
 const TABS: { id: AdminTab; label: string; icon: typeof Users }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -26,6 +27,7 @@ const TABS: { id: AdminTab; label: string; icon: typeof Users }[] = [
   { id: "policies", label: "Policies", icon: SlidersHorizontal },
   { id: "access", label: "Access review", icon: FolderLock },
   { id: "audit", label: "Audit log", icon: FileClock },
+  { id: "integrations", label: "Integrations", icon: Activity },
   { id: "directory", label: "Directory", icon: Building2 },
 ];
 
@@ -99,6 +101,7 @@ export function AdminConsole({
       {tab === "policies" && <PoliciesPanel vault={vault} policies={policies} loading={loading} onChanged={reload} canEdit={businessActive} />}
       {tab === "access" && <AccessReviewPanel vault={vault} workspaceNames={workspaceNames} />}
       {tab === "audit" && <AuditPanel vault={vault} members={members} />}
+      {tab === "integrations" && <IntegrationsPanel vault={vault} />}
       {tab === "directory" && <OrganizationView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={onOpenBilling} />}
     </div>
   </div>;
