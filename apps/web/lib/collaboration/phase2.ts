@@ -212,10 +212,10 @@ export async function acceptWorkspaceInvite(link: InviteLink, accountRootKey: Ui
       p_root_wrapped_workspace_key: toPostgresBytea(fromBase64Url(rootEnvelope.ciphertext)),
     });
     if (acceptError) throw acceptError;
+    link.token.fill(0); // only after success, so a transient failure can be retried
     return invite.workspace_id;
   } finally {
     workspaceKey.fill(0);
-    link.token.fill(0);
   }
 }
 
@@ -314,9 +314,9 @@ export async function acceptAccessCapsule(link: InviteLink, accountRootKey: Uint
       p_recipient_key_aad_hash: toPostgresBytea(await sha256(recipientAad)),
     });
     if (acceptError) throw acceptError;
+    link.token.fill(0); // only after success, so a transient failure can be retried
   } finally {
     shareKey.fill(0);
-    link.token.fill(0);
   }
 }
 
