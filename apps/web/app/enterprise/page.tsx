@@ -38,10 +38,11 @@ const ROLLOUT = [
 ];
 
 const ROADMAP = [
+  { title: "SIEM and webhook audit streaming", status: "Available" },
+  { title: "Import from 1Password, Bitwarden and LastPass", status: "Available" },
   { title: "SAML single sign-on", status: "In development" },
   { title: "SCIM provisioning (Entra ID, Okta, Google)", status: "In development" },
   { title: "Opt-in organization recovery", status: "In development" },
-  { title: "SIEM and webhook audit streaming", status: "Planned" },
   { title: "Break-glass emergency access", status: "Planned" },
 ];
 
@@ -91,7 +92,7 @@ export default function EnterprisePage() {
 
     <section className="mk-section mk-split">
       <div><span className="public-kicker"><CalendarClock /> Enterprise roadmap</span><h2>Built in the open.</h2><p>We tell you what ships today and what is coming next. Enterprise contracts can include roadmap commitments and early access.</p><Link className="mk-text-link" href="/security">Read our security architecture <ArrowRight /></Link></div>
-      <ul className="mk-roadmap">{ROADMAP.map((item) => <li key={item.title}><strong>{item.title}</strong><span className={item.status === "Planned" ? "planned" : "building"}>{item.status}</span></li>)}</ul>
+      <ul className="mk-roadmap">{ROADMAP.map((item) => <li key={item.title}><strong>{item.title}</strong><span className={item.status === "Planned" ? "planned" : item.status === "Available" ? "available" : "building"}>{item.status}</span></li>)}</ul>
     </section>
 
     <CtaBand title="See Passkey-X with your own policies." body="A 30-minute walkthrough of the admin console, policies, audit and rollout plan for your organization." />
