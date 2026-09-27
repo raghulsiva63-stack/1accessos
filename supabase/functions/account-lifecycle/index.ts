@@ -3,10 +3,15 @@ import { adminSupabase, corsHeaders, json, publicError, requireUser } from "../_
 
 type DeletionRequest = { action?: "preflight" | "delete"; confirmation?: string };
 
+/**
+ * Recent sign-in, judged by the authentication time in the `amr` claim.
+ * `iat` is not used: a refreshed token gets a new iat without any new sign-in.
+ */
 function recentlyAuthenticated(token: string): boolean {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/gu, "+").replace(/_/gu, "/"))) as { iat?: number };
-    return typeof payload.iat === "number" && Math.floor(Date.now() / 1000) - payload.iat <= 300;
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/gu, "+").replace(/_/gu, "/"))) as { amr?: Array<{ timestamp?: number }> };
+    const signedInAt = Math.max(0, ...(Array.isArray(payload.amr) ? payload.amr : []).map((entry) => typeof entry?.timestamp === "number" ? entry.timestamp : 0));
+    return Math.floor(Date.now() / 1000) - signedInAt <= 300;
   } catch { return false; }
 }
 
@@ -45,13 +50,11 @@ Deno.serve(async (request: Request) => {
       deletion = createdDeletion;
     }
 
+    // Collect attachment paths first, commit the database cleanup, then remove the
+    // encrypted blobs. A storage failure after the commit only leaves unreadable ciphertext.
     const { data: paths, error: pathError } = await admin.rpc("account_deletion_storage_paths", { p_auth_user_id: context.user.id });
     if (pathError) throw pathError;
     const storagePaths = ((paths ?? []) as Array<{ storage_path: string }>).map((entry) => entry.storage_path);
-    for (let index = 0; index < storagePaths.length; index += 100) {
-      const { error } = await admin.storage.from("vault-attachments").remove(storagePaths.slice(index, index + 100));
-      if (error) throw new Error("storage_cleanup_failed");
-    }
 
     const { data: cleanup, error: cleanupError } = await admin.rpc("complete_account_deletion", {
       p_auth_user_id: context.user.id,
@@ -59,6 +62,11 @@ Deno.serve(async (request: Request) => {
     });
     if (cleanupError) throw cleanupError;
     if (!(cleanup as { cleaned?: boolean })?.cleaned) throw new Error("ownership_transfer_required");
+
+    for (let index = 0; index < storagePaths.length; index += 100) {
+      const { error } = await admin.storage.from("vault-attachments").remove(storagePaths.slice(index, index + 100));
+      if (error) console.error(JSON.stringify({ function: "account-lifecycle", code: "storage_cleanup_deferred", count: storagePaths.length }));
+    }
     const { error: authError } = await admin.auth.admin.deleteUser(context.user.id, false);
     if (authError) throw authError;
     const { data: finalized, error: finalizeError } = await admin.rpc("finalize_account_deletion", {
