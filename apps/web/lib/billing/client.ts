@@ -177,10 +177,20 @@ export async function beginCheckout(
     quantity,
     requestId: crypto.randomUUID(),
   });
-  return response.url;
+  return trustedStripeUrl(response.url);
 }
 
 export async function openCustomerPortal(tenantId: string): Promise<string> {
   const response = await invokeBilling<{ url: string }>({ action: "portal", tenantId });
-  return response.url;
+  return trustedStripeUrl(response.url);
+}
+
+/** Only follow redirects to Stripe-hosted checkout and billing pages. */
+export function trustedStripeUrl(value: string): string {
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error("Billing returned an invalid address."); }
+  if (url.protocol !== "https:" || !["checkout.stripe.com", "billing.stripe.com"].includes(url.hostname)) {
+    throw new Error("Billing returned an unexpected address.");
+  }
+  return url.toString();
 }
