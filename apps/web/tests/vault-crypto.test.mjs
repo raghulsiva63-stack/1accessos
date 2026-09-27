@@ -18,12 +18,20 @@ test("derives a key and authenticates an encrypted envelope", async () => {
   const cryptoModule = await vite.ssrLoadModule("/lib/crypto/vault.ts");
   const profile = {
     algorithm: "ARGON2ID",
-    memoryKib: 8192,
-    iterations: 1,
+    memoryKib: 65536,
+    iterations: 3,
     parallelism: 1,
     hashLength: 32,
   };
   const salt = cryptoModule.randomBytes(16);
+  await assert.rejects(
+    () => cryptoModule.deriveMasterKey("a correct test password", salt, { ...profile, memoryKib: 8192, iterations: 1 }),
+    /secure range/i,
+  );
+  await assert.rejects(
+    () => cryptoModule.deriveMasterKey("a correct test password", salt, { ...profile, memoryKib: 16_777_216 }),
+    /secure range/i,
+  );
   const wrappingKey = await cryptoModule.deriveMasterKey("a correct test password", salt, profile);
   const secret = cryptoModule.randomBytes(32);
   const envelope = await cryptoModule.wrapKey(wrappingKey, secret, "1accessos:test:v1");
