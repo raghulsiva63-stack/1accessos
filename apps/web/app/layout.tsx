@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { AppRuntime } from "@/components/app-install";
 import "./globals.css";
 import "./clients.css";
+import "./enterprise.css";
 
 export const metadata: Metadata = {
   title: "Passkey-X — Your private digital vault",
