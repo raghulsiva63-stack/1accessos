@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Activity, Building2, FileClock, FolderLock, LayoutDashboard, Lock, ShieldCheck, SlidersHorizontal, Users,
+  Activity, BellRing, Building2, FileCheck2, FileClock, FolderLock, KeyRound, LayoutDashboard, Lock, ShieldCheck, SlidersHorizontal, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,9 @@ import { PoliciesPanel } from "@/components/admin/policies-panel";
 import { AuditPanel } from "@/components/admin/audit-panel";
 import { AccessReviewPanel } from "@/components/admin/access-review-panel";
 import { IntegrationsPanel } from "@/components/admin/integrations-panel";
+import { AlertsPanel } from "@/components/admin/alerts-panel";
+import { ReportsPanel } from "@/components/admin/reports-panel";
+import { IdentityPanel } from "@/components/admin/identity-panel";
 import { OrganizationView } from "@/components/organization-view";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import type { TenantEntitlement } from "@/lib/billing/client";
@@ -19,14 +22,17 @@ import { loadMemberOverview, type MemberOverview } from "@/lib/enterprise/admin"
 import { loadTenantPolicies, type StoredPolicy } from "@/lib/enterprise/policies";
 import type { WorkspaceVault } from "@/lib/vault/items";
 
-export type AdminTab = "overview" | "people" | "policies" | "access" | "audit" | "integrations" | "directory";
+export type AdminTab = "overview" | "alerts" | "people" | "identity" | "policies" | "access" | "audit" | "reports" | "integrations" | "directory";
 
 const TABS: { id: AdminTab; label: string; icon: typeof Users }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "alerts", label: "Alerts", icon: BellRing },
   { id: "people", label: "People", icon: Users },
+  { id: "identity", label: "Identity & SSO", icon: KeyRound },
   { id: "policies", label: "Policies", icon: SlidersHorizontal },
   { id: "access", label: "Access review", icon: FolderLock },
   { id: "audit", label: "Audit log", icon: FileClock },
+  { id: "reports", label: "Reports", icon: FileCheck2 },
   { id: "integrations", label: "Integrations", icon: Activity },
   { id: "directory", label: "Directory", icon: Building2 },
 ];
@@ -97,6 +103,9 @@ export function AdminConsole({
     </nav>
     <div role="tabpanel">
       {tab === "overview" && <AdminOverview vault={vault} members={members} policies={policies} loading={loading} onNavigate={setTab} onChanged={reload} canEdit={businessActive} />}
+      {tab === "alerts" && <AlertsPanel vault={vault} members={members} />}
+      {tab === "identity" && <IdentityPanel vault={vault} canEdit={businessActive} />}
+      {tab === "reports" && <ReportsPanel vault={vault} organizationName={vault.name} />}
       {tab === "people" && <PeoplePanel vault={vault} members={members} loading={loading} onChanged={reload} onOpenDirectory={() => setTab("directory")} />}
       {tab === "policies" && <PoliciesPanel vault={vault} policies={policies} loading={loading} onChanged={reload} canEdit={businessActive} />}
       {tab === "access" && <AccessReviewPanel vault={vault} workspaceNames={workspaceNames} />}
