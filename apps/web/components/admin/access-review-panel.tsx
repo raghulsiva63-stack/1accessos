@@ -18,6 +18,10 @@ function staleAccess(row: AccessReviewRow, now: number) {
   return !row.last_activity_at || now - Date.parse(row.last_activity_at) > 60 * DAY;
 }
 
+function expiryFromNow(days: number) {
+  return new Date(Date.now() + days * DAY).toISOString();
+}
+
 function csvCell(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
   const safe = /^[=+\-@\t\r]/u.test(text) ? `'${text}` : text;
@@ -60,7 +64,7 @@ export function AccessReviewPanel({ vault, workspaceNames }: { vault: WorkspaceV
   }
 
   function setExpiry(row: AccessReviewRow, days: number | null) {
-    const expiresAt = days === null ? null : new Date(Date.now() + days * DAY).toISOString();
+    const expiresAt = days === null ? null : expiryFromNow(days);
     void run(`${row.workspace_id}:${row.identity_id}`, () => setWorkspaceMemberExpiry(row.workspace_id, row.identity_id, expiresAt), days === null ? "Access is now permanent." : `Access will expire in ${days} days.`);
   }
 
