@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import {
   fromBase64Url,
@@ -33,6 +34,8 @@ export type VaultPayload = {
   favorite?: boolean;
   archived?: boolean;
   fields?: Record<string, string>;
+  /** When the secret last changed (ISO). Older items fall back to updatedAt. */
+  passwordChangedAt?: string;
   updatedAt: string;
 };
 
@@ -136,7 +139,9 @@ export async function listWorkspaceVaults(identityId: string, accountRootKey: Ui
       && candidate.key_version === workspace?.current_key_version
     );
     if (!workspace || !envelope) continue;
-    const key = await unwrapKey(accountRootKey, {
+    let key: Uint8Array | null = null;
+    try {
+    key = await unwrapKey(accountRootKey, {
       algorithm: "AES-256-GCM",
       nonce: toBase64Url(bytea(envelope.nonce)),
       ciphertext: toBase64Url(bytea(envelope.wrapped_key)),
@@ -145,7 +150,6 @@ export async function listWorkspaceVaults(identityId: string, accountRootKey: Ui
     if (workspace.encrypted_name && workspace.name_nonce && workspace.name_aad_hash) {
       const aad = workspaceNameAad(workspace.tenant_id, workspace.id);
       if (toBase64Url(bytea(workspace.name_aad_hash)) !== toBase64Url(await sha256(aad))) {
-        key.fill(0);
         throw new Error("Workspace name authentication metadata is invalid.");
       }
       const plaintext = await unwrapKey(key, {
@@ -168,6 +172,10 @@ export async function listWorkspaceVaults(identityId: string, accountRootKey: Ui
       role: membership.role as WorkspaceVault["role"],
       keyRotationRequired: workspace.key_rotation_required,
     });
+    } catch {
+      // A damaged or mismatched envelope hides that one workspace instead of all of them.
+      key?.fill(0);
+    }
   }
   if (!opened.length) throw new Error("No decryptable workspace key is available for this account.");
   return opened;
@@ -178,63 +186,110 @@ export async function openWorkspaceVault(identityId: string, accountRootKey: Uin
   return workspaces[0];
 }
 
-export async function listVaultItems(vault: WorkspaceVault, options: { trash?: boolean } = {}): Promise<VaultItem[]> {
+type HeadRow = ItemRow & Omit<RevisionRow, "item_id" | "revision">;
+
+const PAGE_SIZE = 500;
+
+async function decryptHead(vault: WorkspaceVault, row: HeadRow): Promise<VaultItem> {
+  if (row.key_version !== vault.keyVersion) throw new Error("Unsupported workspace key version.");
+  const aad = aadFor(vault, row.id, row.head_revision, row.content_type, row.schema_version);
+  const expectedHash = toBase64Url(await sha256(aad));
+  if (toBase64Url(bytea(row.aad_hash)) !== expectedHash) throw new Error("Vault item authentication metadata is invalid.");
+  const plaintext = await unwrapKey(vault.key, {
+    algorithm: "AES-256-GCM",
+    nonce: toBase64Url(bytea(row.nonce)),
+    ciphertext: toBase64Url(bytea(row.ciphertext)),
+  }, aad);
+  try {
+    return {
+      id: row.id,
+      contentType: row.content_type,
+      revision: row.head_revision,
+      deletedAt: row.deleted_at,
+      payload: JSON.parse(new TextDecoder().decode(plaintext)) as VaultPayload,
+    };
+  } finally { plaintext.fill(0); }
+}
+
+/** Fallback for databases without the vault_item_heads view: paged items, chunked revision lookups. */
+async function legacyHeadRows(vault: WorkspaceVault, options: { trash?: boolean }): Promise<HeadRow[]> {
+  const client = supabase as unknown as SupabaseClient;
+  const items: ItemRow[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let query = client.from("vault_items")
+      .select("id,content_type,schema_version,head_revision,deleted_at")
+      .eq("tenant_id", vault.tenantId)
+      .eq("workspace_id", vault.workspaceId);
+    query = options.trash ? query.not("deleted_at", "is", null) : query.is("deleted_at", null);
+    const { data, error } = await query.order("updated_at", { ascending: false }).order("id").range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    items.push(...((data ?? []) as ItemRow[]));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  const heads: HeadRow[] = [];
+  for (let index = 0; index < items.length; index += 100) {
+    const chunk = items.slice(index, index + 100);
+    const wanted = new Map(chunk.map((item) => [`${item.id}:${item.head_revision}`, item]));
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await client.from("vault_item_revisions")
+        .select("item_id,revision,nonce,ciphertext,aad_hash,key_version")
+        .eq("tenant_id", vault.tenantId)
+        .eq("workspace_id", vault.workspaceId)
+        .in("item_id", chunk.map((item) => item.id))
+        .order("item_id").order("revision")
+        .range(from, from + 999);
+      if (error) throw error;
+      for (const revision of (data ?? []) as RevisionRow[]) {
+        const item = wanted.get(`${revision.item_id}:${revision.revision}`);
+        if (item) heads.push({ ...item, nonce: revision.nonce, ciphertext: revision.ciphertext, aad_hash: revision.aad_hash, key_version: revision.key_version });
+      }
+      if (!data || data.length < 1000) break;
+    }
+  }
+  const order = new Map(items.map((item, index) => [item.id, index]));
+  return heads.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+
+export type VaultItemList = { items: VaultItem[]; unreadable: number };
+
+/**
+ * Lists the workspace's items with only their head revision, paging past the API row
+ * limit. An item that fails to decrypt is counted, not fatal, so one damaged record
+ * never locks the user out of the rest of the vault.
+ */
+export async function listVaultItemsWithStatus(vault: WorkspaceVault, options: { trash?: boolean } = {}): Promise<VaultItemList> {
   if (!supabase) throw new Error("Supabase is not configured.");
-  const { data: itemRows, error: itemError } = await supabase
-    .from("vault_items")
-    .select("id,content_type,schema_version,head_revision,deleted_at")
-    .eq("tenant_id", vault.tenantId)
-    .eq("workspace_id", vault.workspaceId)
-    .order("updated_at", { ascending: false });
-  const filteredRows = options.trash
-    ? itemRows?.filter((row) => row.deleted_at !== null)
-    : itemRows?.filter((row) => row.deleted_at === null);
-  if (itemError) throw itemError;
+  // vault_item_heads is a security_invoker view (not in the generated types).
+  const client = supabase as unknown as SupabaseClient;
+  const rows: HeadRow[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let query = client
+      .from("vault_item_heads")
+      .select("id,content_type,schema_version,head_revision,deleted_at,nonce,ciphertext,aad_hash,key_version")
+      .eq("tenant_id", vault.tenantId)
+      .eq("workspace_id", vault.workspaceId);
+    query = options.trash ? query.not("deleted_at", "is", null) : query.is("deleted_at", null);
+    const { data, error } = await query.order("updated_at", { ascending: false }).order("id").range(from, from + PAGE_SIZE - 1);
+    if (error && from === 0 && (error.code === "PGRST205" || error.code === "42P01")) {
+      rows.push(...await legacyHeadRows(vault, options));
+      break;
+    }
+    if (error) throw error;
+    rows.push(...((data ?? []) as HeadRow[]));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  const results = await Promise.allSettled(rows.map((row) => decryptHead(vault, row)));
+  const items: VaultItem[] = [];
+  let unreadable = 0;
+  for (const result of results) {
+    if (result.status === "fulfilled") items.push(result.value);
+    else unreadable += 1;
+  }
+  return { items, unreadable };
+}
 
-  const items = (filteredRows ?? []) as ItemRow[];
-  if (items.length === 0) return [];
-
-  const { data: revisionRows, error: revisionError } = await supabase
-    .from("vault_item_revisions")
-    .select("item_id,revision,nonce,ciphertext,aad_hash,key_version")
-    .eq("tenant_id", vault.tenantId)
-    .eq("workspace_id", vault.workspaceId)
-    .in("item_id", items.map((item) => item.id));
-  if (revisionError) throw revisionError;
-
-  const revisions = new Map(
-    ((revisionRows ?? []) as RevisionRow[]).map((revision) => [
-      `${revision.item_id}:${revision.revision}`,
-      revision,
-    ]),
-  );
-
-  return Promise.all(items.map(async (item) => {
-    const revision = revisions.get(`${item.id}:${item.head_revision}`);
-    if (!revision) throw new Error(`Encrypted revision missing for item ${item.id}.`);
-    if (revision.key_version !== vault.keyVersion) throw new Error("Unsupported workspace key version.");
-    const aad = aadFor(vault, item.id, revision.revision, item.content_type, item.schema_version);
-    const expectedHash = toBase64Url(await sha256(aad));
-    if (toBase64Url(bytea(revision.aad_hash)) !== expectedHash) throw new Error("Vault item authentication metadata is invalid.");
-    const plaintext = await unwrapKey(
-      vault.key,
-      {
-        algorithm: "AES-256-GCM",
-        nonce: toBase64Url(bytea(revision.nonce)),
-        ciphertext: toBase64Url(bytea(revision.ciphertext)),
-      },
-      aad,
-    );
-    try {
-      return {
-        id: item.id,
-        contentType: item.content_type,
-        revision: revision.revision,
-        deletedAt: item.deleted_at,
-        payload: JSON.parse(new TextDecoder().decode(plaintext)) as VaultPayload,
-      };
-    } finally { plaintext.fill(0); }
-  }));
+export async function listVaultItems(vault: WorkspaceVault, options: { trash?: boolean } = {}): Promise<VaultItem[]> {
+  return (await listVaultItemsWithStatus(vault, options)).items;
 }
 
 async function encryptedRevision(
@@ -317,7 +372,7 @@ export async function listVaultItemHistory(vault: WorkspaceVault, item: VaultIte
     .eq("item_id", item.id)
     .order("revision", { ascending: false });
   if (error) throw error;
-  return Promise.all((data ?? []).map(async (revision) => {
+  const results = await Promise.allSettled((data ?? []).map(async (revision) => {
     if (revision.key_version !== vault.keyVersion) throw new Error("Unsupported workspace key version.");
     const aad = aadFor(vault, item.id, revision.revision, item.contentType);
     const expectedHash = toBase64Url(await sha256(aad));
@@ -335,4 +390,5 @@ export async function listVaultItemHistory(vault: WorkspaceVault, item: VaultIte
       };
     } finally { plaintext.fill(0); }
   }));
+  return results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
 }
