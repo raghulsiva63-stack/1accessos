@@ -18,7 +18,7 @@ const ISSUE_META: Record<HealthIssue, { label: string; tone: "critical" | "warni
   breached: { label: "Found in a breach", tone: "critical", icon: Zap },
   reused: { label: "Reused", tone: "critical", icon: Repeat2 },
   weak: { label: "Weak", tone: "warning", icon: KeyRound },
-  old: { label: "Over a year old", tone: "info", icon: Timer },
+  old: { label: "Due for rotation", tone: "info", icon: Timer },
   insecure_url: { label: "Insecure http:// site", tone: "warning", icon: Link2Off },
   missing_totp: { label: "No 2FA code stored", tone: "info", icon: Fingerprint },
 };
@@ -37,7 +37,9 @@ export function SecurityCenter({
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState<HealthIssue | "all">("all");
   const autoChecked = useRef(false);
-  const report = useMemo(() => analyzeVaultHealth(items, breaches), [items, breaches]);
+  const rotationDays = policy.passwordRotationDays;
+  const [now] = useState(() => Date.now());
+  const report = useMemo(() => analyzeVaultHealth(items, breaches, now, rotationDays), [items, breaches, now, rotationDays]);
   const breachAllowed = policy.breachMonitoring !== "off";
 
   async function runBreachCheck() {

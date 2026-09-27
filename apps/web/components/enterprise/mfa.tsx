@@ -109,7 +109,7 @@ export function TotpCard() {
   async function start() {
     setBusy(true); setMessage("");
     try {
-      const { data, error } = await supabase!.auth.mfa.enroll({ factorType: "totp", friendlyName: `Authenticator ${new Date().toISOString().slice(0, 10)}` });
+      const { data, error } = await supabase!.auth.mfa.enroll({ factorType: "totp", friendlyName: `Authenticator ${new Date().toISOString().slice(0, 10)} · ${crypto.randomUUID().slice(0, 4)}` });
       if (error) throw error;
       setEnrollment({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
     } catch (reason) { setMessage(mfaError(reason, "Authenticator setup could not start. Your organization may need to enable it.")); }

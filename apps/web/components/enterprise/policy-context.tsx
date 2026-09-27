@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { recordVaultActivity, type VaultActivity } from "@/lib/enterprise/audit";
-import { DEFAULT_POLICY, exportAllowed, loadMyPolicy, type EnterprisePolicy } from "@/lib/enterprise/policies";
+import { DEFAULT_POLICY, exportAllowed, loadMyPolicy, LOADING_POLICY, type EnterprisePolicy } from "@/lib/enterprise/policies";
 import { passkeysEnabled, supabase } from "@/lib/supabase/client";
 
 export type Compliance = {
@@ -61,13 +61,16 @@ export function EnterpriseProvider({
   useEffect(() => {
     let current = true;
     if (!tenantId) return () => { current = false; };
-    void Promise.resolve().then(() => { if (current) setLoading(true); })
+    void Promise.resolve().then(() => {
+      if (!current) return;
+      setLoading(true); setPolicy(LOADING_POLICY); setTenantRole(null); setTenantKind(null);
+    })
       .then(() => loadMyPolicy(tenantId, identityId))
       .then((state) => {
         if (!current) return;
         setPolicy(state.policy); setTenantRole(state.tenantRole); setTenantKind(state.kind);
       }, () => {
-        if (current) { setPolicy(DEFAULT_POLICY); }
+        if (current) { setPolicy(LOADING_POLICY); setTenantRole(null); setTenantKind(null); }
       })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };

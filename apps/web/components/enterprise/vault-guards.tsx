@@ -34,20 +34,43 @@ export function RevealAudit({ revealed, itemId }: { revealed: boolean; itemId: s
   return null;
 }
 
+const pendingClipboardClears = new Set<string>();
+
+/** Best-effort clipboard wipe. readText is unreliable (focus rules, Firefox), so write "" directly. */
+export async function clearClipboard() {
+  try { await navigator.clipboard.writeText(""); pendingClipboardClears.clear(); } catch { /* document not focused; retried on next focus */ }
+}
+
+/** Wipes the clipboard only if Passkey-X put a secret there that has not been cleared yet (used on lock). */
+export function clearPendingClipboard() {
+  if (pendingClipboardClears.size) void clearClipboard();
+}
+
+if (typeof window !== "undefined") {
+  const retry = () => { if (pendingClipboardClears.size && document.hasFocus()) void clearClipboard(); };
+  window.addEventListener("focus", retry);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") retry(); });
+}
+
+/** Copies a secret and schedules a wipe; wipes that fail while unfocused retry when the app regains focus. */
+export async function copySecret(value: string, clearSeconds: number) {
+  await navigator.clipboard.writeText(value);
+  const token = crypto.randomUUID();
+  pendingClipboardClears.add(token);
+  window.setTimeout(() => { if (pendingClipboardClears.has(token)) void clearClipboard(); }, clearSeconds * 1_000);
+}
+
 /**
- * Copies a value and clears it from the clipboard after the policy interval (only if
- * the clipboard still holds the same value). Secret copies are audited as metadata.
+ * Copies a value and clears it from the clipboard after the policy interval.
+ * Secret copies are audited as metadata.
  */
-export function PolicyCopyButton({ value, audit = true }: { value: string; audit?: boolean }) {
+export function PolicyCopyButton({ value, audit = true, label = "Copy" }: { value: string; audit?: boolean; label?: string }) {
   const { policy, record } = useEnterprise();
   const [copied, setCopied] = useState(false);
-  return <button type="button" aria-label="Copy" title={`Copied values clear after ${policy.clipboardClearSeconds}s`} onClick={async () => {
-    await navigator.clipboard.writeText(value);
+  return <button type="button" aria-label={label} title={`Copied values clear after ${policy.clipboardClearSeconds}s`} onClick={async () => {
+    try { await copySecret(value, policy.clipboardClearSeconds); } catch { return; }
     setCopied(true);
     if (audit) record("item.copied");
-    window.setTimeout(() => {
-      setCopied(false);
-      navigator.clipboard.readText().then((current) => { if (current === value) void navigator.clipboard.writeText(""); }).catch(() => undefined);
-    }, policy.clipboardClearSeconds * 1_000);
+    window.setTimeout(() => setCopied(false), 2_000);
   }}>{copied ? <ShieldCheck /> : <Copy />}</button>;
 }
