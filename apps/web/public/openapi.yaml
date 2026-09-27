@@ -308,7 +308,7 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Recommended UUID or stable 16-128 character key for retried writes.
+      description: Reserved for retried writes (accepted, not yet used for replay). Creates are idempotent by their client-generated id — a retry returns 409 already_exists, which clients should treat as success.
       schema: { type: string, minLength: 16, maxLength: 128 }
     IfMatch:
       name: If-Match
