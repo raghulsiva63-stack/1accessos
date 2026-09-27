@@ -143,6 +143,11 @@ const ACTION_LABELS: Record<string, string> = {
   "workspace_memberships.expired": "Temporary workspace access expired",
   "workspace_memberships.admin_revoked": "Removed workspace access",
   "vault.password_changed": "Changed vault password",
+  "audit_webhook.created": "Added an audit streaming endpoint",
+  "audit_webhook.deleted": "Deleted an audit streaming endpoint",
+  "audit_webhook.enabled": "Resumed audit streaming",
+  "audit_webhook.disabled": "Paused audit streaming",
+  "audit_webhook.secret_rotated": "Rotated an audit streaming secret",
 };
 
 export function describeAuditAction(action: string) {
@@ -161,4 +166,5 @@ export const AUDIT_CATEGORIES: { label: string; prefix: string }[] = [
   { label: "Invitations", prefix: "organization_invitations." },
   { label: "Workspace access", prefix: "workspace_memberships." },
   { label: "Secure Send", prefix: "secure_send." },
+  { label: "Audit streaming", prefix: "audit_webhook." },
 ];
