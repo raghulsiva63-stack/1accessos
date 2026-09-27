@@ -189,16 +189,25 @@ Deno.serve(async (request: Request) => {
     if (body.action === "send_verification") {
       const phone = body.phone?.trim() ?? "";
       if (!/^\+[1-9]\d{7,14}$/u.test(phone)) throw new Error("invalid_phone");
-      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      const { count, error: rateError } = await admin.from("sms_verification_challenges")
-        .select("id", { count: "exact", head: true }).eq("identity_id", context.identityId).gte("created_at", since);
-      if (rateError) throw rateError;
-      if ((count ?? 0) >= 5) throw new Error("verification_locked");
+      const { data: smsSettings, error: smsSettingsError } = await admin.from("tenant_notification_settings")
+        .select("sms_enabled").eq("tenant_id", tenantId).maybeSingle();
+      if (smsSettingsError) throw smsSettingsError;
+      if (!smsSettings?.sms_enabled) throw new Error("sms_not_ready");
       const challengeId = crypto.randomUUID();
       const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0");
       const phoneHash = await sha256(phone);
       const codeHash = await sha256(`${challengeId}:${code}`);
       const phoneCipher = await encryptCredential(tenantId, `sms-phone:${context.identityId}`, phone);
+      // Atomic rate limit (5 per person and 60 per organization per hour) plus insert.
+      const { data: allowed, error: challengeError } = await admin.rpc("create_sms_verification_challenge", {
+        p_id: challengeId,
+        p_tenant_id: tenantId,
+        p_identity_id: context.identityId,
+        p_code_sha256: toBytea(codeHash),
+        p_phone_sha256: toBytea(phoneHash),
+      });
+      if (challengeError) throw challengeError;
+      if (allowed !== true) throw new Error("verification_locked");
       const { error: subscriptionError } = await admin.from("tenant_sms_subscriptions").upsert({
         tenant_id: tenantId,
         identity_id: context.identityId,
@@ -212,14 +221,6 @@ Deno.serve(async (request: Request) => {
         updated_at: new Date().toISOString(),
       });
       if (subscriptionError) throw subscriptionError;
-      const { error: challengeError } = await admin.from("sms_verification_challenges").insert({
-        id: challengeId,
-        tenant_id: tenantId,
-        identity_id: context.identityId,
-        code_sha256: toBytea(codeHash),
-        phone_sha256: toBytea(phoneHash),
-      });
-      if (challengeError) throw challengeError;
       const deliveryId = crypto.randomUUID();
       const idempotencyKey = `px_verify_${challengeId}`;
       const { error: deliveryError } = await admin.from("notification_deliveries").insert({
@@ -255,24 +256,20 @@ Deno.serve(async (request: Request) => {
 
     if (body.action === "verify_phone") {
       if (!isUuid(body.challengeId) || !/^\d{6}$/u.test(body.code ?? "")) throw new Error("invalid_code");
-      const { data: challenge, error } = await admin.from("sms_verification_challenges")
-        .select("id,code_sha256,attempts,status,expires_at,phone_sha256")
-        .eq("id", body.challengeId).eq("tenant_id", tenantId).eq("identity_id", context.identityId).maybeSingle();
-      if (error || !challenge) throw new Error("invalid_code");
-      if (challenge.status !== "pending" || Date.parse(challenge.expires_at) <= Date.now()) throw new Error("verification_expired");
-      if (challenge.attempts >= 5) throw new Error("verification_locked");
       const candidate = toBytea(await sha256(`${body.challengeId}:${body.code}`));
-      if (candidate.toLowerCase() !== String(challenge.code_sha256).toLowerCase()) {
-        const attempts = challenge.attempts + 1;
-        const { error: attemptError } = await admin.from("sms_verification_challenges")
-          .update({ attempts, ...(attempts >= 5 ? { status: "failed" } : {}) }).eq("id", challenge.id).eq("status", "pending");
-        if (attemptError) throw attemptError;
-        throw new Error("invalid_code");
-      }
+      const { data: checked, error } = await admin.rpc("check_sms_verification_code", {
+        p_id: body.challengeId,
+        p_tenant_id: tenantId,
+        p_identity_id: context.identityId,
+        p_candidate_sha256: candidate,
+      });
+      if (error) throw error;
+      const result = (Array.isArray(checked) ? checked[0] : checked) as { outcome?: string; phone_sha256?: string } | null;
+      if (result?.outcome === "expired") throw new Error("verification_expired");
+      if (result?.outcome === "locked") throw new Error("verification_locked");
+      if (result?.outcome !== "verified" || !result.phone_sha256) throw new Error("invalid_code");
+      const challenge = { phone_sha256: result.phone_sha256 };
       const now = new Date().toISOString();
-      const { error: verifiedError } = await admin.from("sms_verification_challenges")
-        .update({ status: "verified", verified_at: now }).eq("id", challenge.id).eq("status", "pending");
-      if (verifiedError) throw verifiedError;
       const { error: subscriptionError } = await admin.from("tenant_sms_subscriptions")
         .update({ enabled: true, verified_at: now, updated_at: now })
         .eq("tenant_id", tenantId).eq("identity_id", context.identityId).eq("phone_sha256", challenge.phone_sha256);
