@@ -1,0 +1,4 @@
+comment = 'stub pg_cron for local migration tests'
+default_version = '1.0'
+relocatable = false
+schema = pg_catalog
