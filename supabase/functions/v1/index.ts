@@ -55,6 +55,19 @@ function hasPlaintextKeys(value: unknown): boolean {
   );
 }
 
+const PUBLIC_ERRORS: Record<string, [number, string, string]> = {
+  "40001": [409, "revision_conflict", "The item changed; refresh and retry."],
+  "23505": [409, "already_exists", "This resource already exists. A retried create with the same id is safe to treat as done."],
+  "42501": [403, "forbidden", "You do not have access to this resource."],
+  "28000": [401, "reauthentication_required", "Sign in again to continue."],
+  "P0002": [404, "not_found", "The requested resource was not found."],
+  "PGRST116": [404, "not_found", "The requested resource was not found."],
+  "22023": [422, "invalid_request", "The request parameters are invalid."],
+  "22P02": [422, "invalid_request", "The request parameters are invalid."],
+  "23514": [422, "invalid_request", "The request parameters are invalid."],
+  "54000": [429, "rate_limited", "Too many requests. Try again later."],
+};
+
 Deno.serve(async (request) => {
   const requestId = crypto.randomUUID();
   if (request.method === "OPTIONS") return response(request, requestId, 204);
@@ -278,8 +291,9 @@ Deno.serve(async (request) => {
     }
     return failure(request, requestId, 404, "not_found", "The requested API operation does not exist.");
   } catch (error) {
-    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "request_failed";
-    const status = code === "40001" ? 409 : code === "42501" ? 403 : 400;
-    return failure(request, requestId, status, code, code === "40001" ? "The item changed; refresh and retry." : "The encrypted request could not be completed.");
+    // Map database errors to stable public codes; raw Postgres/PostgREST codes are never returned.
+    const dbCode = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    const [status, code, message] = PUBLIC_ERRORS[dbCode] ?? [400, "request_failed", "The encrypted request could not be completed."];
+    return failure(request, requestId, status, code, message);
   }
 });
