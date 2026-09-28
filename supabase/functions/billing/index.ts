@@ -6,6 +6,11 @@ import {
 } from "../_shared/billing.ts";
 
 const INTEGRATION_IDENTIFIER = "passkey_x_qrltmzpn";
+const PLANS_FOR_TENANT_KIND: Record<string, string[]> = {
+  personal: ["personal", "professional"],
+  family: ["family"],
+  organization: ["team", "business"],
+};
 
 type BillingRequest = {
   action?: "catalog" | "checkout" | "portal";
@@ -87,6 +92,10 @@ Deno.serve(async (request: Request) => {
     const maximumQuantity = catalogPlan.billing_model === "per_seat" ? catalogPlan.max_seats : 1;
     if (!minimumQuantity || !maximumQuantity) throw new Error("billing_not_configured");
     const quantity = checkoutQuantity(body.quantity ?? 1, minimumQuantity, maximumQuantity);
+    // Each plan only works on one kind of tenant (Business features need an organization).
+    const { data: tenant, error: tenantError } = await admin.from("tenants").select("kind").eq("id", tenantId).maybeSingle();
+    if (tenantError || !tenant) throw new Error("invalid_tenant");
+    if (!PLANS_FOR_TENANT_KIND[tenant.kind as string]?.includes(choice.plan)) throw new Error("plan_not_available_for_workspace");
     if (!body.requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(body.requestId)) throw new Error("invalid_request");
 
     const { data: existing, error: existingError } = await admin.from("billing_subscriptions")
@@ -146,7 +155,7 @@ Deno.serve(async (request: Request) => {
     return json(request, 200, { url: session.url });
   } catch (reason) {
     const code = safeCode(reason);
-    const status = code === "unauthorized" ? 401 : code === "forbidden" ? 403 : code === "subscription_exists" ? 409 : code === "invalid_request" || code === "invalid_tenant" || code === "invalid_quantity" ? 400 : code === "billing_not_configured" ? 503 : 500;
+    const status = code === "unauthorized" ? 401 : code === "forbidden" ? 403 : code === "subscription_exists" || code === "plan_not_available_for_workspace" ? 409 : code === "invalid_request" || code === "invalid_tenant" || code === "invalid_quantity" ? 400 : code === "billing_not_configured" ? 503 : 500;
     console.error(JSON.stringify({ function: "billing", code }));
     return json(request, status, { error: code });
   }

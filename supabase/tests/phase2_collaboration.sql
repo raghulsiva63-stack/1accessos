@@ -255,6 +255,34 @@ do $$ begin
   end if;
 end $$;
 
+-- A removed member who is invited again becomes active again (re-invite).
+select set_config('request.jwt.claim.sub','71000000-0000-4000-8000-000000000001',true);
+insert into public.workspace_invites(
+  id,tenant_id,workspace_id,created_by,recipient_email_hash,role,token_hash,
+  key_nonce,wrapped_workspace_key,key_aad_hash,status,expires_at
+) values (
+  '71120000-0000-4000-8000-000000000002',
+  '71100000-0000-4000-8000-000000000001',
+  '71110000-0000-4000-8000-000000000001',
+  ((select bootstrap ->> 'identity_id' from phase2_fixtures where actor='owner'))::uuid,
+  extensions.digest(convert_to('phase2-member@example.invalid','UTF8'),'sha256'),
+  'editor',decode(repeat('56',32),'hex'),decode(repeat('57',12),'hex'),
+  decode(repeat('58',48),'hex'),decode(repeat('59',32),'hex'),'pending',now()+interval '1 day'
+);
+select set_config('request.jwt.claim.sub','72000000-0000-4000-8000-000000000002',true);
+select public.accept_workspace_invite(
+  '71120000-0000-4000-8000-000000000002',decode(repeat('56',32),'hex'),
+  decode(repeat('5d',12),'hex'),decode(repeat('5e',48),'hex')
+);
+do $$ begin
+  if not exists (select 1 from public.workspace_memberships
+      where workspace_id='71110000-0000-4000-8000-000000000001'
+        and identity_id=((select bootstrap ->> 'identity_id' from phase2_fixtures where actor='member'))::uuid
+        and status='active' and role='editor') then
+    raise exception 'Re-invited member was not reactivated';
+  end if;
+end $$;
+
 reset role;
 set local role anon;
 do $$ begin

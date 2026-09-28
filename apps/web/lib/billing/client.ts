@@ -1,3 +1,4 @@
+import { functionErrorCode } from "@/lib/supabase/function-error";
 import { supabase } from "@/lib/supabase/client";
 
 export type PlanCode = "free" | "personal" | "family" | "professional" | "team" | "business";
@@ -151,7 +152,7 @@ export async function loadPublicPlanCatalog(): Promise<PublicCatalogPlan[]> {
 async function invokeBilling<T>(body: Record<string, unknown>): Promise<T> {
   if (!supabase || !billingEnabled) throw new Error("billing_not_configured");
   const { data, error } = await supabase.functions.invoke("billing", { body });
-  if (error) throw new Error("billing_unavailable");
+  if (error) throw new Error(await functionErrorCode(error, "billing_unavailable"));
   if (data?.error) throw new Error(String(data.error));
   return data as T;
 }

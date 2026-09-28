@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import { estimateStrength } from "@/lib/enterprise/health";
-import { claimProvisionedMembership, myPendingProvisioning, type ProvisionedUser } from "@/lib/enterprise/identity";
+import { claimProvisionedMembership, myPendingProvisioning, type PendingProvisioning } from "@/lib/enterprise/identity";
 import {
   completeRecovery, enrollInOrganizationRecovery, listMyEnrollments, loadMyRecoveryRequest, loadRecoveryKey, myEnrollment,
   requestOrganizationRecovery,
@@ -15,7 +15,7 @@ import {
 
 /** Offers to join organizations whose identity provider pre-provisioned this email (SCIM). */
 export function ProvisioningBanner({ onJoined }: { onJoined: (message: string) => void }) {
-  const [pending, setPending] = useState<ProvisionedUser[]>([]);
+  const [pending, setPending] = useState<PendingProvisioning[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
@@ -36,7 +36,7 @@ export function ProvisioningBanner({ onJoined }: { onJoined: (message: string) =
   }
   return <div className="secure-link-banner"><span className="feature-icon"><Building2 /></span><div>
     <strong>Your organization set up an account for {next.display_name}</strong>
-    <p>Your company’s identity provider added {next.user_name} to its Passkey-X organization. Joining lets administrators share vaults with you; your personal vault stays private.</p>
+    <p>Your company’s identity provider added your email address to its Passkey-X organization. Joining lets administrators share vaults with you; your personal vault stays private.</p>
     {message && <p className="form-message" role="alert">{message}</p>}</div>
     <Button disabled={busy} onClick={() => void join()}>{busy ? <LoaderCircle className="spin" /> : <Check />} Join</Button>
     <Button variant="ghost" onClick={() => setPending((rows) => rows.slice(1))}><X /> Later</Button></div>;

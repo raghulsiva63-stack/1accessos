@@ -58,11 +58,21 @@ export function userSupabase(request: Request) {
   );
 }
 
+function tokenAal(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/gu, "+").replace(/_/gu, "/"))) as { aal?: unknown };
+    return typeof payload.aal === "string" ? payload.aal : null;
+  } catch { return null; }
+}
+
 export async function requireUser(request: Request) {
   const client = userSupabase(request);
   const token = request.headers.get("authorization")!.slice(7);
   const { data: userData, error: userError } = await client.auth.getUser(token);
   if (userError || !userData.user?.email_confirmed_at) throw new Error("unauthorized");
+  // Accounts with two-step verification must present an aal2 session, matching the database policies.
+  const hasVerifiedFactor = (userData.user.factors ?? []).some((factor) => factor.status === "verified");
+  if (hasVerifiedFactor && tokenAal(token) !== "aal2") throw new Error("mfa_required");
   const { data: identity, error: identityError } = await client.from("identities")
     .select("id,status")
     .eq("auth_user_id", userData.user.id)
@@ -149,7 +159,7 @@ export async function decryptCredential(tenantId: string, purpose: string, ciphe
 export function publicError(reason: unknown): { code: string; status: number } {
   const message = reason instanceof Error ? reason.message : String(reason ?? "unknown");
   if (message === "unauthorized") return { code: message, status: 401 };
-  if (message === "forbidden") return { code: message, status: 403 };
+  if (message === "forbidden" || message === "mfa_required") return { code: message, status: 403 };
   if (["invalid_request", "invalid_tenant", "invalid_phone", "invalid_code", "invalid_credential", "invalid_profile"].includes(message)) return { code: message, status: 400 };
   if (["verification_expired", "verification_locked", "ownership_transfer_required", "credential_not_verified", "sms_not_ready", "recent_reauthentication_required"].includes(message)) return { code: message, status: 409 };
   if (message.startsWith("missing:") || message === "credential_store_not_configured") return { code: "service_not_configured", status: 503 };

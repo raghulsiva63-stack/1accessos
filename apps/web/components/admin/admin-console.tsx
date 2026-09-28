@@ -66,7 +66,7 @@ export function AdminConsole({
   const [message, setMessage] = useState("");
   const [version, setVersion] = useState(0);
 
-  const businessActive = entitlement.plan_code === "business"
+  const businessActive = (entitlement.plan_code === "business" || (entitlement.plan_code as string) === "enterprise")
     && (entitlement.source === "manual" || ["trialing", "active", "past_due"].includes(entitlement.subscription_status));
 
   useEffect(() => {
@@ -105,13 +105,17 @@ export function AdminConsole({
       {tab === "overview" && <AdminOverview vault={vault} members={members} policies={policies} loading={loading} onNavigate={setTab} onChanged={reload} canEdit={businessActive} />}
       {tab === "alerts" && <AlertsPanel vault={vault} members={members} />}
       {tab === "identity" && <IdentityPanel vault={vault} canEdit={businessActive} />}
-      {tab === "reports" && <ReportsPanel vault={vault} organizationName={vault.name} />}
+      {tab === "reports" && (businessActive ? <ReportsPanel vault={vault} organizationName={vault.name} /> : <BusinessOnly feature="Compliance reports" onOpenBilling={onOpenBilling} />)}
       {tab === "people" && <PeoplePanel vault={vault} members={members} loading={loading} onChanged={reload} onOpenDirectory={() => setTab("directory")} />}
       {tab === "policies" && <PoliciesPanel vault={vault} policies={policies} loading={loading} onChanged={reload} canEdit={businessActive} />}
-      {tab === "access" && <AccessReviewPanel vault={vault} workspaceNames={workspaceNames} />}
+      {tab === "access" && (businessActive ? <AccessReviewPanel vault={vault} workspaceNames={workspaceNames} /> : <BusinessOnly feature="Access reviews" onOpenBilling={onOpenBilling} />)}
       {tab === "audit" && <AuditPanel vault={vault} members={members} />}
-      {tab === "integrations" && <IntegrationsPanel vault={vault} />}
+      {tab === "integrations" && (businessActive ? <IntegrationsPanel vault={vault} /> : <BusinessOnly feature="Audit streaming to SIEM and webhooks" onOpenBilling={onOpenBilling} />)}
       {tab === "directory" && <OrganizationView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={onOpenBilling} />}
     </div>
   </div>;
+}
+
+function BusinessOnly({ feature, onOpenBilling }: { feature: string; onOpenBilling: () => void }) {
+  return <Card className="admin-upsell"><CardHeader><span className="feature-icon"><Building2 /></span><CardTitle>{feature} are part of Business</CardTitle><CardDescription>Upgrade this organization to the Business plan to use this. Nothing in your organization changes until you do.</CardDescription></CardHeader><CardContent><Button onClick={onOpenBilling}>View Business plan</Button></CardContent></Card>;
 }
