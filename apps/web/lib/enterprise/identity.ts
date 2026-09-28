@@ -1,3 +1,4 @@
+import { functionErrorCode } from "@/lib/supabase/function-error";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 
@@ -46,13 +47,13 @@ export async function listProvisionedUsers(tenantId: string): Promise<Provisione
   return (data ?? []) as ProvisionedUser[];
 }
 
-/** Organizations that provisioned the signed-in email but the person has not joined yet. */
-export async function myPendingProvisioning(): Promise<ProvisionedUser[]> {
-  const { data, error } = await db().from("scim_provisioned_users")
-    .select("id,external_id,user_name,display_name,job_title,active,identity_id,created_at")
-    .is("identity_id", null).eq("active", true).limit(5);
+export type PendingProvisioning = { id: string; tenant_id: string; display_name: string };
+
+/** Organizations that provisioned the signed-in email but the person has not joined yet (own offers only). */
+export async function myPendingProvisioning(): Promise<PendingProvisioning[]> {
+  const { data, error } = await db().rpc("my_pending_provisioning");
   if (error) throw error;
-  return (data ?? []) as ProvisionedUser[];
+  return ((data ?? []) as PendingProvisioning[]).slice(0, 5);
 }
 
 export async function claimProvisionedMembership(id: string) {
@@ -75,7 +76,7 @@ export async function saveSsoConnection(tenantId: string, domain: string, metada
 
 export async function verifySsoDomain(tenantId: string): Promise<boolean> {
   const { data, error } = await db().functions.invoke<{ verified?: boolean }>("identity-admin", { body: { action: "verify_domain", tenantId } });
-  if (error) throw error;
+  if (error) throw new Error(await functionErrorCode(error));
   return data?.verified === true;
 }
 
