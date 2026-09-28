@@ -13,6 +13,7 @@ import {
   type HealthIssue,
 } from "@/lib/enterprise/health";
 import type { VaultItem } from "@/lib/vault/items";
+import { AiSecurityCoach } from "@/components/app/ai-security-coach";
 
 const ISSUE_META: Record<HealthIssue, { label: string; tone: "critical" | "warning" | "info"; icon: typeof ShieldAlert }> = {
   breached: { label: "Found in a breach", tone: "critical", icon: Zap },
@@ -90,6 +91,12 @@ export function SecurityCenter({
         {message && <p className="form-message" role="alert">{message}</p>}
       </div>
     </section>
+
+    <AiSecurityCoach tenantId={tenantId} metrics={{
+      score: report.score, logins: report.loginCount, weak: report.weak.length, reused: reusedCount, old: report.old.length,
+      breached: report.breachChecked ? report.breached.length : -1, insecure_sites: report.insecureUrl.length,
+      missing_two_step: report.missingTotp.length, passkeys: report.passkeyCount,
+    }} />
 
     <div className="risk-tiles">
       {tiles.map((tile) => { const meta = ISSUE_META[tile.id]; const Icon = meta.icon; const active = filter === tile.id; return <button key={tile.id} className={`risk-tile tone-${tile.value ? meta.tone : "clear"} ${active ? "active" : ""}`} onClick={() => setFilter(active ? "all" : tile.id)} disabled={tile.id === "breached" && !report.breachChecked}>
