@@ -47,7 +47,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
         <div className="public-hero-actions"><a className="public-primary-link" href="#access">Create your vault <ArrowRight /></a><Link className="public-secondary-link" href="/pricing">Compare plans</Link></div>
         <div className="public-assurance"><span><Fingerprint /> Separate vault unlock</span><span><ShieldCheck /> Tamper detection</span><span><KeyRound /> Recovery key</span></div>
       </div>
-      <div className="public-access" id="access">{children}</div>
+      <div className="public-access" id="access">{children}<p className="auth-legal">By creating an account you agree to the <Link href="/terms">Terms of Service</Link> and <Link href="/privacy">Privacy Policy</Link>.</p></div>
     </section>
 
     <section className="public-value-strip" aria-label="Passkey-X capabilities">
