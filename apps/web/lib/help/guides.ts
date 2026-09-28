@@ -284,7 +284,8 @@ export const FAQ: [string, string][] = [
   ["Why did checkout say the plan is for a different kind of workspace?", "Each plan belongs to one kind of vault: Personal and Professional to your personal vault, Family to a family vault, Team and Business to an organisation. The Change plan steps pick or create the right one for you."],
   ["Who can change the plan?", "The owner of the vault or organisation, or an organisation admin."],
   ["Is there a free trial?", "Paid plans include a trial the first time you subscribe: 14 days for Personal, Family and Professional, 21 days for Team and Business."],
-  ["How do I get help?", "Use Help & guides in the app, visit passkey-x.com/help, or contact us at passkey-x.com/contact."],
+  ["Can I cancel or get a refund?", "Yes. Cancel any time in Plans & billing → Manage billing and keep access until the end of the paid period. If you are not happy, email support@vlightsoft.com within 30 days of your first payment for a full refund. Details: passkey-x.com/refunds."],
+  ["How do I get help?", "Use Help & guides in the app, visit passkey-x.com/help, email support@vlightsoft.com, or contact us at passkey-x.com/contact."],
 ];
 
 export function guidesByCategory(category: Guide["category"]): Guide[] {
