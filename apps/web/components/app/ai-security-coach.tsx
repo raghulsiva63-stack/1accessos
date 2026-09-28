@@ -33,7 +33,7 @@ export function AiSecurityCoach({ tenantId, metrics }: { tenantId: string | null
       if (!response.ok || !payload.advice) throw new Error(payload.error ?? "coach_unavailable");
       setAdvice(payload.advice);
     } catch {
-      setMessage("The AI Security Coach is unavailable right now. Nothing was sent from your vault and no credit was used.");
+      setMessage("The AI Security Coach is unavailable right now. Only vault totals are ever sent, and a failed request does not use a credit.");
     } finally { setBusy(false); }
   }
 
