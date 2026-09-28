@@ -26,6 +26,7 @@ export function emergencyError(reason: unknown, fallback: string) {
   if (/PGRST202|42883|PGRST205|42P01/iu.test(`${detail} ${(reason as { code?: string } | null)?.code ?? ""}`)) return "Emergency access is being enabled for your account. Try again shortly.";
   if (/waiting period of at least 24 hours/iu.test(detail)) return "Emergency contacts need a waiting period of at least one day.";
   if (/at most 10/iu.test(detail)) return "A vault can have up to 10 emergency contacts.";
+  if (/business plan required/iu.test(detail)) return "Break-glass access is part of the Business plan. Upgrade this organization to use it.";
   if (/only organization administrators/iu.test(detail)) return "Only organization administrators can set up break-glass access.";
   if (/sharing|organization members/iu.test(detail)) return "Your organization's sharing policy does not allow this person as an emergency contact.";
   if (/not been released/iu.test(detail)) return "Access has not been released yet.";
