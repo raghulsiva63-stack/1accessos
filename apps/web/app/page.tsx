@@ -22,7 +22,7 @@ import {
   MoreHorizontal, Paperclip, Pencil, Play, Plus, Radio, RefreshCw, Search, Send, Smartphone,
   Settings, Share2, ShieldAlert, ShieldCheck, Sparkles, Star, Trash2,
   UserPlus, UserRound, Users, Vault, WandSparkles, Waypoints, Wifi, X,
-  LifeBuoy,
+  LifeBuoy, CircleHelp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,10 +66,7 @@ import {
   type WorkspaceSuite,
 } from "@/lib/collaboration/phase2";
 import {
-  beginCheckout, billingEnabled, clearPlanSelection, FREE_ENTITLEMENT, loadBillingCatalog,
-  loadPublicPlanCatalog, loadTenantEntitlement, openCustomerPortal, type BillingCurrency,
-  readPlanSelection, stripeTestMode, type BillingInterval, type BillingPrice, type PlanCode,
-  type PublicCatalogPlan, type TenantEntitlement,
+  FREE_ENTITLEMENT, loadTenantEntitlement, readPlanSelection, type TenantEntitlement,
 } from "@/lib/billing/client";
 import {
   acceptOrganizationInvitation, parseOrganizationInvitationLink,
@@ -82,6 +79,8 @@ import { EmergencyAccessView, EmergencyInviteBanner, EmergencyRequestNotice } fr
 import { parseEmergencyLink, type EmergencyLink } from "@/lib/enterprise/emergency";
 import { OrgRecoveryEnrollment, OrgRecoveryUnlock, ProvisioningBanner } from "@/components/app/org-membership";
 import { SsoSignIn } from "@/components/app/sso-sign-in";
+import { PlansView } from "@/components/billing/plans-view";
+import { HelpCenter } from "@/components/app/help-center";
 
 type CryptoProfile = {
   identity_id: string;
@@ -94,7 +93,7 @@ type CryptoProfile = {
   recovery_verifier: string | null;
 };
 
-type View = "home" | "vault" | "workspaces" | "organization" | "admin" | "send" | "saas-ai" | "runtime" | "notifications" | "missions" | "sharing" | "inbox" | "security" | "emergency" | "account-security" | "generator" | "automations" | "devices" | "billing" | "settings";
+type View = "home" | "vault" | "workspaces" | "organization" | "admin" | "send" | "saas-ai" | "runtime" | "notifications" | "missions" | "sharing" | "inbox" | "security" | "emergency" | "account-security" | "generator" | "automations" | "devices" | "billing" | "help" | "settings";
 type VaultFilter = ItemKind | "all" | "favorites" | "archive" | "trash";
 type DeviceRow = { id: string; status: "pending" | "trusted" | "revoked"; created_at: string; last_seen_at: string | null; revoked_at: string | null };
 type Entitlement = TenantEntitlement;
@@ -136,13 +135,14 @@ const NAV: { id: View; label: string; icon: typeof Vault }[] = [
   { id: "devices", label: "Devices", icon: Laptop },
   { id: "billing", label: "Plans & billing", icon: CreditCard },
   { id: "settings", label: "Settings", icon: Settings },
+  { id: "help", label: "Help & guides", icon: CircleHelp },
 ];
 
 const NAV_SECTIONS: { label: string; views: View[] }[] = [
   { label: "Workspace", views: ["home", "vault", "workspaces"] },
   { label: "Access", views: ["missions", "sharing", "send", "inbox"] },
   { label: "Protect", views: ["security", "emergency", "account-security", "notifications", "generator", "devices"] },
-  { label: "Manage", views: ["admin", "saas-ai", "runtime", "automations", "billing", "settings"] },
+  { label: "Manage", views: ["admin", "saas-ai", "runtime", "automations", "billing", "settings", "help"] },
 ];
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -589,7 +589,7 @@ function UnlockScreen({ profile, email, onUnlock, onProfileChange }: { profile: 
 }
 
 function VaultShell({ clientMode, email, profile, rootKey, passwordFacts, onPasswordFacts, onProfileChange, onLock }: { clientMode: ClientMode; email: string; profile: CryptoProfile; rootKey: Uint8Array; passwordFacts: VaultPasswordFacts; onPasswordFacts: (facts: VaultPasswordFacts) => void; onProfileChange: (profile: CryptoProfile) => void; onLock: () => void }) {
-  const [view, setView] = useState<View>(() => readPlanSelection() ? "billing" : "home");
+  const [view, setView] = useState<View>(() => readPlanSelection() || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("billing")) ? "billing" : "home");
   const requests = useRef(new WorkspaceRequestGate());
   const workspaceLoadVersion = useRef(0);
   const [workspaces, setWorkspaces] = useState<WorkspaceVault[]>([]);
@@ -775,7 +775,8 @@ function VaultShell({ clientMode, email, profile, rootKey, passwordFacts, onPass
         {view === "generator" && <GeneratorView />}
         {vault && <AutomationsView key={`${vault.identityId}:${vault.tenantId}:${vault.workspaceId}`} vault={vault} items={items} visible={view === "automations"} onNavigate={setView} />}
         {view === "devices" && <DevicesView identityId={profile.identity_id} />}
-        {view === "billing" && vault && <BillingView vault={vault} entitlement={entitlement} onRefresh={() => refreshEntitlement(vault)} />}
+        {view === "billing" && vault && <PlansView vault={vault} workspaces={workspaces} entitlement={entitlement} identityId={profile.identity_id} rootKey={rootKey} onSelectWorkspace={switchWorkspace} onRefresh={() => refreshEntitlement(vault)} onOpenHelp={() => setView("help")} onOpenAdmin={() => setView("admin")} />}
+        {view === "help" && <HelpCenter onNavigate={(next) => { setView(next); setSelected(null); }} />}
         {view === "settings" && vault && <SettingsView email={email} items={items} vault={vault} profile={profile} entitlement={entitlement} onImported={() => refresh(vault)} onProfileChange={onProfileChange} onPasswordFacts={onPasswordFacts} />}
       </>}
     </section>
@@ -787,7 +788,7 @@ function VaultShell({ clientMode, email, profile, rootKey, passwordFacts, onPass
 
 function Dashboard({ items, trash, health, entitlement, identityId, workspaceCount, onNavigate, onOpenVault, onNew }: { items: VaultItem[]; trash: VaultItem[]; health: ReturnType<typeof passwordHealth>; entitlement: Entitlement; identityId: string; workspaceCount: number; onNavigate: (view: string) => void; onOpenVault: (filter?: VaultFilter) => void; onNew: () => void }) {
   const recent = items.slice(0, 4);
-  return <div className="dashboard"><section className="welcome-card"><div><span className="status-pill"><ShieldCheck /> Vault protected</span><h2>Your digital life, under your control.</h2><p>Every item is encrypted before it leaves this device. Search and security checks happen locally.</p><div className="welcome-actions"><Button onClick={onNew}><Plus /> Add secure item</Button><Button variant="outline" onClick={() => onOpenVault()}>Open vault <ChevronRight /></Button></div></div><Image src="/brand/passkey-x-mark.png" alt="" width={220} height={220} /></section><OnboardingChecklist identityId={identityId} itemCount={items.length} workspaceCount={workspaceCount} onNavigate={onNavigate} onNewItem={onNew} /><div className="metric-grid"><Metric icon={Vault} label="Protected items" value={items.length} detail={`${trash.length} in trash`} onClick={() => onOpenVault()} /><Metric icon={CircleGauge} label="Security score" value={`${health.score}%`} detail={`${health.findings.filter((finding) => finding.severity !== "good").length} findings`} /><Metric icon={Bot} label="Automation runs" value={entitlement.automation_runs_remaining} detail="remaining this month" /><Metric icon={Laptop} label="Device limit" value={entitlement.max_devices ?? "∞"} detail={`${entitlement.plan_code} plan`} /></div><div className="dashboard-columns"><Card><CardHeader><div><CardTitle>Recently updated</CardTitle><CardDescription>Decrypted only on this device</CardDescription></div><Button variant="ghost" onClick={() => onOpenVault()}>View all</Button></CardHeader><CardContent>{recent.length ? <div className="recent-list">{recent.map((item) => { const Icon = ITEM_TYPES[item.contentType].icon; return <button key={item.id} onClick={() => onOpenVault(item.contentType)}><span className="item-kind-icon"><Icon /></span><span><strong>{item.payload.title}</strong><small>{ITEM_TYPES[item.contentType].label}</small></span><ChevronRight /></button>; })}</div> : <div className="small-empty"><Vault /><strong>Your vault is ready</strong><span>Add your first password, passkey, note, or credential.</span></div>}</CardContent></Card>{entitlement.plan_code === "free" ? <SponsorCard /> : <PlanSummaryCard entitlement={entitlement} />}</div></div>;
+  return <div className="dashboard"><section className="welcome-card"><div><span className="status-pill"><ShieldCheck /> Vault protected</span><h2>Your digital life, under your control.</h2><p>Every item is encrypted before it leaves this device. Search and security checks happen locally.</p><div className="welcome-actions"><Button onClick={onNew}><Plus /> Add secure item</Button><Button variant="outline" onClick={() => onOpenVault()}>Open vault <ChevronRight /></Button></div></div><Image src="/brand/passkey-x-mark.png" alt="" width={220} height={220} /></section><OnboardingChecklist identityId={identityId} itemCount={items.length} workspaceCount={workspaceCount} planCode={entitlement.plan_code} onNavigate={onNavigate} onNewItem={onNew} /><div className="metric-grid"><Metric icon={Vault} label="Protected items" value={items.length} detail={`${trash.length} in trash`} onClick={() => onOpenVault()} /><Metric icon={CircleGauge} label="Security score" value={`${health.score}%`} detail={`${health.findings.filter((finding) => finding.severity !== "good").length} findings`} /><Metric icon={Bot} label="Automation runs" value={entitlement.automation_runs_remaining} detail="remaining this month" /><Metric icon={Laptop} label="Device limit" value={entitlement.max_devices ?? "∞"} detail={`${entitlement.plan_code} plan`} /></div><div className="dashboard-columns"><Card><CardHeader><div><CardTitle>Recently updated</CardTitle><CardDescription>Decrypted only on this device</CardDescription></div><Button variant="ghost" onClick={() => onOpenVault()}>View all</Button></CardHeader><CardContent>{recent.length ? <div className="recent-list">{recent.map((item) => { const Icon = ITEM_TYPES[item.contentType].icon; return <button key={item.id} onClick={() => onOpenVault(item.contentType)}><span className="item-kind-icon"><Icon /></span><span><strong>{item.payload.title}</strong><small>{ITEM_TYPES[item.contentType].label}</small></span><ChevronRight /></button>; })}</div> : <div className="small-empty"><Vault /><strong>Your vault is ready</strong><span>Add your first password, passkey, note, or credential.</span></div>}</CardContent></Card>{entitlement.plan_code === "free" ? <SponsorCard /> : <PlanSummaryCard entitlement={entitlement} />}</div></div>;
 }
 
 function Metric({ icon: Icon, label, value, detail, onClick }: { icon: typeof Vault; label: string; value: string | number; detail: string; onClick?: () => void }) { return <button className="metric-card" onClick={onClick}><span className="metric-icon"><Icon /></span><span><small>{label}</small><strong>{value}</strong><em>{detail}</em></span></button>; }
@@ -1048,88 +1049,6 @@ function DevicesView({ identityId }: { identityId: string }) {
   useEffect(() => { let active = true; supabase!.from("devices").select("id,status,created_at,last_seen_at,revoked_at").eq("identity_id", identityId).order("created_at", { ascending: false }).then(({ data, error }) => { if (!active) return; if (error) setMessage(customerError(error, "Your devices could not be loaded. Try again.")); else setDevices((data ?? []) as DeviceRow[]); setLoading(false); }); return () => { active = false; }; }, [identityId]);
   async function revoke(device: DeviceRow) { if (!window.confirm("Revoke this device? It cannot be trusted again.")) return; const { error } = await supabase!.from("devices").update({ status: "revoked", revoked_at: new Date().toISOString() }).eq("id", device.id).neq("status", "revoked"); if (error) setMessage(customerError(error, "This device could not be revoked. Try again.")); else await refresh(); }
   return <div className="feature-page"><div className="feature-intro"><div><span className="status-pill"><Laptop /> Trusted-device boundary</span><h2>Devices with vault access</h2><p>Free accounts support two active devices. Revocation is one-way and removes device-key eligibility.</p></div></div>{message && <p className="form-message" role="alert">{message}</p>}<div className="device-list">{loading ? <div className="loading-ring" /> : devices.map((device, index) => <Card key={device.id}><CardContent><span className="device-icon"><Laptop /></span><div><strong>{index === devices.length - 1 ? "Initial browser" : `Browser device ${devices.length - index}`}</strong><span>Added {new Date(device.created_at).toLocaleDateString()} · {device.status}</span><code>{device.id.slice(0, 8)}…{device.id.slice(-4)}</code></div><span className={`device-status ${device.status}`}>{device.status}</span>{device.status !== "revoked" && <Button variant="outline" onClick={() => revoke(device)}>Revoke</Button>}</CardContent></Card>)}</div><div className="privacy-note"><ShieldCheck /><span>Passkey-X stores only a public device key and encrypted labels. Private device key material stays protected in the client.</span></div></div>;
-}
-
-function formatPrice(price: BillingPrice | undefined) {
-  if (!price) return "Not configured";
-  return new Intl.NumberFormat(price.currency === "inr" ? "en-IN" : "en-US", {
-    style: "currency", currency: price.currency.toUpperCase(), maximumFractionDigits: price.currency === "inr" ? 0 : 2,
-  }).format(price.unitAmount / 100);
-}
-
-function formatCatalogPrice(plan: PublicCatalogPlan, currency: BillingCurrency, interval: BillingInterval) {
-  if (plan.billingModel === "contract") return "Custom";
-  const price = plan.prices.find((entry) => entry.currency === currency && entry.interval === interval);
-  if (!price) return "Not available";
-  return new Intl.NumberFormat(currency === "inr" ? "en-IN" : "en-US", {
-    style: "currency", currency: currency.toUpperCase(), maximumFractionDigits: currency === "inr" ? 0 : 2,
-  }).format(price.unitAmount / 100);
-}
-
-function BillingView({ vault, entitlement, onRefresh }: { vault: WorkspaceVault; entitlement: Entitlement; onRefresh: () => Promise<void> }) {
-  const [currency, setCurrency] = useState<BillingCurrency>("inr");
-  const [interval, setInterval] = useState<BillingInterval>("month");
-  const [prices, setPrices] = useState<BillingPrice[]>([]);
-  const [catalogPlans, setCatalogPlans] = useState<PublicCatalogPlan[]>([]);
-  const [selectedPlan] = useState<Exclude<PlanCode, "free"> | null>(() => readPlanSelection());
-  const [seatCounts, setSeatCounts] = useState({ team: 3, business: 5 });
-  const [busy, setBusy] = useState("");
-  const [message, setMessage] = useState(() => {
-    if (typeof window === "undefined") return "";
-    const result = new URLSearchParams(window.location.search).get("billing");
-    if (result === "success") return "Checkout completed. Your plan activates only after the signed Stripe webhook is verified.";
-    if (result === "cancelled") return "Checkout was cancelled. Your current plan is unchanged.";
-    if (result === "portal-return") return "Billing portal closed. Refresh to read the latest verified entitlement.";
-    const selected = readPlanSelection();
-    return selected ? `You selected ${selected[0].toUpperCase() + selected.slice(1)}. Confirm the billing options below to continue.` : "";
-  });
-  const canManage = vault.role === "owner";
-
-  useEffect(() => {
-    let active = true;
-    loadPublicPlanCatalog()
-      .then((catalog) => { if (active) setCatalogPlans(catalog); })
-      .catch(() => { if (active) setMessage("The launch catalog could not be loaded. Your current plan is unchanged."); });
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    if (!billingEnabled || !canManage) return () => { active = false; };
-    loadBillingCatalog(vault.tenantId)
-      .then((catalog) => { if (active) setPrices(catalog); })
-      .catch((reason) => { if (active) setMessage(customerError(reason, "Plan pricing could not be loaded. Your current plan is unchanged.")); });
-    return () => { active = false; };
-  }, [canManage, vault.tenantId]);
-
-  async function checkout(plan: Exclude<PlanCode, "free">) {
-    setBusy(plan); setMessage("");
-    const quantity = plan === "team" || plan === "business" ? seatCounts[plan] : 1;
-    try { const url = await beginCheckout(vault.tenantId, plan, interval, currency, quantity); clearPlanSelection(); window.location.assign(url); }
-    catch (reason) { setMessage(customerError(reason, "Checkout could not be started. Your current plan is unchanged.")); setBusy(""); }
-  }
-
-  async function portal() {
-    setBusy("portal"); setMessage("");
-    try { window.location.assign(await openCustomerPortal(vault.tenantId)); }
-    catch (reason) { setMessage(customerError(reason, "The billing portal could not be opened. Try again shortly.")); setBusy(""); }
-  }
-
-  async function refresh() {
-    setBusy("refresh"); setMessage("");
-    try { await onRefresh(); setMessage("Verified workspace entitlement refreshed."); }
-    catch { setMessage("The entitlement could not be refreshed. Try again shortly."); }
-    finally { setBusy(""); }
-  }
-
-  return <div className="feature-page billing-page"><div className="feature-intro"><div><span className="status-pill"><CreditCard /> SaaS workspace billing</span><h2>Choose the right protection for this workspace</h2><p>Checkout and subscription management are hosted by Stripe. Passkey-X receives billing status only—never card details or vault contents.</p></div><div className="billing-status"><small>Current plan</small><strong>{entitlement.plan_code}</strong><span>{entitlement.subscription_status.replaceAll("_", " ")}</span></div></div>
-    <div className="billing-toolbar"><div className="billing-segment" role="group" aria-label="Billing currency"><button className={currency === "inr" ? "active" : ""} onClick={() => setCurrency("inr")}>INR</button><button className={currency === "usd" ? "active" : ""} onClick={() => setCurrency("usd")}>USD</button></div><div className="billing-segment" role="group" aria-label="Billing interval"><button className={interval === "month" ? "active" : ""} onClick={() => setInterval("month")}>Monthly</button><button className={interval === "year" ? "active" : ""} onClick={() => setInterval("year")}>Annual</button></div>{entitlement.source === "stripe" && <Button variant="outline" disabled={!canManage || busy !== ""} onClick={() => void portal()}><CreditCard /> {busy === "portal" ? "Opening…" : "Manage billing"}</Button>}<Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}><RefreshCw /> Refresh</Button></div>
-    {stripeTestMode && <div className="billing-notice"><ShieldAlert /><div><strong>Stripe sandbox checkout</strong><p>Use Stripe test cards only. No real payment will be collected and sandbox subscriptions must not be treated as commercial orders.</p></div></div>}
-    {!billingEnabled && <div className="billing-notice"><ShieldCheck /><div><strong>Test billing is safely disabled</strong><p>Checkout stays unavailable until all twenty Stripe test Price IDs, the restricted key, and the signed webhook secret are installed in Supabase.</p></div></div>}
-    {!canManage && <div className="billing-notice"><ShieldAlert /><div><strong>Workspace owner access required</strong><p>Members can see the verified plan. Only an owner can start Checkout or open the Customer Portal.</p></div></div>}
-    <div className="pricing-grid">{catalogPlans.map((plan) => { const livePrice = prices.find((entry) => entry.plan === plan.code && entry.currency === currency && entry.interval === interval); const current = entitlement.plan_code === plan.code; const selected = selectedPlan === plan.code; const canCheckout = ["personal", "family", "professional", "team", "business"].includes(plan.code); const displayPrice = livePrice ? formatPrice(livePrice) : formatCatalogPrice(plan, currency, interval); const seatPlan = plan.code === "team" || plan.code === "business" ? plan.code : null; const seatCount = seatPlan ? seatCounts[seatPlan] : 1; const minimumSeats = plan.minSeats ?? 1; const maximumSeats = plan.maxSeats ?? minimumSeats; return <Card key={plan.code} className={`pricing-card ${current ? "current" : ""} ${selected ? "selected" : ""} ${plan.code === "business" ? "featured" : ""}`}><CardHeader>{plan.code === "business" && <span className="popular-pill">For offices</span>}{selected && !current && <span className="selected-plan-pill">Your selection</span>}<CardTitle>{plan.name}</CardTitle><CardDescription>{plan.summary}</CardDescription></CardHeader><CardContent><div className="plan-price"><strong>{displayPrice}</strong><span>{plan.billingModel === "per_seat" ? `per user / ${interval}` : plan.billingModel === "contract" ? "contract pricing" : plan.code === "free" ? "forever" : `per ${interval}`}</span>{plan.trialDays > 0 && <small>{plan.trialDays}-day test trial</small>}</div>{seatPlan && <div><Label htmlFor={`billing-seats-${seatPlan}`}>Seats</Label><Input id={`billing-seats-${seatPlan}`} type="number" inputMode="numeric" min={minimumSeats} max={maximumSeats} value={seatCount} onChange={(event) => { const next = Number(event.target.value); setSeatCounts((currentCounts) => ({ ...currentCounts, [seatPlan]: Number.isSafeInteger(next) ? Math.min(maximumSeats, Math.max(minimumSeats, next)) : minimumSeats })); }} /><p className="field-hint">{minimumSeats}–{maximumSeats} users · Checkout quantity is validated on the server.</p></div>}<ul>{plan.features.slice(0, 6).map((feature) => <li key={feature}><Check /> {feature}</li>)}</ul>{plan.code === "free" ? <Button variant="outline" disabled>{current ? "Current plan" : "Included"}</Button> : plan.code === "enterprise" ? <Button variant="outline" disabled>Sales-assisted</Button> : !canCheckout ? <Button variant="outline" disabled>Checkout pending</Button> : <Button disabled={!billingEnabled || !canManage || !livePrice || busy !== "" || current} onClick={() => void checkout(plan.code as Exclude<PlanCode, "free">)}>{current ? "Current plan" : busy === plan.code ? "Opening secure Checkout…" : `Choose ${plan.name}`}</Button>}</CardContent></Card>; })}</div>
-    {message && <p className="settings-message" role="status">{message}</p>}<div className="privacy-note"><ShieldCheck /><span>Plan access changes only after a verified Stripe webhook updates the tenant entitlement. Redirect query parameters cannot unlock paid features.</span></div><p className="billing-footnote">Taxes are not calculated or collected until Vlightsoft confirms the required registrations and explicitly enables Stripe Tax.</p>
-  </div>;
 }
 
 function SettingsView({ email, items, vault, profile, entitlement, onImported, onProfileChange, onPasswordFacts }: { email: string; items: VaultItem[]; vault: WorkspaceVault; profile: CryptoProfile; entitlement: Entitlement; onImported: () => Promise<void> | void; onProfileChange: (profile: CryptoProfile) => void; onPasswordFacts: (facts: VaultPasswordFacts) => void }) {
