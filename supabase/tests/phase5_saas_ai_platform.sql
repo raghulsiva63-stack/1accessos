@@ -37,8 +37,12 @@ insert into public.saas_licenses(id,tenant_id,contract_id,status) values
 ('85000000-0000-4000-8000-000000000001','71000000-0000-4000-8000-000000000001','84000000-0000-4000-8000-000000000001','assigned');
 insert into public.spend_budgets(id,tenant_id,scope_type,metric,currency,soft_limit,hard_limit,consumed,period_start,period_end,enforcement,chargeback_tag,created_by) values
 ('86000000-0000-4000-8000-000000000001','71000000-0000-4000-8000-000000000001','tenant','ai_cost_minor','usd',8000,10000,8000,current_date - 5,current_date + 25,'block','engineering','61000000-0000-4000-8000-000000000001');
+-- Workflows are created through RPCs since phase7; seed this fixture as the table owner.
+reset role;
 insert into public.lifecycle_workflows(id,tenant_id,display_name,trigger_type,action_type,execution_mode,destructive_action,approval_required,definition,enabled,created_by) values
 ('87000000-0000-4000-8000-000000000001','71000000-0000-4000-8000-000000000001','Unused license review','license_reclaim','propose_reclaim','proposal',true,true,'{"inactive_days":45}'::jsonb,true,'61000000-0000-4000-8000-000000000001');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','51000000-0000-4000-8000-000000000001',true);
 
 do $$ declare generated integer; dashboard jsonb; begin
   generated := public.refresh_saas_recommendations('71000000-0000-4000-8000-000000000001');
