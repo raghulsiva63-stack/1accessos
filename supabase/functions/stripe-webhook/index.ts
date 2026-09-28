@@ -127,7 +127,19 @@ Deno.serve(async (request: Request) => {
       p_cancel_at_period_end: state?.cancelAtPeriodEnd ?? false,
       p_canceled_at: state?.canceledAt ?? null,
     });
-    if (error) throw error;
+    if (error) {
+      // A workspace can disappear while Stripe still holds its subscription (for example after the
+      // account was deleted). Acknowledge those events so Stripe stops retrying and never disables
+      // the endpoint; every other failure is still rejected and retried.
+      if (error.code === "23503" && tenantId) {
+        const { data: tenant, error: tenantError } = await admin.from("tenants").select("id").eq("id", tenantId).maybeSingle();
+        if (!tenantError && !tenant) {
+          console.warn(JSON.stringify({ function: "stripe-webhook", eventId: event.id, code: "unknown_tenant_ignored" }));
+          return json(request, 200, { received: true, ignored: "unknown_tenant" });
+        }
+      }
+      throw error;
+    }
     return json(request, 200, { received: true });
   } catch (reason) {
     const code = safeCode(reason);

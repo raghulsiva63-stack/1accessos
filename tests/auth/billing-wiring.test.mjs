@@ -7,6 +7,7 @@ const billing = await readFile("supabase/functions/billing/index.ts", "utf8");
 const webhook = await readFile("supabase/functions/stripe-webhook/index.ts", "utf8");
 const policy = await readFile("supabase/migrations/20260905193000_billing_catalog_entitlements.sql", "utf8");
 const client = await readFile("apps/web/lib/billing/client.ts", "utf8");
+const lifecycle = await readFile("supabase/functions/account-lifecycle/index.ts", "utf8");
 const page = await readFile("apps/web/app/page.tsx", "utf8");
 const plansView = await readFile("apps/web/components/billing/plans-view.tsx", "utf8");
 const publicSite = (await readFile("apps/web/components/public-site.tsx", "utf8")) + (await readFile("apps/web/components/marketing/pricing-section.tsx", "utf8"));
@@ -46,4 +47,12 @@ test("public package choice survives authentication and opens verified billing",
   assert.match(page, /useState<View>\(\(\) => readPlanSelection\(\) \|\|[^\n]*\? "billing" : "home"\)/);
   assert.match(plansView, /readPlanSelection\(\)/);
   assert.match(plansView, /clearPlanSelection\(\);\s*window\.location\.assign\(url\)/);
+});
+
+test("deleted workspaces stop billing and never wedge the Stripe webhook", () => {
+  assert.match(webhook, /error\.code === "23503" && tenantId/);
+  assert.match(webhook, /ignored: "unknown_tenant"/);
+  assert.match(lifecycle, /await cancelSoleOwnerSubscriptions\(admin, context\.identityId\);\s*\n\s*\/\/ Collect attachment paths first/);
+  assert.match(lifecycle, /stripe\.subscriptions\.cancel\(/);
+  assert.match(lifecycle, /throw new Error\("billing_cancel_failed"\)/);
 });
