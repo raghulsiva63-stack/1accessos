@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { adminSupabase, corsHeaders, json, publicError, requireUser } from "../_shared/control-plane.ts";
+import { stripeClient } from "../_shared/billing.ts";
 
 type DeletionRequest = { action?: "preflight" | "delete"; confirmation?: string };
 
@@ -13,6 +14,43 @@ function recentlyAuthenticated(token: string): boolean {
     const signedInAt = Math.max(0, ...(Array.isArray(payload.amr) ? payload.amr : []).map((entry) => typeof entry?.timestamp === "number" ? entry.timestamp : 0));
     return Math.floor(Date.now() / 1000) - signedInAt <= 300;
   } catch { return false; }
+}
+
+type AdminClient = ReturnType<typeof adminSupabase>;
+
+/**
+ * Cancel the Stripe subscriptions of every workspace this person owns alone. Those workspaces are
+ * deleted or left without members, so leaving the subscription running would keep charging a card
+ * for a workspace nobody can use. Any cancellation failure stops the deletion so it can be retried.
+ */
+async function cancelSoleOwnerSubscriptions(admin: AdminClient, identityId: string) {
+  const { data: owned, error } = await admin.from("tenant_memberships").select("tenant_id")
+    .eq("identity_id", identityId).eq("role", "owner").eq("status", "active");
+  if (error) throw error;
+  const soleTenants: string[] = [];
+  for (const row of (owned ?? []) as Array<{ tenant_id: string }>) {
+    const { count, error: countError } = await admin.from("tenant_memberships").select("tenant_id", { count: "exact", head: true })
+      .eq("tenant_id", row.tenant_id).eq("status", "active").neq("identity_id", identityId);
+    if (countError) throw countError;
+    if (!count) soleTenants.push(row.tenant_id);
+  }
+  if (!soleTenants.length) return;
+  const { data: subscriptions, error: subscriptionError } = await admin.from("billing_subscriptions")
+    .select("stripe_subscription_id,status").in("tenant_id", soleTenants);
+  if (subscriptionError) throw subscriptionError;
+  const running = ((subscriptions ?? []) as Array<{ stripe_subscription_id: string; status: string }>)
+    .filter((entry) => !["canceled", "incomplete_expired"].includes(entry.status));
+  if (!running.length) return;
+  const stripe = stripeClient();
+  for (const entry of running) {
+    try {
+      await stripe.subscriptions.cancel(entry.stripe_subscription_id, {}, { idempotencyKey: `passkey-x-account-deletion-${entry.stripe_subscription_id}` });
+    } catch (reason) {
+      if ((reason as { code?: string })?.code === "resource_missing") continue;
+      console.error(JSON.stringify({ function: "account-lifecycle", code: "billing_cancel_failed" }));
+      throw new Error("billing_cancel_failed");
+    }
+  }
 }
 
 Deno.serve(async (request: Request) => {
@@ -49,6 +87,8 @@ Deno.serve(async (request: Request) => {
       if (requestError || !createdDeletion) throw requestError ?? new Error("service_unavailable");
       deletion = createdDeletion;
     }
+
+    await cancelSoleOwnerSubscriptions(admin, context.identityId);
 
     // Collect attachment paths first, commit the database cleanup, then remove the
     // encrypted blobs. A storage failure after the commit only leaves unreadable ciphertext.
