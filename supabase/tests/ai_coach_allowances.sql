@@ -32,6 +32,20 @@ do $$ begin
   end if;
 end $$;
 
+-- 1b. A request that fails at the provider refunds its credit.
+set local role authenticated;
+select set_config('request.jwt.claim.sub','a8000000-0000-4000-8000-000000000001',true);
+select public.complete_ai_assistant_request(public.begin_ai_assistant_request(
+  ((select bootstrap ->> 'tenant_id' from coach where actor='owner'))::uuid,
+  'vault_health', decode(repeat('ac',32),'hex'), array['vault_health_counts']), 'failed', 0, 0, 'provider_unavailable');
+reset role;
+do $$ begin
+  if (select ai_credits_remaining from public.tenant_entitlements
+      where tenant_id = ((select bootstrap ->> 'tenant_id' from coach where actor='owner'))::uuid) <> 19 then
+    raise exception 'failed coach request was not refunded';
+  end if;
+end $$;
+
 -- 2. The coach cannot run on someone else's tenant, or with business context categories.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','a8000000-0000-4000-8000-000000000001',true);
