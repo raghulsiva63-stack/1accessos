@@ -1,8 +1,7 @@
 {
   "manifest_version": 3,
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAunqxf4i7u7acU6GhD62Vby2N1sOvLU+ulpM0Kt9fTY3NNlUglwDdpKC7bUrHRoOmGKmV7ffEo42omwH7rTl6NuD/9Nx5X+OxU+QN7iKlHqRjcI5u1Eav4tLZ8Stv+chBvIpNkZnwLpi55yYkCHcWU1T4FFJWzIu3hKvoc4q2NXjguuS7H5F2R4BDck1/kxgsRe7tvpwgWqljsMcm5wkHJadP8S6cPAqKdRKSEs7OonHIHftwmAKEwdadFDVEsonciyz72JUW5UrlajffrSfNxiOKyfulh4nxtjhZs7HB1AfpdGdEtlrgiMl6YW/o6yFUrFhJG6W2hAKn9tNKLrLyWwIDAQAB",
   "name": "Passkey-X",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "minimum_chrome_version": "127",
   "description": "Automatic save prompts and explicit, encrypted login fill for your Passkey-X vault.",
   "action": {
@@ -20,8 +19,9 @@
   "content_scripts": [
     {
       "matches": [
-        "http://*/*",
-        "https://*/*"
+        "https://*/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
       ],
       "js": [
         "content.js"

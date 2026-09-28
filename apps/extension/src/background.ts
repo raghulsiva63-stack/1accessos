@@ -275,8 +275,20 @@ async function saveCandidate(tabId: number, workspaceId: unknown) {
   forgetCandidate(tabId); await reloadCredentials();
 }
 
-function safeOrigin(value: string) { try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.origin : ""; } catch { return ""; } }
-function matches(origin: string) { return credentials.filter((credential) => safeOrigin(credential.url) === origin).map(({ key: id, title, username, source }) => ({ id, title: source === "capsule" ? `${title} · shared` : title, username })); }
+// Only HTTPS pages (and local development on loopback) can receive save prompts or fills:
+// a password typed into a plain-HTTP page can be read or changed by anyone on the network.
+function safeOrigin(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") return url.origin;
+    return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) ? url.origin : "";
+  } catch { return ""; }
+}
+// A login saved for example.com also fills on www.example.com (and the reverse). Scheme and port
+// must still match exactly, and no other subdomain is treated as the same site.
+function siteKey(origin: string) { try { const url = new URL(origin); return `${url.protocol}//${url.hostname.replace(/^www\./u, "")}:${url.port}`; } catch { return ""; } }
+function sameSite(url: string, origin: string) { const saved = safeOrigin(url); return Boolean(saved && origin && siteKey(saved) === siteKey(origin)); }
+function matches(origin: string) { return credentials.filter((credential) => sameSite(credential.url, origin)).map(({ key: id, title, username, source }) => ({ id, title: source === "capsule" ? `${title} · shared` : title, username })); }
 function clearVault(forgetPending = true) { vaultGeneration++; clearTimeout(idleTimer); for (const context of vaults) context.key.fill(0); vaults = []; accountRoot?.fill(0); accountRoot = null; for (const credential of credentials) credential.secret = ""; credentials = []; if (forgetPending) for (const tabId of [...candidates.keys()]) forgetCandidate(tabId); }
 async function disconnect() {
   locallyDisconnected = true;
@@ -311,7 +323,7 @@ async function fillCredential(tabId: number, origin: string, id: unknown) {
   vaults = vaults.filter(context => allowed.has(context.workspaceId));
   if (!vaults.length) { clearVault(); throw new Error("Workspace access is no longer available."); }
   await reloadCredentials();
-  const credential = credentials.find(item => item.key === id && safeOrigin(item.url) === origin);
+  const credential = credentials.find(item => item.key === id && sameSite(item.url, origin));
   if (!credential) throw new Error("That login is no longer available for this page.");
   const tab = await chrome.tabs.get(tabId);
   if (safeOrigin(tab.url ?? "") !== origin) throw new Error("The page changed. Open Passkey-X again.");
@@ -352,7 +364,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         const origin = safeOrigin(sender.tab.url);
         if (!origin || request.origin !== origin || typeof request.username !== "string" || typeof request.secret !== "string" || !request.secret) throw new Error("Rejected untrusted login candidate.");
         if (await isIgnored(origin) || generation !== vaultGeneration) { sendResponse({ ok: true, ignored: true }); return; }
-        if (credentials.some(item => item.source === "workspace" && safeOrigin(item.url) === origin && item.username === request.username && item.secret === request.secret)) { forgetCandidate(sender.tab.id); sendResponse({ ok: true, ignored: true }); return; }
+        if (credentials.some(item => item.source === "workspace" && sameSite(item.url, origin) && item.username === request.username && item.secret === request.secret)) { forgetCandidate(sender.tab.id); sendResponse({ ok: true, ignored: true }); return; }
         const pending = candidates.get(sender.tab.id);
         if (pending?.origin === origin && pending.username === request.username && pending.secret === request.secret) { sendResponse({ ok: true, duplicate: true }); return; }
         forgetCandidate(sender.tab.id);

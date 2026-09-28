@@ -8,7 +8,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { TurnstileCheck } from "@/components/turnstile-check";
 import { captchaEnabled, passkeysEnabled } from "@/lib/supabase/client";
 
-const EXTENSION_ID = "egkaneajfcaomheahcmopioiemmplebg";
+// The UAT (unpacked) build has a fixed ID. Store builds get their IDs from the Chrome Web Store and
+// Edge Add-ons; list them in NEXT_PUBLIC_EXTENSION_IDS (comma-separated) so pairing accepts them.
+const UAT_EXTENSION_ID = "egkaneajfcaomheahcmopioiemmplebg";
+const EXTENSION_IDS = new Set([UAT_EXTENSION_ID, ...(process.env.NEXT_PUBLIC_EXTENSION_IDS ?? "").split(",").map((value) => value.trim())]
+  .filter((value) => /^[a-p]{32}$/u.test(value)));
 type Runtime = { lastError?: { message?: string }; sendMessage: (id: string, message: unknown, callback: (response?: { ok?: boolean; error?: string }) => void) => void };
 function runtime() { return (window as Window & { chrome?: { runtime?: Runtime } }).chrome?.runtime; }
 type Factor = { id: string; label: string; type: "phone" | "totp" };
@@ -17,6 +21,7 @@ export default function ExtensionConnectPage() {
   const router = useRouter();
   const client = useRef<SupabaseClient | null>(null);
   const nonce = useRef("");
+  const extensionId = useRef("");
   const [valid, setValid] = useState(false);
   const [stage, setStage] = useState<"signin" | "mfa" | "approve" | "done">("signin");
   const [email, setEmail] = useState("");
@@ -37,7 +42,8 @@ export default function ExtensionConnectPage() {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-    const accepted = id === EXTENSION_ID && /^[a-f0-9]{64}$/u.test(nonce.current) && window.location.origin === "https://passkey-x.com";
+    const accepted = id !== null && EXTENSION_IDS.has(id) && /^[a-f0-9]{64}$/u.test(nonce.current) && window.location.origin === "https://passkey-x.com";
+    if (accepted) extensionId.current = id;
     if (accepted && url && key) {
       // A fresh memory-only login belongs exclusively to the extension. The web
       // vault's session is never shared, persisted, or refreshed by this client.
@@ -104,14 +110,14 @@ export default function ExtensionConnectPage() {
 
   async function connect() {
     const bridge = runtime();
-    if (!valid || !client.current || !bridge) { setStatus("The extension is unavailable. Enable it and start a new connection."); return; }
+    if (!valid || !client.current || !bridge || !extensionId.current) { setStatus("The extension is unavailable. Enable it and start a new connection."); return; }
     setBusy(true); setStatus("Connecting this browser…");
     try {
       const { data, error } = await client.current.auth.getSession();
       if (error || !data.session) throw new Error("Your sign-in expired. Start a new connection.");
       await new Promise<void>((resolve, reject) => {
         const timer = window.setTimeout(() => reject(new Error("Connection timed out. Check the extension before starting again.")), 20000);
-        bridge.sendMessage(EXTENSION_ID, { type: "PX_PAIR_SESSION", extensionId: EXTENSION_ID, nonce: nonce.current, accessToken: data.session!.access_token, refreshToken: data.session!.refresh_token }, response => {
+        bridge.sendMessage(extensionId.current, { type: "PX_PAIR_SESSION", extensionId: extensionId.current, nonce: nonce.current, accessToken: data.session!.access_token, refreshToken: data.session!.refresh_token }, response => {
           window.clearTimeout(timer);
           const error = bridge.lastError;
           if (error || !response?.ok) reject(new Error(response?.error || error?.message || "Connection was not accepted."));

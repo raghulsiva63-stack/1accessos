@@ -12,7 +12,8 @@ test("Manifest V3 extension has no remote code and protects extension pages", ()
   assert.equal(manifest.manifest_version, 3);
   assert.match(manifest.content_security_policy.extension_pages, /script-src 'self'/);
   assert.match(manifest.content_security_policy.extension_pages, /object-src 'none'/);
-  assert.deepEqual(manifest.content_scripts[0].matches, ["http://*/*", "https://*/*"]);
+  assert.deepEqual(manifest.content_scripts[0].matches, ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"]);
+  assert.equal("key" in manifest, false, "store builds must not ship a manifest key");
   assert.equal(manifest.commands["fill-login"].suggested_key.default, "Alt+Shift+X");
 });
 
@@ -59,5 +60,25 @@ test("shared workspaces and fill-only capsules stay origin-bound and are consume
   assert.match(background, /capsule-recipient:v1/);
   assert.match(background, /capsule-payload:v1/);
   assert.match(background, /consume_access_capsule/);
-  assert.match(background, /safeOrigin\(item\.url\) === origin/);
+  assert.match(background, /sameSite\(item\.url, origin\)/);
+});
+
+test("plain-HTTP pages never get save prompts or fills, and www/apex share logins", () => {
+  const safeOriginSource = (source) => source.match(/function safeOrigin\(value: string\) \{[\s\S]*?\n\}/u)[0].replace("(value: string)", "(value)");
+  for (const source of [background, content]) {
+    const safeOrigin = new Function(`${safeOriginSource(source)}; return safeOrigin;`)();
+    assert.equal(safeOrigin("http://example.com/login"), "");
+    assert.equal(safeOrigin("https://example.com/login"), "https://example.com");
+    assert.equal(safeOrigin("http://localhost:3000/login"), "http://localhost:3000");
+    assert.equal(safeOrigin("javascript:alert(1)"), "");
+  }
+  const helpers = background.match(/function siteKey[^\n]*\n\s*function sameSite[^\n]*/u)[0]
+    .replace("(origin: string)", "(origin)").replace("(url: string, origin: string)", "(url, origin)");
+  const sameSite = new Function(`${safeOriginSource(background)}\n${helpers}; return sameSite;`)();
+  assert.equal(sameSite("https://www.example.com/login", "https://example.com"), true);
+  assert.equal(sameSite("https://example.com/login", "https://www.example.com"), true);
+  assert.equal(sameSite("https://login.example.com/", "https://example.com"), false);
+  assert.equal(sameSite("https://example.com/", "https://example.com.evil.test"), false);
+  assert.equal(sameSite("https://example.com:8443/", "https://example.com"), false);
+  assert.equal(sameSite("http://example.com/", "https://example.com"), false);
 });
