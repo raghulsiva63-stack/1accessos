@@ -14,6 +14,7 @@ const SOLUTION_LINKS: MenuLink[] = [
   ...SOLUTIONS.filter((entry) => entry.slug === "msp").map((entry) => ({ href: `/solutions/${entry.slug}`, label: entry.navLabel, blurb: entry.navBlurb, icon: entry.icon })),
 ];
 const RESOURCE_LINKS: MenuLink[] = [
+  { href: "/help", label: "Help & user guide", blurb: "Step-by-step guides for every feature.", icon: "Users" },
   { href: "/compare", label: "Compare", blurb: "Passkey-X vs spreadsheets and basic managers.", icon: "Sparkles" },
   { href: "/download", label: "Apps & downloads", blurb: "Desktop, mobile and browser extension.", icon: "Laptop" },
   { href: "/api-docs", label: "API documentation", blurb: "REST API and ciphertext-only CLI.", icon: "Code2" },

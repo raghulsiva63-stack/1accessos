@@ -12,7 +12,8 @@ const shared = await readFile("supabase/functions/_shared/billing.ts", "utf8");
 const billing = await readFile("supabase/functions/billing/index.ts", "utf8");
 const webhook = await readFile("supabase/functions/stripe-webhook/index.ts", "utf8");
 const config = await readFile("supabase/config.toml", "utf8");
-const page = await readFile("apps/web/app/page.tsx", "utf8");
+// The pricing UI lives in the Plans & billing component; the page wires it in.
+const page = `${await readFile("apps/web/app/page.tsx", "utf8")}\n${await readFile("apps/web/components/billing/plans-view.tsx", "utf8")}`;
 const client = await readFile("apps/web/lib/billing/client.ts", "utf8");
 const environment = await readFile("apps/web/.env.example", "utf8");
 const netlify = await readFile("netlify.toml", "utf8");

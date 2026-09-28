@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, CircleCheck, Download, Fingerprint, KeyRound, Plus, ShieldCheck, Upload, Users, X } from "lucide-react";
+import { ArrowRight, BookOpen, CircleCheck, CreditCard, Download, Fingerprint, KeyRound, Plus, ShieldCheck, Upload, Users, X } from "lucide-react";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 
 type Stored = { dismissed: boolean; done: string[] };
@@ -15,10 +15,11 @@ function readStored(identityId: string): Stored {
   } catch { return { dismissed: false, done: [] }; }
 }
 
-export function OnboardingChecklist({ identityId, itemCount, workspaceCount, onNavigate, onNewItem }: {
+export function OnboardingChecklist({ identityId, itemCount, workspaceCount, planCode = "free", onNavigate, onNewItem }: {
   identityId: string;
   itemCount: number;
   workspaceCount: number;
+  planCode?: string;
   onNavigate: (view: string) => void;
   onNewItem: () => void;
 }) {
@@ -38,6 +39,8 @@ export function OnboardingChecklist({ identityId, itemCount, workspaceCount, onN
     { id: "security", icon: ShieldCheck, title: "Run a security check", body: "Find weak, reused and breached passwords to fix first.", done: stored.done.includes("security"), action: () => { mark("security"); onNavigate("security"); } },
     { id: "apps", icon: Download, title: "Get the apps and extension", body: "Fill passwords in your browser and use Passkey-X on every device.", done: stored.done.includes("apps"), action: () => { mark("apps"); window.open("/download", "_blank", "noopener,noreferrer"); } },
     { id: "share", icon: Users, title: "Share with your team or family", body: "Create a shared vault with roles, or send a one-time Secure Send link.", done: workspaceCount > 1, action: () => onNavigate("workspaces") },
+    { id: "plan", icon: CreditCard, title: "Pick the right plan", body: "Stay on Free, or upgrade for unlimited devices, family sharing or company controls. We guide you step by step.", done: planCode !== "free" || stored.done.includes("plan"), action: () => { mark("plan"); onNavigate("billing"); } },
+    { id: "guide", icon: BookOpen, title: "Read the quick guide", body: "Two-minute guides for recovery, sharing, teams and billing, whenever you need them.", done: stored.done.includes("guide"), action: () => { mark("guide"); onNavigate("help"); } },
   ];
   const completed = steps.filter((step) => step.done).length;
   if (stored.dismissed || completed === steps.length) return null;
