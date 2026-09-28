@@ -15,7 +15,7 @@ export function ClientAuthFrame({ mode, children }: { mode: ClientMode; children
   return <main className={`client-signin client-signin-${mode}`}>
     <header><Link href="/" aria-label="Passkey-X website"><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X" width={190} height={54} priority /></Link><Link href="/download">Get the apps</Link></header>
     <div className="client-signin-body"><div className="client-signin-intro"><span className="client-device-icon">{mobile ? <Smartphone /> : mode === "desktop" ? <Laptop /> : <ShieldCheck />}</span><p className="eyebrow">{mobile ? "Your mobile companion" : mode === "desktop" ? "Your desktop workspace" : "Your private vault"}</p><h1>{mobile ? "Your passwords.\nWithin reach." : mode === "desktop" ? "Open. Find.\nGet on with your day." : "Welcome back."}</h1><p>{mobile ? "Quick access to favorites, a password generator and your encrypted logins." : mode === "desktop" ? "Search your vault, manage workspaces and keep your everyday credentials close." : "Sign in, unlock your vault and pick up where you left off."}</p><div className="client-signin-trust"><ShieldCheck /> Your vault password stays on this device.</div></div>{children}</div>
-    <footer>Passkey-X by Vlightsoft <Link href="/#security">Security</Link></footer>
+    <footer>Passkey-X by Vlightsoft <Link href="/#security">Security</Link> <Link href="/terms">Terms</Link> <Link href="/privacy">Privacy</Link> <span className="auth-legal-inline">By creating an account you agree to the Terms of Service and Privacy Policy.</span></footer>
   </main>;
 }
 
