@@ -7,6 +7,7 @@ import "./marketing.css";
 import "./marketing-nav.css";
 import "./app-features.css";
 import "./app-dark.css";
+import "./plans-help.css";
 
 export const metadata: Metadata = {
   title: "Passkey-X — Your private digital vault",
