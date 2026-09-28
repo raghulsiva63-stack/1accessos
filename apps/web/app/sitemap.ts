@@ -16,6 +16,9 @@ const PAGES: { path: string; priority: number }[] = [
   { path: "/download", priority: 0.6 },
   { path: "/help", priority: 0.6 },
   { path: "/api-docs", priority: 0.5 },
+  { path: "/privacy", priority: 0.3 },
+  { path: "/terms", priority: 0.3 },
+  { path: "/refunds", priority: 0.3 },
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
