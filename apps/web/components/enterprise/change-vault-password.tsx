@@ -62,7 +62,11 @@ export function ChangeVaultPasswordCard<T extends RotatableProfile>({
     let oldMaster: Uint8Array | null = null; let root: Uint8Array | null = null; let newMaster: Uint8Array | null = null;
     try {
       oldMaster = await deriveMasterKey(current, bytea(profile.salt), { algorithm: "ARGON2ID", ...profile.kdf_parameters });
-      root = await unwrapKey(oldMaster, { algorithm: "AES-256-GCM", nonce: toBase64Url(bytea(profile.master_nonce)), ciphertext: toBase64Url(bytea(profile.master_wrapped_root)) }, "1accessos:account-root:v1");
+      try {
+        root = await unwrapKey(oldMaster, { algorithm: "AES-256-GCM", nonce: toBase64Url(bytea(profile.master_nonce)), ciphertext: toBase64Url(bytea(profile.master_wrapped_root)) }, "1accessos:account-root:v1");
+      } catch {
+        throw new Error("The current vault password is incorrect.");
+      }
       const salt = randomBytes(16);
       newMaster = await deriveMasterKey(next, salt, WEB_KDF_PROFILE);
       const wrapped = await wrapKey(newMaster, root, "1accessos:account-root:v1");

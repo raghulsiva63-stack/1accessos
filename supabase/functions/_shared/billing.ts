@@ -231,7 +231,7 @@ export async function requireTenantManager(request: Request, tenantId: string) {
 
 export function safeCode(reason: unknown): string {
   const message = reason instanceof Error ? reason.message : String(reason ?? "unknown");
-  if (/^(unauthorized|forbidden|invalid_tenant|invalid_request|invalid_quantity|billing_not_configured|subscription_exists|customer_missing)$/u.test(message)) return message;
+  if (/^(unauthorized|forbidden|invalid_tenant|invalid_request|invalid_quantity|billing_not_configured|subscription_exists|customer_missing|plan_not_available_for_workspace)$/u.test(message)) return message;
   if (message.startsWith("missing:")) return "billing_not_configured";
   return "billing_unavailable";
 }
