@@ -66,6 +66,34 @@ $$;
 comment on function private.begin_ai_assistant_request(uuid,text,bytea,text[]) is
   'Hosted-AI admission: Business aggregate advisor, or the all-plans vault-health coach (on-device counts only). Hourly rate limit and atomic tenant credit consumption.';
 
+-- A request that fails at the AI provider gives its credit back, so users are only charged for
+-- advice they actually receive. Only the requester's own still-open request can be completed.
+create or replace function private.complete_ai_assistant_request(
+  p_request_id uuid,p_status text,p_input_tokens integer,p_output_tokens integer,p_failure_code text default null
+) returns boolean language plpgsql security definer set search_path = ''
+as $$
+declare v_actor uuid := private.current_identity_id(); v_tenant uuid;
+begin
+  if v_actor is null or p_status not in ('completed','blocked','failed')
+    or coalesce(p_input_tokens,0) not between 0 and 1000000
+    or coalesce(p_output_tokens,0) not between 0 and 1000000
+    or (p_failure_code is not null and p_failure_code !~ '^[a-z0-9_]{2,64}$') then
+    raise exception 'invalid AI completion' using errcode = '22023';
+  end if;
+  update public.ai_assistant_requests set status = p_status,input_tokens = p_input_tokens,
+    output_tokens = p_output_tokens,failure_code = p_failure_code,completed_at = now()
+    where id = p_request_id and requested_by = v_actor and status = 'accepted'
+    returning tenant_id into v_tenant;
+  if v_tenant is null then return false; end if;
+  if p_status = 'failed' then
+    update public.tenant_entitlements
+      set ai_credits_remaining = ai_credits_remaining + 1,updated_at = now()
+      where tenant_id = v_tenant;
+  end if;
+  return true;
+end
+$$;
+
 -- 2. Monthly allowances.
 -- The catalog promises AI credits and automation runs "each month", but credits were only
 -- refilled by Stripe events (so never for Free, and only yearly for annual plans).
