@@ -57,11 +57,12 @@ export function MarketingHeader() {
 
 export function MarketingFooter() {
   return <footer className="public-footer mk-footer">
-    <div><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={55} /><p>Private access for people, teams, and machines.</p><small>© 2026 Vlightsoft. Passkey-X launch catalog v2.2.</small></div>
+    <div><Image src="/brand/passkey-x-horizontal.png" alt="Passkey-X by Vlightsoft" width={190} height={55} /><p>Private access for people, teams, and machines.</p><small>© 2026 Vlightsoft Pvt Ltd. Passkey-X launch catalog v2.2.</small></div>
     <div><strong>Products</strong>{PRODUCT_LINKS.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}</div>
     <div><strong>Solutions</strong>{SOLUTION_LINKS.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}</div>
     <div><strong>Resources</strong><Link href="/pricing">Pricing</Link><Link href="/security">Security &amp; trust</Link>{RESOURCE_LINKS.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}</div>
     <div><strong>Account</strong><Link href="/login">Sign in</Link><Link href="/login">Create a free vault</Link><Link href="/send">Open a Secure Send link</Link><Link href="/contact?interest=demo">Book a demo</Link></div>
+    <div><strong>Legal</strong><Link href="/privacy">Privacy Policy</Link><Link href="/terms">Terms of Service</Link><Link href="/refunds">Refunds &amp; cancellation</Link><a href="mailto:support@vlightsoft.com">support@vlightsoft.com</a></div>
   </footer>;
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Building2, Check, KeyRound, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { publicCatalogEnabled, loadPublicPlanCatalog, rememberPlanSelection, stripeTestMode, type BillingCurrency, type BillingInterval, type PublicCatalogPlan } from "@/lib/billing/client";
@@ -69,7 +70,7 @@ export function PricingSection() {
         <div className="public-plan-grid office">{officePlans.map((plan) => <PlanCard key={plan.code} plan={plan} currency={currency} interval={interval} office />)}</div>
         {enterprise && <PlanCard plan={enterprise} currency={currency} interval={interval} office />}
       </>}
-      <p className="public-pricing-note"><ShieldCheck /> {stripeTestMode ? "Checkout uses Stripe sandbox only: test cards, no real charges. Displayed amounts are the v2.2 test catalog." : "Displayed amounts are the active server-managed catalog. Tax is collected only where configured and registered."}</p>
+      <p className="public-pricing-note"><ShieldCheck /> {stripeTestMode ? "Checkout uses Stripe sandbox only: test cards, no real charges. Displayed amounts are the v2.2 test catalog." : "Displayed amounts are the active server-managed catalog. Tax is collected only where configured and registered."} Cancel any time · 30-day money-back guarantee (<Link href="/refunds">refund policy</Link>).</p>
       </>}
     </section>;
 }
