@@ -56,3 +56,18 @@ test("deleted workspaces stop billing and never wedge the Stripe webhook", () =>
   assert.match(lifecycle, /stripe\.subscriptions\.cancel\(/);
   assert.match(lifecycle, /throw new Error\("billing_cancel_failed"\)/);
 });
+
+test("legal pages exist and are linked from the site, sign-up and pricing", async () => {
+  const legal = await readFile("apps/web/lib/legal/content.ts", "utf8");
+  const shell = await readFile("apps/web/components/marketing/marketing-shell.tsx", "utf8");
+  const sitemap = await readFile("apps/web/app/sitemap.ts", "utf8");
+  for (const slug of ["privacy", "terms", "refunds"]) {
+    await readFile(`apps/web/app/${slug}/page.tsx`, "utf8");
+    assert.match(shell, new RegExp(`href="/${slug}"`));
+    assert.match(sitemap, new RegExp(`"/${slug}"`));
+  }
+  assert.match(legal, /Vlightsoft Pvt Ltd/);
+  assert.match(legal, /support@vlightsoft\.com/);
+  assert.match(legal, /within 30 days of your first payment/);
+  assert.match(publicSite, /By creating an account you agree to the <Link href="\/terms">/);
+});
