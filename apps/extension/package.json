@@ -1,13 +1,14 @@
 {
   "name": "passkey-x-extension",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "vite build",
     "test": "node scripts/test.mjs",
     "typecheck": "tsc --noEmit",
-    "package:uat": "npm run typecheck && npm run build && node scripts/package-uat.mjs"
+    "package:uat": "npm run typecheck && npm run build && node scripts/package-uat.mjs",
+    "package:store": "npm run typecheck && npm run build && node scripts/package-store.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.115.0",
