@@ -211,9 +211,17 @@ export async function requireTenantManager(request: Request, tenantId: string) {
   const token = request.headers.get("authorization")!.slice(7);
   const { data: userData, error: userError } = await client.auth.getUser(token);
   if (userError || !userData.user?.email_confirmed_at) throw new Error("unauthorized");
+  const { data: identity, error: identityError } = await client.from("identities")
+    .select("id")
+    .eq("auth_user_id", userData.user.id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (identityError || !identity) throw new Error("forbidden");
+  // Must filter on the caller: RLS lets members read every membership row in their tenant.
   const { data, error } = await client.from("tenant_memberships")
     .select("role,status")
     .eq("tenant_id", tenantId)
+    .eq("identity_id", identity.id)
     .eq("status", "active")
     .in("role", ["owner", "admin"])
     .maybeSingle();

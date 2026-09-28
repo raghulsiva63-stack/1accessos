@@ -5,7 +5,8 @@ import { supabase } from "@/lib/supabase/client";
 export type PolicyType =
   | "passkey_required" | "mfa_required" | "device_approval_required"
   | "minimum_vault_password" | "session_timeout_minutes" | "clipboard_clear_seconds"
-  | "sharing_mode" | "export_policy" | "breach_monitoring" | "organization_recovery";
+  | "sharing_mode" | "export_policy" | "breach_monitoring" | "organization_recovery"
+  | "password_rotation";
 
 export type SharingMode = "open" | "internal_only" | "disabled";
 export type ExportMode = "allowed" | "admins_only" | "blocked";
@@ -23,6 +24,8 @@ export type EnterprisePolicy = {
   exportMode: ExportMode;
   breachMonitoring: BreachMode;
   organizationRecovery: boolean;
+  /** Stored secrets older than this many days are flagged for rotation. */
+  passwordRotationDays: number;
   /** Which scope set each enforced value (for "managed by your organization" hints). */
   managed: Partial<Record<PolicyType, string>>;
 };
@@ -39,6 +42,18 @@ export const DEFAULT_POLICY: EnterprisePolicy = Object.freeze({
   exportMode: "allowed",
   breachMonitoring: "optional",
   organizationRecovery: false,
+  passwordRotationDays: 365,
+  managed: {},
+}) as EnterprisePolicy;
+
+/**
+ * Used while an organisation's policy is loading or could not be loaded: sensitive
+ * actions stay off until the real policy arrives (fail closed).
+ */
+export const LOADING_POLICY: EnterprisePolicy = Object.freeze({
+  ...DEFAULT_POLICY,
+  sharingMode: "disabled",
+  exportMode: "blocked",
   managed: {},
 }) as EnterprisePolicy;
 
@@ -91,6 +106,7 @@ export function normalizePolicies(rows: PolicyRow[]): EnterprisePolicy {
         break;
       case "sharing_mode": policy.sharingMode = oneOf(config.mode, ["open", "internal_only", "disabled"] as const, "open"); break;
       case "export_policy": policy.exportMode = oneOf(config.mode, ["allowed", "admins_only", "blocked"] as const, "allowed"); break;
+      case "password_rotation": policy.passwordRotationDays = clampInteger(config.days, 30, 730, 365); break;
       case "breach_monitoring": policy.breachMonitoring = oneOf(config.mode, ["off", "optional", "required"] as const, "optional"); break;
       default: continue;
     }
@@ -120,6 +136,8 @@ export async function loadMyPolicy(tenantId: string, identityId: string): Promis
     client.from("tenant_memberships").select("role").eq("tenant_id", tenantId).eq("identity_id", identityId).eq("status", "active").maybeSingle(),
     client.from("tenants").select("kind").eq("id", tenantId).maybeSingle(),
   ]);
+  if (membership.error) throw membership.error;
+  if (tenant.error) throw tenant.error;
   const tenantRole = (membership.data as { role?: string } | null)?.role ?? null;
   const kind = (tenant.data as { kind?: string } | null)?.kind ?? null;
   if (kind !== "organization") return { policy: { ...DEFAULT_POLICY, managed: {} }, tenantRole, kind };
@@ -196,6 +214,12 @@ export const POLICY_DEFINITIONS: PolicyDefinition[] = [
       { value: "off", label: "Off" }, { value: "optional", label: "Member choice" }, { value: "required", label: "Always on" },
     ] }],
     defaults: { mode: "required" }, enforcement: "client",
+  },
+  {
+    type: "password_rotation", group: "Vault protection", title: "Password rotation",
+    description: "Flag stored passwords and secrets that have not changed in this many days, with a one-click rotate action.",
+    controls: [{ kind: "number", key: "days", min: 30, max: 730, unit: "days" }],
+    defaults: { days: 180 }, enforcement: "client",
   },
   {
     type: "sharing_mode", group: "Data movement", title: "Sharing boundary",
@@ -317,6 +341,7 @@ export const RECOMMENDED_BASELINE: { type: PolicyType; configuration: Record<str
   { type: "session_timeout_minutes", configuration: { minutes: 10 } },
   { type: "clipboard_clear_seconds", configuration: { seconds: 20 } },
   { type: "breach_monitoring", configuration: { mode: "required" } },
+  { type: "password_rotation", configuration: { days: 180 } },
   { type: "sharing_mode", configuration: { mode: "internal_only" } },
   { type: "export_policy", configuration: { mode: "admins_only" } },
 ];

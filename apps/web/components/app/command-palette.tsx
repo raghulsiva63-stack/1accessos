@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
-import { ArrowRight, KeyRound, LockKeyhole, Plus, Search, WandSparkles } from "lucide-react";
+import { ArrowRight, KeyRound, LockKeyhole, MoonStar, Plus, Search, WandSparkles } from "lucide-react";
+import { THEME_EVENT } from "@/components/app/theme-toggle";
 import type { VaultItem } from "@/lib/vault/items";
 
 export const OPEN_COMMAND_PALETTE = "passkey-x:command-palette";
@@ -51,6 +52,7 @@ export function CommandPalette({ enabled, items, views, onNavigate, onOpenItem, 
       { kind: "action", id: "new", label: "New item", hint: "Add a password, note, card or key", icon: Plus, run: onNewItem },
       { kind: "action", id: "generate", label: "Generate a password", hint: "Open the generator", icon: WandSparkles, run: () => onNavigate("generator") },
       { kind: "action", id: "lock", label: "Lock vault", hint: "Clear keys from memory", icon: LockKeyhole, run: onLock },
+      { kind: "action", id: "theme", label: "Change theme", hint: "Light, dark or match the system", icon: MoonStar, run: () => window.dispatchEvent(new Event(THEME_EVENT)) },
     ] satisfies Entry[]).filter((entry) => matches(entry.label, entry.hint));
     const viewEntries: Entry[] = views.filter((view) => matches(view.label, "go to")).map((view) => ({ kind: "view", id: `view:${view.id}`, label: view.label, run: () => onNavigate(view.id) }));
     const itemEntries: Entry[] = needle ? items.filter((item) => matches(item.payload.title, item.payload.username, item.payload.url, ...(item.payload.tags ?? []))).slice(0, 8)

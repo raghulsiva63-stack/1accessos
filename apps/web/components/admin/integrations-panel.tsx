@@ -14,6 +14,7 @@ import {
   SIGNATURE_EXAMPLE, testAuditWebhook, WEBHOOK_EVENT_FILTERS, webhookHealth, type AuditWebhook,
 } from "@/lib/enterprise/webhooks";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { copySecret } from "@/components/enterprise/vault-guards";
 
 function webhookError(reason: unknown) {
   const detail = typeof reason === "object" && reason !== null && "message" in reason ? String(reason.message) : "";
@@ -28,7 +29,7 @@ function SecretReveal({ secret, onDone }: { secret: string; onDone: () => void }
   const [copied, setCopied] = useState(false);
   return <div className="webhook-secret" role="status">
     <KeyRound /><div><strong>Signing secret — shown once</strong><p>Store it in your SIEM or receiver. Passkey-X cannot show it again.</p><code>{secret}</code></div>
-    <div className="inline-actions"><Button size="sm" onClick={async () => { await navigator.clipboard.writeText(secret); setCopied(true); }}>{copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy"}</Button><Button size="sm" variant="ghost" onClick={onDone}>I saved it</Button></div>
+    <div className="inline-actions"><Button size="sm" onClick={async () => { try { await copySecret(secret, 120); setCopied(true); } catch { /* clipboard blocked */ } }}>{copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy"}</Button><Button size="sm" variant="ghost" onClick={onDone}>I saved it</Button></div>
   </div>;
 }
 
@@ -94,7 +95,7 @@ export function IntegrationsPanel({ vault }: { vault: WorkspaceVault }) {
             const health = webhookHealth(hook);
             return <li key={hook.id}>
               <div className="webhook-main"><span className={`webhook-dot ${health.tone}`} /><div><strong>{hook.name}</strong><code>{hook.url}</code><small>{health.label} · last delivery {relativeTime(hook.last_success_at, now)}{hook.event_prefixes.length ? ` · ${hook.event_prefixes.length} event filter${hook.event_prefixes.length === 1 ? "" : "s"}` : " · all events"}</small>
-                {hook.last_error && <small className="webhook-error">Last error: {hook.last_error}{hook.last_status ? ` (HTTP ${hook.last_status})` : ""}</small>}
+                {hook.last_error && <small className="webhook-error">Last error: {hook.last_status === 421 ? "the address resolves to a private or internal network, so delivery was blocked" : hook.last_status === 504 ? "the endpoint did not respond in time" : hook.last_error}{hook.last_status && hook.last_status !== 421 ? ` (HTTP ${hook.last_status})` : ""}</small>}
                 {hook.last_test_at && <small>Test {relativeTime(hook.last_test_at, now)}: {hook.last_test_status === null ? "waiting for a response…" : hook.last_test_status >= 200 && hook.last_test_status < 300 ? `delivered (HTTP ${hook.last_test_status})` : hook.last_test_status === 0 ? "no response" : `failed (HTTP ${hook.last_test_status})`}</small>}
               </div></div>
               {isTenantAdmin && <div className="webhook-actions">

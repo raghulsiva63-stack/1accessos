@@ -12,6 +12,7 @@ import {
   openSecureSend, parseSendLink, payloadToBlob, peekSecureSend,
   type SendLink, type SendPayload, type SendPreview,
 } from "@/lib/enterprise/send";
+import { copySecret } from "@/components/enterprise/vault-guards";
 
 type State =
   | { stage: "loading" }
@@ -83,7 +84,7 @@ export default function SecureSendPage() {
         </form>}
         {state.stage === "opened" && (state.payload.kind === "text" ? <div className="form-stack">
           <div className="send-secret">{shown ? <pre>{state.payload.text}</pre> : <button type="button" onClick={() => setShown(true)}>Click to show</button>}</div>
-          <div className="inline-actions"><Button variant="outline" onClick={async () => { if (state.stage === "opened" && state.payload.kind === "text") { await navigator.clipboard.writeText(state.payload.text); setMessage("Copied. Clear your clipboard when you're done."); } }}>Copy</Button></div>
+          <div className="inline-actions"><Button variant="outline" onClick={async () => { if (state.stage === "opened" && state.payload.kind === "text") { try { await copySecret(state.payload.text, 60); setMessage("Copied. The clipboard clears automatically after 60 seconds."); } catch { setMessage("Clipboard access was blocked."); } } }}>Copy</Button></div>
           <p className="field-hint">{state.viewsLeft > 0 ? `${state.viewsLeft} view${state.viewsLeft === 1 ? "" : "s"} left on this link.` : "This link is now burned — it cannot be opened again."} Save anything you need now.</p>
         </div> : <div className="form-stack">
           <p><strong>{state.payload.name}</strong></p>

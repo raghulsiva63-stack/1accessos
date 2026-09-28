@@ -4,7 +4,8 @@ const APP_ORIGINS = new Set([
   "https://passkey-x.com",
   "https://www.passkey-x.com",
   "https://passkey-x.netlify.app",
-  "http://localhost:3000",
+  // Local development origin only when explicitly enabled for this function deployment.
+  ...(Deno.env.get("ALLOW_LOCALHOST_ORIGIN") === "true" ? ["http://localhost:3000"] : []),
 ]);
 
 export function required(name: string): string {

@@ -12,6 +12,7 @@ import {
   type SentSummary,
 } from "@/lib/enterprise/send";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { copySecret } from "@/components/enterprise/vault-guards";
 
 const EXPIRY_OPTIONS = [
   { hours: 1, label: "1 hour" }, { hours: 24, label: "1 day" }, { hours: 72, label: "3 days" },
@@ -92,7 +93,7 @@ export function SecureSendView({ vault }: { vault: WorkspaceVault }) {
             <label className="check-row"><input type="checkbox" checked={showSender} onChange={(event) => setShowSender(event.target.checked)} /> Show my email to the recipient</label>
             <Button disabled={busy}>{busy ? <LoaderCircle className="spin" /> : <Send />} Create secure link</Button>
           </form>
-          {link && <div className="send-result"><Link2 /><code>{link}</code><Button size="sm" onClick={async () => { await navigator.clipboard.writeText(link); setCopied(true); }}>{copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy link"}</Button><small className="field-hint">This link is shown once. Anyone with it can open the content{passphrase ? " (with the passphrase)" : ""}.</small></div>}
+          {link && <div className="send-result"><Link2 /><code>{link}</code><Button size="sm" onClick={async () => { try { await copySecret(link, 120); setCopied(true); } catch { /* clipboard blocked */ } }}>{copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy link"}</Button><small className="field-hint">This link is shown once. Anyone with it can open the content{passphrase ? " (with the passphrase)" : ""}.</small></div>}
           {message && <p className="form-message" role="alert">{message}</p>}
         </CardContent>
       </Card>

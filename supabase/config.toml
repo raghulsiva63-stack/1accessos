@@ -24,3 +24,16 @@ verify_jwt = true
 
 [functions.tenant-sms]
 verify_jwt = true
+
+# The database calls this relay through pg_net with a one-time delivery token,
+# so it carries no Supabase JWT. The token is verified against the outbox.
+[functions.audit-relay]
+verify_jwt = false
+
+# SCIM clients (Okta, Entra ID) authenticate with a Passkey-X provisioning token,
+# which the handler verifies; they send no Supabase JWT.
+[functions.scim]
+verify_jwt = false
+
+[functions.identity-admin]
+verify_jwt = true

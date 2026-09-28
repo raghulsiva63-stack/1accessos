@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import type { VaultItem } from "@/lib/vault/items";
+import { needsRotation } from "@/lib/vault/rotation";
 
 /** 0 = very weak … 4 = very strong. Local estimate; nothing leaves the device. */
 export type StrengthScore = 0 | 1 | 2 | 3 | 4;
@@ -80,8 +81,6 @@ export type VaultHealthReport = {
   breachChecked: boolean;
 };
 
-const DAY = 86_400_000;
-
 function totpPresent(item: VaultItem) {
   const fields = item.payload.fields ?? {};
   return Object.entries(fields).some(([key, value]) => /totp|otp|2fa|mfa|authenticator/iu.test(key) && Boolean(value?.trim()));
@@ -91,7 +90,7 @@ function totpPresent(item: VaultItem) {
  * Analyses decrypted items in memory. `breaches` maps item id → breach count from a
  * k-anonymity lookup (omit when the check has not run).
  */
-export function analyzeVaultHealth(items: VaultItem[], breaches?: Map<string, number>, now = Date.now()): VaultHealthReport {
+export function analyzeVaultHealth(items: VaultItem[], breaches?: Map<string, number>, now = Date.now(), rotationDays = 365): VaultHealthReport {
   const active = items.filter((item) => !item.deletedAt && !item.payload.archived);
   const logins = active.filter((item) => item.contentType === "login" && item.payload.secret);
   const bySecret = new Map<string, string[]>();
@@ -106,8 +105,7 @@ export function analyzeVaultHealth(items: VaultItem[], breaches?: Map<string, nu
     const strength = estimateStrength(item.payload.secret!).score;
     if (strength <= 1) { issues.push("weak"); weak.push(item.id); }
     if (reusedIds.has(item.id)) issues.push("reused");
-    const updated = Date.parse(item.payload.updatedAt);
-    if (Number.isFinite(updated) && now - updated > 365 * DAY) { issues.push("old"); old.push(item.id); }
+    if (needsRotation(item.payload, now, rotationDays)) { issues.push("old"); old.push(item.id); }
     const breachCount = breaches?.get(item.id);
     if (breachCount && breachCount > 0) { issues.push("breached"); breached.push(item.id); }
     if (item.payload.url && !totpPresent(item)) { missingTotp.push(item.id); }

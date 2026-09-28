@@ -36,13 +36,18 @@ export function ImportCard({ vault, onImported }: { vault: WorkspaceVault; onImp
         done += 1;
         if (done % 5 === 0 || done === entries.length) setProgress({ done, total: entries.length });
       }
-      record("vault.imported", null);
-      setMessage(`${done} item${done === 1 ? "" : "s"} encrypted and imported. Delete the export file from your computer now — it contains your passwords in plain text.`);
-      setPreview(null);
-      await onImported();
     } catch {
-      setError(`The import stopped after ${done} item${done === 1 ? "" : "s"}. Check your connection and import the file again; already imported items will be duplicated.`);
-    } finally { setProgress(null); }
+      // Keep only what is left so "Import" resumes instead of duplicating.
+      setPreview({ ...preview, entries: entries.slice(done) });
+      setError(`The import paused after ${done} of ${entries.length} item${entries.length === 1 ? "" : "s"}. Check your connection and press Import again to continue with the remaining ${entries.length - done}.`);
+      setProgress(null);
+      if (done) { try { await onImported(); } catch { /* list refresh is best effort */ } }
+      return;
+    }
+    record("vault.imported", null);
+    setMessage(`${done} item${done === 1 ? "" : "s"} encrypted and imported. Delete the export file from your computer now — it contains your passwords in plain text.`);
+    setPreview(null); setProgress(null);
+    try { await onImported(); } catch { setMessage(`${done} item${done === 1 ? "" : "s"} imported. Lock and unlock the vault to see them. Delete the export file from your computer now.`); }
   }
 
   const counts = preview ? Object.entries(preview.entries.reduce<Record<string, number>>((acc, entry) => ({ ...acc, [entry.kind]: (acc[entry.kind] ?? 0) + 1 }), {})) : [];

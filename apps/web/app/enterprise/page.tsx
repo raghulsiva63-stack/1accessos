@@ -40,10 +40,14 @@ const ROLLOUT = [
 const ROADMAP = [
   { title: "SIEM and webhook audit streaming", status: "Available" },
   { title: "Import from 1Password, Bitwarden and LastPass", status: "Available" },
-  { title: "SAML single sign-on", status: "In development" },
-  { title: "SCIM provisioning (Entra ID, Okta, Google)", status: "In development" },
-  { title: "Opt-in organization recovery", status: "In development" },
-  { title: "Break-glass emergency access", status: "Planned" },
+  { title: "SAML single sign-on (Okta, Entra ID, Google)", status: "Available" },
+  { title: "SCIM 2.0 provisioning and instant deprovisioning", status: "Available" },
+  { title: "Opt-in organization recovery", status: "Available" },
+  { title: "Break-glass and emergency access", status: "Available" },
+  { title: "Security alerts and compliance reports", status: "Available" },
+  { title: "One-click workspace key rotation", status: "In development" },
+  { title: "Device approval workflow", status: "In development" },
+  { title: "Native iOS app with AutoFill", status: "Planned" },
 ];
 
 export default function EnterprisePage() {

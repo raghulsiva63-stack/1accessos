@@ -19,6 +19,7 @@ import {
   type DeviceReadiness, type EffectiveOrganizationPolicy, type OrganizationAdminRole,
   type OrganizationScopeType, type OrganizationSnapshot,
 } from "@/lib/organization/phase5";
+import { copySecret } from "@/components/enterprise/vault-guards";
 
 type BulkResult = { email: string; status: "created" | "failed"; link?: string; detail?: string };
 
@@ -230,7 +231,7 @@ export function OrganizationGovernance({
           <div><Label htmlFor="org-invite-team">Team</Label><select id="org-invite-team" value={inviteTeam} onChange={(event) => setInviteTeam(event.target.value)}><option value="">No team</option>{peopleTeams.filter((entry) => !inviteDepartment || entry.department_id === inviteDepartment).map((entry) => <option key={entry.id} value={entry.id}>{entry.display_name}</option>)}</select></div>
           <Button disabled={busy !== ""}>{busy === "invite" ? "Creating…" : "Create invitation"}</Button>
         </form>
-        {inviteLink && <div className="one-time-link"><strong>Copy this link now</strong><code>{inviteLink}</code><Button size="sm" variant="outline" onClick={() => void navigator.clipboard.writeText(inviteLink)}><ClipboardCopy /> Copy</Button><small>Only its SHA-256 verifier is stored. The raw token remains in the URL fragment.</small></div>}
+        {inviteLink && <div className="one-time-link"><strong>Copy this link now</strong><code>{inviteLink}</code><Button size="sm" variant="outline" onClick={() => void copySecret(inviteLink, 120).catch(() => undefined)}><ClipboardCopy /> Copy</Button><small>Only its SHA-256 verifier is stored. The raw token remains in the URL fragment.</small></div>}
         <div className="bulk-onboarding"><label className="file-action"><Upload /><span>{busy === "bulk" ? "Preparing invitations…" : "Bulk invite CSV"}</span><input type="file" accept=".csv,text/csv" disabled={busy !== ""} onChange={(event) => { const file = event.target.files?.[0]; if (file) void bulkInvite(file, invitationExpiry()); event.target.value = ""; }} /></label><small>Columns: email, display_name, job_title, department, team, team_role. Maximum 200 rows; parsing stays in this browser.</small>{bulkResults.length > 0 && <Button size="sm" variant="outline" onClick={downloadBulkResults}><Download /> Download results</Button>}</div></> : <p className="field-hint">An authorized organization or helpdesk administrator creates invitations.</p>}
         <div className="governance-list">{data.invitations.slice(0,8).map((invitation) => <article key={invitation.id}><span className={`governance-state ${invitation.status}`}>{invitation.status}</span><div><strong>{invitation.display_name}</strong><small>{invitation.department_id ? departmentNames.get(invitation.department_id) ?? "Department" : "Unassigned"} · expires {new Date(invitation.expires_at).toLocaleDateString()}</small></div>{canPeople && invitation.status === "pending" && <Button size="sm" variant="ghost" disabled={busy !== ""} onClick={() => void run(`revoke-invite-${invitation.id}`,() => revokeOrganizationInvitation(invitation.id),"Invitation revoked.")}>Revoke</Button>}</article>)}</div>
       </CardContent></Card>
