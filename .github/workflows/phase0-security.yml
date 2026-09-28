@@ -27,6 +27,8 @@ jobs:
         run: node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8'))"
       - name: Run crypto, API client, and tamper tests
         run: npm test
+      - name: Apply migrations and run database RLS tests
+        run: bash supabase/tests/run-db-tests.sh
       - name: Audit root production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Run Phase 0 static security checks
