@@ -195,3 +195,22 @@
 .client-signin > footer { flex-wrap: wrap; }
 .client-signin > footer .auth-legal-inline { flex-basis: 100%; margin-top: 0; }
 @media (min-width: 1101px) { .mk-footer { grid-template-columns: 1.4fr repeat(5, minmax(0, 1fr)); } }
+
+/* AI Security Coach (Security screen) */
+.coach-card { display: grid; gap: .8rem; padding: clamp(1rem, 2.5vw, 1.4rem); border: 1px solid var(--border); border-radius: 1.1rem; background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 9%, var(--card)), var(--card)); }
+.coach-head { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
+.coach-head > div { flex: 1; min-width: 200px; }
+.coach-head h3 { margin: 0; font-size: 1.1rem; }
+.coach-head p { margin: .2rem 0 0; color: var(--muted-foreground); font-size: .9rem; }
+.coach-icon { display: inline-grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: .8rem; background: var(--primary); color: var(--primary-foreground, white); flex: none; }
+.coach-icon svg { width: 1.2rem; height: 1.2rem; }
+.coach-advice { display: flex; gap: .7rem; align-items: flex-start; padding: .9rem 1rem; border-radius: .9rem; background: var(--card); border: 1px solid var(--border); }
+.coach-advice > svg { width: 1.2rem; height: 1.2rem; color: #1f9d5c; flex: none; margin-top: .15rem; }
+.coach-advice p { margin: 0; white-space: pre-line; line-height: 1.55; }
+.coach-privacy { justify-self: start; padding: 0; border: 0; background: none; color: var(--primary); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.coach-sent { font-size: .85rem; color: var(--muted-foreground); }
+.coach-sent p { margin: 0 0 .4rem; }
+.coach-sent dl { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .3rem .8rem; }
+.coach-sent dl div { display: flex; justify-content: space-between; gap: .5rem; }
+.coach-sent dt { text-transform: capitalize; }
+.coach-sent dd { margin: 0; font-weight: 700; color: var(--foreground); }
