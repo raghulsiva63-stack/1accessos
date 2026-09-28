@@ -1,5 +1,10 @@
+// Mirrors the service worker: never capture or fill on plain-HTTP pages except local development.
 function safeOrigin(value: string) {
-  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.origin : ""; }
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") return url.origin;
+    return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) ? url.origin : "";
+  }
   catch { return ""; }
 }
 
@@ -52,7 +57,7 @@ document.addEventListener("keydown", event => {
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   const request = message as Record<string, unknown>;
-  if (window.top !== window || sender.id !== chrome.runtime.id || request?.type !== "PX_FILL" || request.origin !== location.origin || typeof request.username !== "string" || typeof request.secret !== "string") return false;
+  if (window.top !== window || sender.id !== chrome.runtime.id || request?.type !== "PX_FILL" || !safeOrigin(location.href) || request.origin !== location.origin || typeof request.username !== "string" || typeof request.secret !== "string") return false;
   const found = fields(document, true); if (!found) { sendResponse({ ok: false }); return false; }
   if (found.username) setValue(found.username, request.username);
   setValue(found.password, request.secret);
