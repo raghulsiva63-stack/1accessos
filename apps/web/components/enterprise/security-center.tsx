@@ -14,6 +14,9 @@ import {
 } from "@/lib/enterprise/health";
 import type { VaultItem } from "@/lib/vault/items";
 import { AiSecurityCoach } from "@/components/app/ai-security-coach";
+import { FixQueue } from "@/components/enterprise/fix-queue";
+import { recallBreachResults, rememberBreachResults } from "@/lib/enterprise/breach-watch";
+import { buildFixQueue } from "@/lib/vault/change-password";
 
 const ISSUE_META: Record<HealthIssue, { label: string; tone: "critical" | "warning" | "info"; icon: typeof ShieldAlert }> = {
   breached: { label: "Found in a breach", tone: "critical", icon: Zap },
@@ -25,15 +28,17 @@ const ISSUE_META: Record<HealthIssue, { label: string; tone: "critical" | "warni
 };
 
 export function SecurityCenter({
-  tenantId, items, onOpen, clientKind = "web",
+  tenantId, items, onOpen, onRotate, clientKind = "web",
 }: {
   tenantId: string | null;
   items: VaultItem[];
   onOpen: (id: string) => void;
+  /** Opens the item editor with a freshly generated password. */
+  onRotate?: (id: string) => void;
   clientKind?: string;
 }) {
   const { policy, isOrganization } = useEnterprise();
-  const [breaches, setBreaches] = useState<Map<string, number> | undefined>(undefined);
+  const [breaches, setBreaches] = useState<Map<string, number> | undefined>(() => recallBreachResults(tenantId));
   const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState<HealthIssue | "all">("all");
@@ -46,7 +51,9 @@ export function SecurityCenter({
   async function runBreachCheck() {
     setChecking(true); setMessage("");
     try {
-      setBreaches(await checkBreachedPasswords(items));
+      const results = await checkBreachedPasswords(items);
+      if (tenantId) rememberBreachResults(tenantId, results);
+      setBreaches(results);
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "The breach check could not complete.");
     } finally { setChecking(false); }
@@ -97,6 +104,8 @@ export function SecurityCenter({
       breached: report.breachChecked ? report.breached.length : -1, insecure_sites: report.insecureUrl.length,
       missing_two_step: report.missingTotp.length, passkeys: report.passkeyCount,
     }} />
+
+    {onRotate && <FixQueue tasks={buildFixQueue(items, report)} onRotate={onRotate} />}
 
     <div className="risk-tiles">
       {tiles.map((tile) => { const meta = ISSUE_META[tile.id]; const Icon = meta.icon; const active = filter === tile.id; return <button key={tile.id} className={`risk-tile tone-${tile.value ? meta.tone : "clear"} ${active ? "active" : ""}`} onClick={() => setFilter(active ? "all" : tile.id)} disabled={tile.id === "breached" && !report.breachChecked}>
