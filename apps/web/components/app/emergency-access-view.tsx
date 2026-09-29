@@ -16,6 +16,7 @@ import {
   type EmergencyGrant, type EmergencyKind, type EmergencyLink,
 } from "@/lib/enterprise/emergency";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { shareOrigin } from "@/lib/desktop/bridge";
 
 const PERSONAL_WAITS = [24, 48, 72, 168, 336, 720];
 const BREAK_GLASS_WAITS = [0, 1, 4, 24];
@@ -116,7 +117,7 @@ export function EmergencyAccessView({ vault, workspaces, identityId, rootKey, on
   function create(event: React.FormEvent) {
     event.preventDefault(); setLink(""); setCopied(false);
     void run("create", async () => {
-      setLink(await createEmergencyGrant(vault, { email, label, kind, waitHours, accessHours, origin: window.location.origin }));
+      setLink(await createEmergencyGrant(vault, { email, label, kind, waitHours, accessHours, origin: shareOrigin() }));
       setEmail(""); setLabel("");
     });
   }
