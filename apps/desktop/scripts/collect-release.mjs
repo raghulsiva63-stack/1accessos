@@ -14,6 +14,14 @@ async function walk(directory) {
   }
   return files;
 }
+async function walkAll(directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...await walkAll(path)); else files.push(path);
+  }
+  return files;
+}
 const files = await walk('src-tauri/target');
 if (files.length !== 1) throw new Error(`Expected one installer, found ${files.length}`);
 const filename = `passkey-x-desktop-${version}-${platform}${extension}`;
@@ -23,4 +31,10 @@ const bytes = await readFile(files[0]);
 const sha256 = createHash('sha256').update(bytes).digest('hex');
 await writeFile(join('artifacts', filename + '.sha256'), `${sha256}  ${filename}\n`);
 await copyFile('src-tauri/Cargo.lock', join('artifacts', 'Cargo.lock'));
+// Signed update bundles (only when the build had an updater signing key).
+for (const file of await walkAll('src-tauri/target')) {
+  if (/[\\/]bundle[\\/]/u.test(file) && (file.endsWith('.sig') || file.endsWith('.app.tar.gz'))) {
+    await copyFile(file, join('artifacts', file.split(/[\\/]/u).pop()));
+  }
+}
 await writeFile(join('artifacts', 'release.json'), JSON.stringify({ version, platform, filename, sha256, bytes: bytes.length, commit: process.env.GITHUB_SHA, run: process.env.GITHUB_RUN_ID, signing: platform === 'macos-universal' ? 'ad-hoc, not notarized' : 'unsigned' }, null, 2) + '\n');

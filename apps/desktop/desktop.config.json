@@ -1,0 +1,11 @@
+{
+  "comment": "Public client configuration baked into the desktop app. These values are safe to publish (the publishable key only allows what row-level security allows).",
+  "NEXT_PUBLIC_SUPABASE_URL": "https://wkkmyacbhqloubtwvjom.supabase.co",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_fRXHFcPIzwj8smWC_j8ypw_omkNyK-K",
+  "NEXT_PUBLIC_PASSKEYS_ENABLED": "false",
+  "NEXT_PUBLIC_PHONE_MFA_ENABLED": "false",
+  "NEXT_PUBLIC_BILLING_ENABLED": "true",
+  "NEXT_PUBLIC_PLAN_CATALOG_ENABLED": "true",
+  "NEXT_PUBLIC_STRIPE_TEST_MODE": "true",
+  "NEXT_PUBLIC_TURNSTILE_SITE_KEY": ""
+}

@@ -1,10 +1,10 @@
 {
   "name": "passkey-x-desktop",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "node scripts/tauri-build.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.4"
