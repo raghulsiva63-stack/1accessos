@@ -226,7 +226,7 @@ export async function requireTenantManager(request: Request, tenantId: string) {
     .in("role", ["owner", "admin"])
     .maybeSingle();
   if (error || !data) throw new Error("forbidden");
-  return { email: userData.user.email ?? null, role: data.role };
+  return { email: userData.user.email ?? null, role: data.role, identityId: identity.id as string };
 }
 
 export function safeCode(reason: unknown): string {
