@@ -80,7 +80,7 @@ function parseCsvRow(row: string) {
 }
 
 export function parseLoginCsv(csv: string): CsvLogin[] {
-  const rows = csv.replace(/^﻿/u, "").split(/\r?\n/u).filter((row) => row.trim());
+  const rows = (csv.charCodeAt(0) === 0xfeff ? csv.slice(1) : csv).split(/\r?\n/u).filter((row) => row.trim());
   if (rows.length < 2) throw new Error("The CSV does not contain any records.");
   const headers = parseCsvRow(rows[0]).map((value) => value.trim().toLowerCase());
   const find = (...names: string[]) => names.map((name) => headers.indexOf(name)).find((index) => index >= 0) ?? -1;
