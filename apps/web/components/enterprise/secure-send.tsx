@@ -13,6 +13,7 @@ import {
 } from "@/lib/enterprise/send";
 import type { WorkspaceVault } from "@/lib/vault/items";
 import { copySecret } from "@/components/enterprise/vault-guards";
+import { shareOrigin } from "@/lib/desktop/bridge";
 
 const EXPIRY_OPTIONS = [
   { hours: 1, label: "1 hour" }, { hours: 24, label: "1 day" }, { hours: 72, label: "3 days" },
@@ -58,7 +59,7 @@ export function SecureSendView({ vault }: { vault: WorkspaceVault }) {
     try {
       const payload = mode === "text" ? { v: 1 as const, kind: "text" as const, text } : file ? await fileToPayload(file) : null;
       if (!payload) throw new Error("Choose a file to send.");
-      const created = await createSecureSend(vault.tenantId, payload, { maxViews, expiresInHours: expiry, passphrase: passphrase || undefined, showSender }, window.location.origin);
+      const created = await createSecureSend(vault.tenantId, payload, { maxViews, expiresInHours: expiry, passphrase: passphrase || undefined, showSender }, shareOrigin());
       setLink(created); setText(""); setFile(null); setPassphrase("");
       setVersion((value) => value + 1);
     } catch (reason) { setMessage(sendError(reason)); }
