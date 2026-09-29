@@ -24,7 +24,7 @@ export function VaultView({ vault, items, allItems, trash, filter, query, select
   const siteUrl = selected?.payload.url && /^https:\/\//iu.test(selected.payload.url) ? selected.payload.url : null;
   return <div className="vault-view vault-v3">
     <div className="vault-head">
-      <div><h2>Vault</h2><p>{active.length} item{active.length === 1 ? "" : "s"} · encrypted on this device · search never leaves it</p></div>
+      <div><p>{active.length} item{active.length === 1 ? "" : "s"} · encrypted on this device · search never leaves it</p></div>
       <Button onClick={onNew}><Plus /> New item</Button>
     </div>
     <div className="vault-toolbar"><div className="search-box"><Search /><input aria-label="Search vault" placeholder="Search by name, username, website, note or tag" value={query} onChange={(event) => onQuery(event.target.value)} />{query && <button type="button" className="search-clear" aria-label="Clear search" onClick={() => onQuery("")}><X /></button>}</div></div>
