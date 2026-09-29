@@ -6,6 +6,8 @@ import {
 } from "../_shared/billing.ts";
 
 const INTEGRATION_IDENTIFIER = "passkey_x_qrltmzpn";
+// A friend who joined with an invite code gets a 30-day first trial (referrals: give a month, get a month).
+const REFERRAL_TRIAL_DAYS = 30;
 const PLANS_FOR_TENANT_KIND: Record<string, string[]> = {
   personal: ["personal", "professional"],
   family: ["family"],
@@ -105,6 +107,17 @@ Deno.serve(async (request: Request) => {
     if (existingError) throw existingError;
     if (existing && ["trialing", "active", "past_due", "unpaid", "incomplete", "paused"].includes(existing.status)) throw new Error("subscription_exists");
     const trialDays = existing ? 0 : catalogPlan.trial_days;
+    let referralId: string | null = null;
+    if (trialDays > 0) {
+      const { data: referral, error: referralError } = await admin.from("referrals")
+        .select("id")
+        .eq("referred_identity_id", manager.identityId)
+        .eq("status", "signed_up")
+        .maybeSingle();
+      if (referralError) throw referralError;
+      referralId = referral?.id ?? null;
+    }
+    const referralBonusDays = referralId ? Math.max(0, REFERRAL_TRIAL_DAYS - trialDays) : 0;
 
     let customerId = mapping?.stripe_customer_id as string | undefined;
     if (!customerId) {
@@ -144,10 +157,11 @@ Deno.serve(async (request: Request) => {
         passkey_x_quantity: String(quantity),
       },
       subscription_data: {
-        ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
+        ...(trialDays > 0 ? { trial_period_days: trialDays + referralBonusDays } : {}),
         metadata: {
           passkey_x_tenant_id: tenantId,
           passkey_x_plan: choice.plan,
+          ...(referralId ? { passkey_x_referral_id: referralId } : {}),
         },
       },
     }, { idempotencyKey: `passkey-x-checkout-${tenantId}-${body.requestId}` });
