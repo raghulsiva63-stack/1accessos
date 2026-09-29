@@ -1,7 +1,7 @@
 [package]
 name = "passkey-x"
-version = "0.3.0"
-description = "Passkey-X zero-knowledge personal vault"
+version = "1.0.0"
+description = "Passkey-X zero-knowledge password vault"
 authors = ["Vlightsoft"]
 edition = "2021"
 rust-version = "1.77.2"
@@ -10,9 +10,42 @@ rust-version = "1.77.2"
 name = "passkey_x_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Signed automatic updates. Enabled by scripts/tauri-build.mjs only when a signing key is available.
+updater = ["dep:tauri-plugin-updater"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "=2.11.4", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = { version = "2", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+aes-gcm = "0.10"
+sha2 = "0.10"
+base64 = "0.22"
+zeroize = "1"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+arboard = { version = "3", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSError"] }
+objc2-local-authentication = { version = "0.3", features = ["LAContext", "LAError", "block2"] }
+block2 = "0.6"
+core-foundation = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+  "Foundation",
+  "Security_Credentials",
+  "Security_Cryptography",
+  "Storage_Streams",
+  "Win32_Foundation",
+  "Win32_System_StationsAndDesktops",
+] }

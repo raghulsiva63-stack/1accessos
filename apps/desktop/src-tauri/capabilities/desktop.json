@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-vault",
+  "description": "The bundled Passkey-X pages in the main window may call these native commands. No remote website is listed, so passkey-x.com or any other site can never call them.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-desktop-info",
+    "allow-desktop-settings-get",
+    "allow-desktop-settings-set",
+    "allow-secure-get",
+    "allow-secure-set",
+    "allow-secure-remove",
+    "allow-clipboard-copy",
+    "allow-clipboard-clear",
+    "allow-quick-hide",
+    "allow-sign-in-listen",
+    "allow-update-check",
+    "allow-biometric-enrolled",
+    "allow-biometric-enroll",
+    "allow-biometric-unlock",
+    "allow-biometric-remove"
+  ]
+}

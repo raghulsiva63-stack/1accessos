@@ -1,27 +1,60 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Passkey-X",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "identifier": "com.vlightsoft.passkeyx",
   "build": {
     "beforeBuildCommand": "node scripts/build-frontend.mjs",
-    "frontendDist": "../launcher"
+    "frontendDist": "../dist"
   },
   "app": {
     "windows": [],
     "withGlobalTauri": false,
     "security": {
-      "capabilities": [],
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://passkey-x.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob:",
+        "font-src": "'self' data:",
+        "connect-src": "'self' ipc: http://ipc.localhost https://wkkmyacbhqloubtwvjom.supabase.co wss://wkkmyacbhqloubtwvjom.supabase.co https://api.pwnedpasswords.com https://passkey-x.com",
+        "worker-src": "'self' blob:",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'self'",
+        "frame-src": "'none'",
+        "frame-ancestors": "'none'"
+      },
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ],
+      "freezePrototype": false
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "shortDescription": "Your Passkey-X vault in a dedicated desktop app",
+    "shortDescription": "Passkey-X: your zero-knowledge password vault",
+    "longDescription": "Passkey-X desktop keeps your encrypted vault on your computer with fingerprint/face unlock, a quick-access shortcut, automatic clipboard clearing and screen-capture protection.",
+    "publisher": "Vlightsoft Pvt Ltd",
+    "copyright": "© Vlightsoft Pvt Ltd",
     "category": "Productivity",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
-    "macOS": { "minimumSystemVersion": "12.0", "signingIdentity": "-" },
-    "windows": { "nsis": { "installMode": "currentUser", "displayLanguageSelector": false } }
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
   }
 }
