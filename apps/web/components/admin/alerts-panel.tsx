@@ -11,13 +11,14 @@ import {
   ALERT_GUIDANCE, listSecurityAlerts, SEVERITY_ORDER, updateSecurityAlert, type AlertStatus, type SecurityAlert,
 } from "@/lib/enterprise/alerts";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { AiAlertTriage } from "@/components/admin/security-ai";
 
 const FILTERS: { id: AlertStatus | "all"; label: string }[] = [
   { id: "open", label: "Open" }, { id: "acknowledged", label: "Acknowledged" }, { id: "resolved", label: "Resolved" }, { id: "all", label: "All" },
 ];
 
 export function AlertsPanel({ vault, members }: { vault: WorkspaceVault; members: MemberOverview[] }) {
-  const { isTenantAdmin } = useEnterprise();
+  const { isTenantAdmin, tenantRole } = useEnterprise();
   const [filter, setFilter] = useState<AlertStatus | "all">("open");
   const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +45,9 @@ export function AlertsPanel({ vault, members }: { vault: WorkspaceVault; members
     finally { setBusy(""); }
   }
 
-  return <Card>
+  return <div className="si-stack">
+  {(isTenantAdmin || tenantRole === "auditor") && <AiAlertTriage tenantId={vault.tenantId} />}
+  <Card>
     <CardHeader>
       <div className="panel-heading"><div><CardTitle>Security alerts</CardTitle><CardDescription>Risky events detected in your audit log every few minutes: emergency access, exports, new administrators, policy changes, unusual secret access and more. Metadata only.</CardDescription></div>
         <Button variant="ghost" size="icon-sm" aria-label="Refresh" onClick={() => setVersion((value) => value + 1)}><RefreshCw /></Button></div>
@@ -66,5 +69,6 @@ export function AlertsPanel({ vault, members }: { vault: WorkspaceVault; members
           </div>}
         </li>)}</ul>}
     </CardContent>
-  </Card>;
+  </Card>
+  </div>;
 }
