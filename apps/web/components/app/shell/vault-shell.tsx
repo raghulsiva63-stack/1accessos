@@ -40,13 +40,14 @@ import { HelpCenter } from "@/components/app/help-center";
 import { GeneratorView, AccountSecurityView, DevicesView, SettingsView } from "@/components/app/shell/account-views";
 import { WorkspacesView, SharingView, MissionsView, AccessInboxView } from "@/components/app/shell/collaboration-views";
 import { Dashboard } from "@/components/app/shell/home-view";
-import { type CryptoProfile, type View, type VaultFilter, type Entitlement, NAV, NAV_SECTIONS, Brand, customerError } from "@/components/app/shell/shared";
+import { type CryptoProfile, type View, type VaultFilter, type Entitlement, NAV, NAV_SECTIONS, Brand, customerError, viewFromUrl } from "@/components/app/shell/shared";
 import { VaultView, ItemEditor, HistoryDialog } from "@/components/app/shell/vault-view";
 import { DesktopSettingsPanel } from "@/components/desktop/desktop-settings";
 import { desktop, isDesktopApp } from "@/lib/desktop/bridge";
+import { reportSignInContext } from "@/lib/security/client";
 
 export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts, onPasswordFacts, onProfileChange, onLock }: { clientMode: ClientMode; email: string; profile: CryptoProfile; rootKey: Uint8Array; passwordFacts: VaultPasswordFacts; onPasswordFacts: (facts: VaultPasswordFacts) => void; onProfileChange: (profile: CryptoProfile) => void; onLock: () => void }) {
-  const [view, setView] = useState<View>(() => readPlanSelection() || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("billing")) ? "billing" : "home");
+  const [view, setView] = useState<View>(() => readPlanSelection() || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("billing")) ? "billing" : viewFromUrl() ?? "home");
   const requests = useRef(new WorkspaceRequestGate());
   const workspaceLoadVersion = useRef(0);
   const [workspaces, setWorkspaces] = useState<WorkspaceVault[]>([]);
@@ -182,6 +183,8 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
     document.documentElement.classList.remove("vault-privacy-lock");
   }, []);
   useEffect(() => () => workspaces.forEach(entry => entry.key.fill(0)), [workspaces]);
+  // Attach the sign-in country to this session once (for new-country sign-in alerts).
+  useEffect(() => { void reportSignInContext().catch(() => undefined); }, []);
   const companion = ["mobile", "desktop", "android"].includes(clientMode);
   const quickAccess = useEffectEvent(() => {
     if (!companion) return;
@@ -218,7 +221,7 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
         {view === "vault" && vault && <VaultView vault={vault} items={visibleItems} allItems={items} trash={trash} filter={filter} query={query} selected={selected} revealed={revealed} onQuery={setQuery} onFilter={setFilter} onNew={() => setEditor("new")} onSelect={(item) => { setSelected(item); setRevealed(false); setHistory(null); }} onReveal={() => setRevealed(!revealed)} onClose={() => setSelected(null)} onEdit={(item) => setEditor(item)} onDelete={removeItem} onRestore={restoreItem} onToggle={toggle} onHistory={showHistory} onRotate={(item) => { setRotateSecret(generatePassword({ length: 24, uppercase: true, lowercase: true, numbers: true, symbols: true, avoidAmbiguous: true })); setEditor(item); }} onImport={() => setView("settings")} onGenerator={() => setView("generator")} />}
         {view === "workspaces" && vault && <WorkspacesView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} workspaces={workspaces} vault={vault} onSelect={switchWorkspace} onReload={reloadWorkspaces} />}
         {view === "organization" && vault && <OrganizationView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
-        {view === "admin" && vault && <AdminConsole key={vault.tenantId} vault={vault} entitlement={entitlement} workspaceNames={new Map(workspaces.map((entry) => [entry.workspaceId, entry.name]))} onOpenBilling={() => setView("billing")} />}
+        {view === "admin" && vault && <AdminConsole key={vault.tenantId} vault={vault} items={items} entitlement={entitlement} workspaceNames={new Map(workspaces.map((entry) => [entry.workspaceId, entry.name]))} onOpenBilling={() => setView("billing")} />}
         {view === "saas-ai" && vault && <SaasAiManager key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
         {view === "runtime" && vault && <RuntimeAccessView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
         {view === "notifications" && vault && <NotificationsView key={vault.tenantId} vault={vault} />}
