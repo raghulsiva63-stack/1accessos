@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Copy, ShieldCheck } from "lucide-react";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import { watchVaultLifetime } from "@/lib/browser/vault-lifecycle";
+import { desktop, isDesktopApp } from "@/lib/desktop/bridge";
 
 /**
  * Runs the idle/visibility vault lock using the organisation's session timeout and
@@ -13,9 +14,18 @@ export function PolicyLifecycle({ onLock, tenantId }: { onLock: () => void; tena
   const { policy, record, loading } = useEnterprise();
   const lock = useEffectEvent(() => onLock());
   const minutes = policy.sessionTimeoutMinutes;
+  // Desktop: a hidden window (after a quick copy) stays unlocked until the idle limit,
+  // unless the person chose "lock when hidden". Until the setting loads, hidden locks.
+  const [lockWhenHidden, setLockWhenHidden] = useState(true);
+  useEffect(() => {
+    if (!isDesktopApp()) return;
+    let active = true;
+    desktop.settings().then((settings) => { if (active) setLockWhenHidden(settings.lockOnHide); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   useEffect(() => watchVaultLifetime({
-    documentObject: document, windowObject: window, onLock: () => lock(), idleMs: minutes * 60_000,
-  }), [minutes]);
+    documentObject: document, windowObject: window, onLock: () => lock(), idleMs: minutes * 60_000, lockWhenHidden,
+  }), [minutes, lockWhenHidden]);
   const recorded = useRef<string | null>(null);
   const recordUnlock = useEffectEvent(() => record("vault.unlocked", null));
   useEffect(() => {
@@ -38,6 +48,7 @@ const pendingClipboardClears = new Set<string>();
 
 /** Best-effort clipboard wipe. readText is unreliable (focus rules, Firefox), so write "" directly. */
 export async function clearClipboard() {
+  if (isDesktopApp()) { try { await desktop.clearClipboard(); pendingClipboardClears.clear(); } catch { /* app will clear on its own timer */ } return; }
   try { await navigator.clipboard.writeText(""); pendingClipboardClears.clear(); } catch { /* document not focused; retried on next focus */ }
 }
 
@@ -54,6 +65,13 @@ if (typeof window !== "undefined") {
 
 /** Copies a secret and schedules a wipe; wipes that fail while unfocused retry when the app regains focus. */
 export async function copySecret(value: string, clearSeconds: number) {
+  // Desktop: the app copies, hides the value from clipboard history and wipes it even
+  // while Passkey-X is in the background.
+  if (isDesktopApp()) {
+    const settings = await desktop.settings().catch(() => null);
+    await desktop.copy(value, Math.min(clearSeconds, settings?.clipboardSeconds ?? clearSeconds));
+    return;
+  }
   await navigator.clipboard.writeText(value);
   const token = crypto.randomUUID();
   pendingClipboardClears.add(token);
