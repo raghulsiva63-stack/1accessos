@@ -9,7 +9,8 @@ const read = (path) => readFile(new URL(path, root), "utf8");
 const [migration, hardening, sms, control, lifecycle, webhook, ai, notifications, runtime, deletion, page, netlify] = await Promise.all([
   read("supabase/migrations/20260906102200_web_v22_runtime_control_plane.sql"),
   read("supabase/migrations/20260906113000_web_v22_integrity_hardening.sql"),
-  read("supabase/functions/tenant-sms/index.ts"),
+  // Sending moved to a shared module (also used by security-notify).
+  Promise.all([read("supabase/functions/tenant-sms/index.ts"), read("supabase/functions/_shared/sms-delivery.ts")]).then((parts) => parts.join("\n")),
   read("supabase/functions/_shared/control-plane.ts"),
   read("supabase/functions/account-lifecycle/index.ts"),
   read("supabase/functions/sent-webhook/index.ts"),
