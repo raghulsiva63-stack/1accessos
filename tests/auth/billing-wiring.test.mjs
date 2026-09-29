@@ -45,7 +45,7 @@ test("public package choice survives authentication and opens verified billing",
   assert.match(publicSite, /rememberPlanSelection\(plan\.code\)/);
   assert.match(client, /passkey-x:pending-plan/);
   assert.match(client, /SELF_SERVE_PLANS/);
-  assert.match(page, /useState<View>\(\(\) => readPlanSelection\(\) \|\|[^\n]*\? "billing" : "home"\)/);
+  assert.match(page, /useState<View>\(\(\) => readPlanSelection\(\) \|\|[^\n]*\? "billing" : (?:viewFromUrl\(\) \?\? )?"home"\)/);
   assert.match(plansView, /readPlanSelection\(\)/);
   assert.match(plansView, /clearPlanSelection\(\);\s*window\.location\.assign\(url\)/);
 });
