@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readAppShell } from "./lib/app-source.mjs";
 
 const migration = await readFile("supabase/migrations/00000000000009_phase2_collaboration.sql", "utf8");
 const missionRpc = await readFile("supabase/migrations/00000000000010_phase2_mission_rpc.sql", "utf8");
 const hardening = await readFile("supabase/migrations/00000000000011_phase2_policy_and_index_hardening.sql", "utf8");
 const databaseTest = await readFile("supabase/tests/phase2_collaboration.sql", "utf8");
 const client = await readFile("apps/web/lib/collaboration/phase2.ts", "utf8");
-const page = await readFile("apps/web/app/page.tsx", "utf8");
+const page = await readAppShell();
 const api = await readFile("supabase/functions/v1/index.ts", "utf8");
 const openapi = await readFile("docs/api/openapi.yaml", "utf8");
 const cli = await readFile("apps/cli/src/index.mjs", "utf8");

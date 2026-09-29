@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { readAppShell } from "../../scripts/lib/app-source.mjs";
 
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
@@ -16,7 +17,7 @@ const [migration, hardening, sms, control, lifecycle, webhook, ai, notifications
   read("apps/web/components/notifications-view.tsx"),
   read("apps/web/components/runtime-access-view.tsx"),
   read("apps/web/components/account-deletion-card.tsx"),
-  read("apps/web/app/page.tsx"),
+  readAppShell(),
   read("netlify.toml"),
 ]);
 

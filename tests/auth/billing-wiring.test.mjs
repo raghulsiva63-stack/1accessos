@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { readAppShell } from "../../scripts/lib/app-source.mjs";
 
 const shared = await readFile("supabase/functions/_shared/billing.ts", "utf8");
 const billing = await readFile("supabase/functions/billing/index.ts", "utf8");
@@ -8,7 +9,7 @@ const webhook = await readFile("supabase/functions/stripe-webhook/index.ts", "ut
 const policy = await readFile("supabase/migrations/20260905193000_billing_catalog_entitlements.sql", "utf8");
 const client = await readFile("apps/web/lib/billing/client.ts", "utf8");
 const lifecycle = await readFile("supabase/functions/account-lifecycle/index.ts", "utf8");
-const page = await readFile("apps/web/app/page.tsx", "utf8");
+const page = await readAppShell();
 const plansView = await readFile("apps/web/components/billing/plans-view.tsx", "utf8");
 const publicSite = (await readFile("apps/web/components/public-site.tsx", "utf8")) + (await readFile("apps/web/components/marketing/pricing-section.tsx", "utf8"));
 

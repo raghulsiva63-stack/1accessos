@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readAppShell } from "./lib/app-source.mjs";
 
 const migration = await readFile("supabase/migrations/20260905030000_phase5_business_organization.sql","utf8");
 const advisorFixes = await readFile("supabase/migrations/20260905033000_phase5_advisor_fixes.sql","utf8");
@@ -11,7 +12,7 @@ const governanceTest = await readFile("supabase/tests/phase5_business_governance
 const organization = await readFile("apps/web/lib/organization/phase5.ts","utf8");
 const component = await readFile("apps/web/components/organization-view.tsx","utf8");
 const governanceComponent = await readFile("apps/web/components/organization-governance.tsx","utf8");
-const page = await readFile("apps/web/app/page.tsx","utf8");
+const page = await readAppShell();
 const shared = await readFile("supabase/functions/_shared/billing.ts","utf8");
 const webhook = await readFile("supabase/functions/stripe-webhook/index.ts","utf8");
 const adr = await readFile("docs/architecture/ADR-0009-business-organization-boundary.md","utf8");
