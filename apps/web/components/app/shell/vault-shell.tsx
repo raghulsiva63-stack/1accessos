@@ -42,6 +42,8 @@ import { WorkspacesView, SharingView, MissionsView, AccessInboxView } from "@/co
 import { Dashboard } from "@/components/app/shell/home-view";
 import { type CryptoProfile, type View, type VaultFilter, type Entitlement, NAV, NAV_SECTIONS, Brand, customerError } from "@/components/app/shell/shared";
 import { VaultView, ItemEditor, HistoryDialog } from "@/components/app/shell/vault-view";
+import { DesktopSettingsPanel } from "@/components/desktop/desktop-settings";
+import { desktop, isDesktopApp } from "@/lib/desktop/bridge";
 
 export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts, onPasswordFacts, onProfileChange, onLock }: { clientMode: ClientMode; email: string; profile: CryptoProfile; rootKey: Uint8Array; passwordFacts: VaultPasswordFacts; onPasswordFacts: (facts: VaultPasswordFacts) => void; onProfileChange: (profile: CryptoProfile) => void; onLock: () => void }) {
   const [view, setView] = useState<View>(() => readPlanSelection() || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("billing")) ? "billing" : "home");
@@ -174,7 +176,7 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
   async function showHistory(item: VaultItem) { if (!vault) return; try { const entries = await listVaultItemHistory(vault, item); setHistory({ itemId: item.id, entries }); } catch (reason) { setError(customerError(reason, "Revision history could not be decrypted. Try again.")); } }
   function openVault(filterValue: VaultFilter = "all") { setFilter(filterValue); setView("vault"); setSelected(null); }
   function lockVault() { clearPendingClipboard(); forgetBreachResults(); document.documentElement.classList.add("vault-privacy-lock"); requests.current.select(null); workspaceLoadVersion.current += 1; workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); pendingEmergency?.token.fill(0); onLock(); }
-  async function signOut() { lockVault(); requests.current.select(null); workspaceLoadVersion.current += 1; workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); await supabase!.auth.signOut(); }
+  async function signOut() { lockVault(); requests.current.select(null); workspaceLoadVersion.current += 1; workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); if (isDesktopApp()) await desktop.biometric.remove(profile.identity_id).catch(() => undefined); await supabase!.auth.signOut(); }
   const autoLock = useEffectEvent(() => lockVault());
   useEffect(() => {
     document.documentElement.classList.remove("vault-privacy-lock");
@@ -233,6 +235,7 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
         {view === "billing" && vault && <PlansView vault={vault} workspaces={workspaces} entitlement={entitlement} identityId={profile.identity_id} rootKey={rootKey} onSelectWorkspace={switchWorkspace} onRefresh={() => refreshEntitlement(vault)} onOpenHelp={() => setView("help")} onOpenAdmin={() => setView("admin")} />}
         {view === "help" && <HelpCenter onNavigate={(next) => { setView(next); setSelected(null); }} />}
         {view === "settings" && vault && <SettingsView email={email} items={items} vault={vault} profile={profile} entitlement={entitlement} onImported={() => refresh(vault)} onProfileChange={onProfileChange} onPasswordFacts={onPasswordFacts} />}
+        {view === "settings" && clientMode === "desktop" && isDesktopApp() && <DesktopSettingsPanel profile={profile} rootKey={rootKey} />}
       </>}
     </section>
     <CommandPalette enabled={!companion} items={items} views={NAV} onNavigate={(next) => { setView(next as View); setSelected(null); }} onOpenItem={(item) => { setView("vault"); setFilter("all"); setSelected(item); setRevealed(false); setHistory(null); }} onNewItem={() => { setView("vault"); setEditor("new"); }} onLock={lockVault} />
