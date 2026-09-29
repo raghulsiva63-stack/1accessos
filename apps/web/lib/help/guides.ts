@@ -120,8 +120,23 @@ export const GUIDES: Guide[] = [
     steps: [
       "Open Security. Checks run on your device; your passwords are never sent anywhere.",
       "Start with anything marked breached or reused.",
-      "Open the item, choose Edit and generate a new password (or choose Rotate when it is shown), save, then change the password on that website too.",
+      "Use Fix your passwords, one at a time: choose Open change-password page, sign in to the site, then choose Generate new password.",
+      "Copy the new password into the site, save it there, then choose Save in Passkey-X. The item leaves the list automatically.",
     ],
+  },
+  {
+    id: "breach-watch",
+    category: "protect",
+    title: "Get alerts with Breach Watch",
+    summary: "Passkey-X re-checks your passwords every week and tells you when one appears in a new breach.",
+    opens: { view: "home", label: "Open Home" },
+    steps: [
+      "Open Home and choose Turn on in the Breach Watch card.",
+      "The first check runs straight away. After that, Passkey-X checks once a week when you open your vault on this device.",
+      "If a password shows up in a new data breach, a red alert appears on Home. Choose Review and fix to change it.",
+      "To stop the checks, choose Turn off in the same card.",
+    ],
+    tips: ["Your passwords never leave your device. Only the first 5 characters of each password's hash are sent to Have I Been Pwned, the same method used by major browsers."],
   },
   {
     id: "ai-coach",
