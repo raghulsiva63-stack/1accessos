@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { readAppShell } from "../../scripts/lib/app-source.mjs";
 
-const page = await readFile("apps/web/app/page.tsx", "utf8");
+const page = await readAppShell();
 
 test("onboarding uses the delayed browser download helper and gates vault creation", () => {
   assert.match(page, /downloadBlob\(recoveryFile\(recoveryKey\)/);
