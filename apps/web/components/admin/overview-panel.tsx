@@ -15,6 +15,7 @@ import {
   type StoredPolicy,
 } from "@/lib/enterprise/policies";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { SecurityTrend } from "@/components/admin/security-trend";
 
 function Kpi({ icon: Icon, label, value, detail, tone = "neutral", onClick }: {
   icon: typeof Users; label: string; value: string | number; detail: string;
@@ -77,6 +78,8 @@ export function AdminOverview({
       <Kpi icon={UserX} label="Inactive 30+ days" value={summary.inactive30} detail="review for offboarding" tone={summary.inactive30 ? "warn" : "good"} onClick={() => onNavigate("people")} />
       <Kpi icon={BadgeCheck} label="Policy baseline" value={`${coverage.percent}%`} detail={`${coverage.met} of ${coverage.total} recommended controls`} tone={coverage.percent === 100 ? "good" : coverage.percent >= 50 ? "warn" : "bad"} onClick={() => onNavigate("policies")} />
     </div>
+
+    <SecurityTrend tenantId={vault.tenantId} />
 
     <div className="admin-columns">
       <Card>
