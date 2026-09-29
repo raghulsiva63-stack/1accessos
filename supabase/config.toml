@@ -37,3 +37,8 @@ verify_jwt = false
 
 [functions.identity-admin]
 verify_jwt = true
+
+# Desktop sign-in: the app has no session yet. The one-time code plus the app's PKCE
+# verifier are the credential; both are checked once in the database.
+[functions.desktop-session]
+verify_jwt = false

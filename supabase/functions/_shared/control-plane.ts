@@ -4,6 +4,10 @@ const APP_ORIGINS = new Set([
   "https://passkey-x.com",
   "https://www.passkey-x.com",
   "https://passkey-x.netlify.app",
+  // Passkey-X desktop (bundled app): tauri://localhost on macOS/Linux, http://tauri.localhost on Windows.
+  // Calls carry the user's bearer token; no cookies are used, so these origins gain no ambient access.
+  "tauri://localhost",
+  "http://tauri.localhost",
   // Local development origin only when explicitly enabled for this function deployment.
   ...(Deno.env.get("ALLOW_LOCALHOST_ORIGIN") === "true" ? ["http://localhost:3000"] : []),
 ]);
