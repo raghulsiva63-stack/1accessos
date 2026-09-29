@@ -224,6 +224,21 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "team-rollout",
+    category: "business",
+    title: "Roll out Passkey-X to your team",
+    summary: "See who has finished setting up, nudge the rest and keep a record.",
+    opens: { view: "admin", label: "Open Admin console" },
+    steps: [
+      "Open Admin console and choose Team rollout.",
+      "Work through the checklist: invite your people (a CSV spreadsheet works for many at once), require two-step verification and turn on breach checks.",
+      "Check Where everyone is. Each person shows as Not started, Signed in, Using the vault or Fully set up, with their next step.",
+      "Choose Copy reminder and send it to anyone who has not finished.",
+      "Choose Download CSV or Print or save as PDF to keep a record for yourself or your auditors.",
+    ],
+    tips: ["Admins see only setup status and totals. Nobody in your organisation can see another person's passwords."],
+  },
+  {
     id: "admin-console",
     category: "business",
     title: "Use the Admin console",
