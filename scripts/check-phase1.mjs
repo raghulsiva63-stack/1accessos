@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
+import { readAppShell } from "./lib/app-source.mjs";
 
-const page = await readFile("apps/web/app/page.tsx", "utf8");
+const page = await readAppShell();
 const itemModel = await readFile("apps/web/lib/vault/items.ts", "utf8");
 const crypto = await readFile("apps/web/lib/crypto/vault.ts", "utf8");
 const attachments = await readFile("apps/web/lib/vault/attachments.ts", "utf8");

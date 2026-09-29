@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readAppShell } from "./lib/app-source.mjs";
 
 const client = await readFile("apps/web/lib/supabase/client.ts", "utf8");
-const page = await readFile("apps/web/app/page.tsx", "utf8");
+const page = await readAppShell();
 const environment = await readFile("apps/web/.env.example", "utf8");
 const netlify = await readFile("netlify.toml", "utf8");
 const decision = await readFile("docs/architecture/ADR-0007-passkey-relying-party.md", "utf8");
