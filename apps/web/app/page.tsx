@@ -12,6 +12,9 @@ import { authSessionTransition } from "@/lib/auth/session-machine";
 import { ConfigurationNotice, FatalNotice, AuthScreen, AccountPasswordReset, VaultSetup, UnlockScreen } from "@/components/app/shell/auth-screens";
 import { type CryptoProfile, Brand, customerError } from "@/components/app/shell/shared";
 import { VaultShell } from "@/components/app/shell/vault-shell";
+import { DesktopFinishSetup, DesktopSignIn } from "@/components/desktop/desktop-sign-in";
+import { isDesktopApp } from "@/lib/desktop/bridge";
+import { parsePendingLink, PENDING_LINK_KEY } from "@/lib/desktop/handoff";
 
 export default function Home() {
   const clientMode = useClientMode();
@@ -75,13 +78,21 @@ export default function Home() {
     return () => { active = false; };
   }, [sessionUserId, mfaState]);
 
+  // Web: an SSO sign-in started on /desktop-link returns here; send it back to finish approving the desktop app.
+  useEffect(() => {
+    if (!sessionUserId || isDesktopApp()) return;
+    try { if (parsePendingLink(window.sessionStorage.getItem(PENDING_LINK_KEY))) window.location.replace("/desktop-link/"); } catch { /* storage blocked */ }
+  }, [sessionUserId]);
+
+  const inDesktopApp = clientMode === "desktop" && isDesktopApp();
   if (loading || !clientMode) return <main className="center-screen"><div className="loading-ring" aria-label="Loading Passkey-X" /></main>;
   if (!isSupabaseConfigured) return <ConfigurationNotice />;
   if (accountRecovery && session) return <AccountPasswordReset email={session.user.email ?? "your account"} onComplete={() => { setAccountRecovery(false); void supabase?.auth.signOut(); }} />;
   if (error) return <FatalNotice message={error} />;
   if (session && mfaState === "checking") return <main className="center-screen"><div className="loading-ring" aria-label="Checking account security" /></main>;
   if (session && mfaState === "required") return <MfaChallengeScreen brand={<Brand />} onComplete={() => setMfaState("satisfied")} footer={<><Button type="button" variant="ghost" onClick={() => void supabase?.auth.signOut()}>Use another account</Button><div className="privacy-note"><ShieldCheck /><span>Two-step verification (authenticator app or SMS) verifies the account session only. It cannot reset the vault password, decrypt vault data, or replace the recovery key.</span></div></>} />;
-  if (!session) return <AuthScreen clientMode={clientMode} />;
+  if (!session) return inDesktopApp ? <DesktopSignIn /> : <AuthScreen clientMode={clientMode} />;
+  if (!profile && inDesktopApp) return <DesktopFinishSetup email={session.user.email ?? "your account"} />;
   if (!profile) return <VaultSetup email={session.user.email ?? "your account"} onComplete={setProfile} />;
   if (!rootKey) return <UnlockScreen profile={profile} email={session.user.email ?? ""} onUnlock={(key, facts) => { if (document.hidden || activeUserId.current !== sessionUserId) key.fill(0); else { setPasswordFacts(facts ?? null); setRootKey(key); } }} onProfileChange={setProfile} />;
   return <VaultShell clientMode={clientMode} email={session.user.email ?? ""} profile={profile} rootKey={rootKey} passwordFacts={passwordFacts} onPasswordFacts={setPasswordFacts} onProfileChange={setProfile} onLock={() => { rootKey.fill(0); setRootKey(null); }} />;

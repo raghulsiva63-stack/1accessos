@@ -11,10 +11,10 @@ function target() {
     emit(name, event = {}) { for (const fn of handlers.get(name) ?? []) fn(event); },
   };
 }
-function harness() {
+function harness(options = {}) {
   const doc = target(), win = target(), timers = new Map();
   let time = 0, locks = 0, id = 0;
-  const dispose = watchVaultLifetime({ documentObject: doc, windowObject: win, onLock: () => locks++, now: () => time,
+  const dispose = watchVaultLifetime({ ...options, documentObject: doc, windowObject: win, onLock: () => locks++, now: () => time,
     schedule(fn, delay) { const key = ++id; timers.set(key, { fn, at: time + delay }); return key; },
     cancel(key) { timers.delete(key); },
   });
@@ -43,4 +43,14 @@ test('an event after suspended timers cannot revive an expired vault', () => {
 test('clock rollback and lifecycle cleanup cannot extend access', () => {
   const h = harness(); h.jump(-1); h.doc.emit('pointerdown', { isTrusted: true }); assert.equal(h.count(), 1);
   const clean = harness(); clean.dispose(); clean.win.emit('pagehide'); clean.advance(600000); assert.equal(clean.count(), 0); assert.equal(clean.timers.size, 0);
+});
+
+test('desktop mode keeps a hidden window unlocked only until the idle limit', () => {
+  const h = harness({ lockWhenHidden: false, idleMs: 1000 });
+  h.doc.hidden = true; h.doc.emit('visibilitychange');
+  assert.equal(h.count(), 0);
+  h.advance(999); assert.equal(h.count(), 0);
+  h.advance(1); assert.equal(h.count(), 1);
+  const lockEvent = harness({ lockWhenHidden: false });
+  lockEvent.win.emit('passkey-x:lock'); assert.equal(lockEvent.count(), 1);
 });

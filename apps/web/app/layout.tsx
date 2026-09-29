@@ -12,6 +12,7 @@ import "./plans-help.css";
 import "./protect.css";
 import "./home.css";
 import "./views.css";
+import "./desktop.css";
 
 export const metadata: Metadata = {
   title: "Passkey-X — Your private digital vault",
