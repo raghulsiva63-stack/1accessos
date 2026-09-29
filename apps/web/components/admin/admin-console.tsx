@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Activity, BellRing, Building2, FileCheck2, FileClock, FolderLock, KeyRound, LayoutDashboard, Lock, Rocket, ShieldCheck, SlidersHorizontal, Users,
+  Activity, BellRing, Building2, CalendarClock, FileCheck2, FileClock, Fingerprint, FolderLock, KeyRound, LayoutDashboard, Lock, MailWarning, Rocket, ShieldCheck, SlidersHorizontal, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,19 +16,23 @@ import { AlertsPanel } from "@/components/admin/alerts-panel";
 import { ReportsPanel } from "@/components/admin/reports-panel";
 import { IdentityPanel } from "@/components/admin/identity-panel";
 import { RolloutPanel } from "@/components/admin/rollout-panel";
+import { BreachWatchPanel, PasskeyAdoptionPanel, RotationPanel } from "@/components/admin/security-panels";
 import { OrganizationView } from "@/components/organization-view";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import type { TenantEntitlement } from "@/lib/billing/client";
 import { loadMemberOverview, type MemberOverview } from "@/lib/enterprise/admin";
 import { loadTenantPolicies, type StoredPolicy } from "@/lib/enterprise/policies";
-import type { WorkspaceVault } from "@/lib/vault/items";
+import type { VaultItem, WorkspaceVault } from "@/lib/vault/items";
 
-export type AdminTab = "overview" | "rollout" | "alerts" | "people" | "identity" | "policies" | "access" | "audit" | "reports" | "integrations" | "directory";
+export type AdminTab = "overview" | "rollout" | "alerts" | "breach" | "passkeys" | "rotation" | "people" | "identity" | "policies" | "access" | "audit" | "reports" | "integrations" | "directory";
 
 const TABS: { id: AdminTab; label: string; icon: typeof Users }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "rollout", label: "Team rollout", icon: Rocket },
   { id: "alerts", label: "Alerts", icon: BellRing },
+  { id: "breach", label: "Breach watch", icon: MailWarning },
+  { id: "passkeys", label: "Passkeys", icon: Fingerprint },
+  { id: "rotation", label: "Rotation", icon: CalendarClock },
   { id: "people", label: "People", icon: Users },
   { id: "identity", label: "Identity & SSO", icon: KeyRound },
   { id: "policies", label: "Policies", icon: SlidersHorizontal },
@@ -53,15 +57,20 @@ export function adminErrorMessage(reason: unknown, fallback = "The change could 
 }
 
 export function AdminConsole({
-  vault, entitlement, workspaceNames, onOpenBilling,
+  vault, entitlement, workspaceNames, onOpenBilling, items = [],
 }: {
   vault: WorkspaceVault;
+  /** Decrypted items of the current workspace (for choosing rotation campaign items; never sent). */
+  items?: VaultItem[];
   entitlement: TenantEntitlement;
   workspaceNames: Map<string, string>;
   onOpenBilling: () => void;
 }) {
   const { isOrganization, tenantRole, refresh: refreshPolicy } = useEnterprise();
-  const [tab, setTab] = useState<AdminTab>("overview");
+  const [tab, setTab] = useState<AdminTab>(() => {
+    const requested = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
+    return TABS.some((entry) => entry.id === requested) ? requested as AdminTab : "overview";
+  });
   const [members, setMembers] = useState<MemberOverview[]>([]);
   const [policies, setPolicies] = useState<StoredPolicy[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,6 +116,9 @@ export function AdminConsole({
       {tab === "overview" && <AdminOverview vault={vault} members={members} policies={policies} loading={loading} onNavigate={setTab} onChanged={reload} canEdit={businessActive} />}
       {tab === "rollout" && <RolloutPanel vault={vault} members={members} policies={policies} loading={loading} onNavigate={setTab} />}
       {tab === "alerts" && <AlertsPanel vault={vault} members={members} />}
+      {tab === "breach" && (businessActive ? <BreachWatchPanel vault={vault} canEdit={businessActive} /> : <BusinessOnly feature="Employee breach checks" onOpenBilling={onOpenBilling} />)}
+      {tab === "passkeys" && <PasskeyAdoptionPanel vault={vault} canEdit={businessActive} onOpenPolicies={() => setTab("policies")} />}
+      {tab === "rotation" && (businessActive ? <RotationPanel vault={vault} items={items} members={members} canEdit={businessActive} /> : <BusinessOnly feature="Password rotation campaigns" onOpenBilling={onOpenBilling} />)}
       {tab === "identity" && <IdentityPanel vault={vault} canEdit={businessActive} />}
       {tab === "reports" && (businessActive ? <ReportsPanel vault={vault} organizationName={vault.name} /> : <BusinessOnly feature="Compliance reports" onOpenBilling={onOpenBilling} />)}
       {tab === "people" && <PeoplePanel vault={vault} members={members} loading={loading} onChanged={reload} onOpenDirectory={() => setTab("directory")} />}

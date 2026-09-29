@@ -2,6 +2,7 @@ import { authorizedExtensionMessage, authorizedPairingMessage, type PendingPairi
 import { sessionStorageAdapter } from "./session-storage";
 import { createClient } from "@supabase/supabase-js";
 import { argon2id } from "hash-wasm";
+import { assessSite } from "../../web/lib/security/phishing";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -288,6 +289,13 @@ function safeOrigin(value: string) {
 // must still match exactly, and no other subdomain is treated as the same site.
 function siteKey(origin: string) { try { const url = new URL(origin); return `${url.protocol}//${url.hostname.replace(/^www\./u, "")}:${url.port}`; } catch { return ""; } }
 function sameSite(url: string, origin: string) { const saved = safeOrigin(url); return Boolean(saved && origin && siteKey(saved) === siteKey(origin)); }
+// Warn when the current site looks like a saved one but is not it (e.g. paypa1.com vs paypal.com).
+// Checked locally against the unlocked vault; nothing is sent anywhere.
+function lookalike(origin: string) {
+  if (!origin || !credentials.length || matches(origin).length) return null;
+  const verdict = assessSite(origin, credentials.map((credential) => credential.url));
+  return verdict.kind === "lookalike" ? { resembles: verdict.resembles, reason: verdict.reason } : null;
+}
 function matches(origin: string) { return credentials.filter((credential) => sameSite(credential.url, origin)).map(({ key: id, title, username, source }) => ({ id, title: source === "capsule" ? `${title} · shared` : title, username })); }
 function clearVault(forgetPending = true) { vaultGeneration++; clearTimeout(idleTimer); for (const context of vaults) context.key.fill(0); vaults = []; accountRoot?.fill(0); accountRoot = null; for (const credential of credentials) credential.secret = ""; credentials = []; if (forgetPending) for (const tabId of [...candidates.keys()]) forgetCandidate(tabId); }
 async function disconnect() {
@@ -407,7 +415,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       }
       else if (request.type === "PX_FILL") await fillCredential(tabId, origin, request.id);
       const session = await restoreSession();
-      sendResponse({ ok: true, connected: Boolean(session), email: session?.user.email, unlocked: vaults.length > 0, matches: origin ? matches(origin) : [], workspaces: vaults.filter(context => context.writable).map(context => ({ id: context.workspaceId, name: context.name })), ignored: Boolean(origin && await isIgnored(origin)), candidate: Number.isInteger(tabId) ? candidateSummary(tabId, origin) : null });
+      sendResponse({ ok: true, connected: Boolean(session), email: session?.user.email, unlocked: vaults.length > 0, matches: origin ? matches(origin) : [], workspaces: vaults.filter(context => context.writable).map(context => ({ id: context.workspaceId, name: context.name })), ignored: Boolean(origin && await isIgnored(origin)), candidate: Number.isInteger(tabId) ? candidateSummary(tabId, origin) : null, lookalike: vaults.length ? lookalike(origin) : null });
     } catch (error) { sendResponse({ ok: false, error: error instanceof Error ? error.message : "Passkey-X extension error." }); }
     finally { if (guarded) vaultOperationBusy = false; }
   })();

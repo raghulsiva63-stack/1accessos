@@ -12,6 +12,7 @@ import {
   type ComplianceSnapshot, type ControlResult,
 } from "@/lib/enterprise/compliance";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { WeeklyReportCard } from "@/components/admin/security-panels";
 
 const STATUS_ICON = { pass: CircleCheck, partial: CircleDashed, fail: CircleX };
 const STATUS_LABEL = { pass: "Meets", partial: "Partially meets", fail: "Gap" };
@@ -51,6 +52,7 @@ export function ReportsPanel({ vault, organizationName }: { vault: WorkspaceVaul
   const stamp = snapshot ? snapshot.generated_at.slice(0, 10) : "";
 
   return <div className="reports-panel">
+    <WeeklyReportCard vault={vault} organizationName={organizationName} />
     <Card className="report-sheet">
       <CardHeader>
         <div className="panel-heading"><div><CardTitle><FileCheck2 /> Security & compliance report</CardTitle>

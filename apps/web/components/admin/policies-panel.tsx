@@ -12,6 +12,7 @@ import {
   type PolicyDefinition, type StoredPolicy,
 } from "@/lib/enterprise/policies";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { AiPolicyAdvisor } from "@/components/admin/security-ai";
 
 const GROUPS: PolicyDefinition["group"][] = ["Authentication", "Vault protection", "Data movement", "Recovery"];
 
@@ -96,6 +97,7 @@ export function PoliciesPanel({
   const scoped = policies.filter((policy) => policy.scope_type !== "tenant" && policy.enforced);
   if (loading && !policies.length) return <div className="vault-loading"><div className="loading-ring" /></div>;
   return <div className="policies-panel">
+    <AiPolicyAdvisor tenantId={vault.tenantId} identityId={vault.identityId} canEdit={canEdit} onChanged={onChanged} />
     <p className="field-hint policies-intro">Organization-wide defaults apply to every member. Department and team overrides are managed in Directory and take precedence for those people.{scoped.length ? ` ${scoped.length} scoped override${scoped.length === 1 ? " is" : "s are"} active.` : ""}</p>
     {GROUPS.map((group) => <Card key={group}>
       <CardHeader><CardTitle>{group}</CardTitle><CardDescription>{group === "Authentication" ? "How members prove who they are." : group === "Vault protection" ? "How the vault behaves on every device." : group === "Data movement" ? "Where vault data is allowed to go." : "What happens when a member loses access."}</CardDescription></CardHeader>

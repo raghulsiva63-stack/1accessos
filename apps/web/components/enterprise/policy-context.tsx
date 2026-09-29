@@ -12,6 +12,8 @@ export type Compliance = {
 };
 
 type EnterpriseContextValue = {
+  /** The signed-in person's identity (empty when outside the vault). */
+  identityId: string;
   policy: EnterprisePolicy;
   tenantRole: string | null;
   tenantKind: string | null;
@@ -26,6 +28,7 @@ type EnterpriseContextValue = {
 };
 
 const fallback: EnterpriseContextValue = {
+  identityId: "",
   policy: DEFAULT_POLICY,
   tenantRole: null,
   tenantKind: null,
@@ -103,6 +106,7 @@ export function EnterpriseProvider({
   }, [currentItemId, tenantId, workspaceId]);
 
   const value = useMemo<EnterpriseContextValue>(() => ({
+    identityId,
     policy,
     tenantRole,
     tenantKind,
@@ -114,7 +118,7 @@ export function EnterpriseProvider({
     record,
     refresh: () => setVersion((value) => value + 1),
     refreshCompliance: () => setComplianceVersion((value) => value + 1),
-  }), [compliance, loading, policy, record, tenantKind, tenantRole]);
+  }), [compliance, identityId, loading, policy, record, tenantKind, tenantRole]);
 
   return <EnterpriseContext.Provider value={value}>{children}</EnterpriseContext.Provider>;
 }

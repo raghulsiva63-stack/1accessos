@@ -56,4 +56,9 @@ export const ALERT_GUIDANCE: Record<string, string> = {
   "org_recovery.key_set": "The organization recovery key changed. Make sure the new kit is stored offline and the old one destroyed.",
   "sso.optional": "Members can sign in without your identity provider again. Confirm this was intended.",
   "scim.user_deactivated": "Your identity provider removed a person. Their vault access was revoked; rotate shared secrets they knew.",
+  "sign_in.unfamiliar": "A member signed in from a new device on a new network. They were emailed; confirm with them if it looks unexpected.",
+  "sign_in.new_country": "A member signed in from a country they haven't used before. Check with them, and ask them to review Sign-in activity.",
+  "sign_in.many_networks": "Sign-ins from many networks in an hour can mean a stolen password or session. Contact the member and have them sign out other sessions and change their account password.",
+  "member.breach_exposed": "A member's work email is in a new data breach. Ask them to change any password they reused there; start a rotation campaign for shared logins they know.",
+  "rotation.overdue": "A password rotation campaign passed its due date with open tasks. Remind the assignees or extend the campaign.",
 };

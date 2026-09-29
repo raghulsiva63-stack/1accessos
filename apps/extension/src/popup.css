@@ -45,3 +45,5 @@ button:focus-visible { outline: 3px solid #4d72ff; outline-offset: 2px; }
 select { width: 100%; min-height: 40px; padding: .5rem; border: 1px solid #526489; border-radius: .5rem; background: #101d38; color: #f1f5ff; font: inherit; }
 footer a { color: #a9c0ff; }
 footer p { margin-bottom: 0; }
+.lookalike { display: grid; gap: 4px; margin: 10px 0; padding: 10px 12px; border: 1px solid #f0a3a3; border-radius: 10px; background: #fff5f5; color: #5c1016; font-size: 12px; }
+.lookalike strong { color: #a3202a; font-size: 13px; }

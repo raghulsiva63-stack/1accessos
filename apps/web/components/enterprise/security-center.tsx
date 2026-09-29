@@ -2,7 +2,7 @@
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
-  TriangleAlert, ChevronRight, Fingerprint, KeyRound, Link2Off, LoaderCircle, RefreshCw,
+  TriangleAlert, ChevronRight, FileWarning, Fingerprint, KeyRound, Link2Off, LoaderCircle, RefreshCw,
   Repeat2, ShieldAlert, ShieldCheck, Timer, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,10 @@ import { AiSecurityCoach } from "@/components/app/ai-security-coach";
 import { FixQueue } from "@/components/enterprise/fix-queue";
 import { recallBreachResults, rememberBreachResults } from "@/lib/enterprise/breach-watch";
 import { buildFixQueue } from "@/lib/vault/change-password";
+import { upgradeSuggestions } from "@/lib/security/site-directory";
+import {
+  ExposedSecretsCard, LookalikeCard, MyBreachesCard, RotationTasksCard, UpgradeCard, useSiteDirectory,
+} from "@/components/security/security-extras";
 
 const ISSUE_META: Record<HealthIssue, { label: string; tone: "critical" | "warning" | "info"; icon: typeof ShieldAlert }> = {
   breached: { label: "Found in a breach", tone: "critical", icon: Zap },
@@ -25,6 +29,8 @@ const ISSUE_META: Record<HealthIssue, { label: string; tone: "critical" | "warni
   old: { label: "Due for rotation", tone: "info", icon: Timer },
   insecure_url: { label: "Insecure http:// site", tone: "warning", icon: Link2Off },
   missing_totp: { label: "No 2FA code stored", tone: "info", icon: Fingerprint },
+  lookalike: { label: "Look-alike website", tone: "critical", icon: ShieldAlert },
+  exposed_secret: { label: "Secret in notes", tone: "warning", icon: FileWarning },
 };
 
 export function SecurityCenter({
@@ -37,7 +43,8 @@ export function SecurityCenter({
   onRotate?: (id: string) => void;
   clientKind?: string;
 }) {
-  const { policy, isOrganization } = useEnterprise();
+  const { policy, isOrganization, identityId } = useEnterprise();
+  const directory = useSiteDirectory();
   const [breaches, setBreaches] = useState<Map<string, number> | undefined>(() => recallBreachResults(tenantId));
   const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState("");
@@ -47,6 +54,11 @@ export function SecurityCenter({
   const [now] = useState(() => Date.now());
   const report = useMemo(() => analyzeVaultHealth(items, breaches, now, rotationDays), [items, breaches, now, rotationDays]);
   const breachAllowed = policy.breachMonitoring !== "off";
+  const suggestions = useMemo(() => upgradeSuggestions(items, directory), [items, directory]);
+  const readiness = useMemo(() => directory ? {
+    passkeyReady: suggestions.filter((entry) => entry.passkey).length,
+    twoFactorReady: suggestions.filter((entry) => entry.twoStep).length,
+  } : undefined, [directory, suggestions]);
 
   async function runBreachCheck() {
     setChecking(true); setMessage("");
@@ -68,9 +80,9 @@ export function SecurityCenter({
 
   useEffect(() => {
     if (!tenantId || !isOrganization) return;
-    const timer = window.setTimeout(() => { void reportVaultHealth(tenantId, report, clientKind).catch(() => undefined); }, 1_500);
+    const timer = window.setTimeout(() => { void reportVaultHealth(tenantId, report, clientKind, readiness).catch(() => undefined); }, 1_500);
     return () => window.clearTimeout(timer);
-  }, [clientKind, isOrganization, report, tenantId]);
+  }, [clientKind, isOrganization, readiness, report, tenantId]);
 
   const reusedCount = new Set(report.reused.flat()).size;
   const tiles: { id: HealthIssue; value: number }[] = [
@@ -79,6 +91,7 @@ export function SecurityCenter({
     { id: "weak", value: report.weak.length },
     { id: "old", value: report.old.length },
     { id: "insecure_url", value: report.insecureUrl.length },
+    { id: "exposed_secret", value: new Set(report.exposedSecrets.map((finding) => finding.itemId)).size },
   ];
   const shown = report.items.filter((entry) => filter === "all" || entry.issues.includes(filter));
   const byId = new Map(items.map((item) => [item.id, item]));
@@ -105,7 +118,17 @@ export function SecurityCenter({
       missing_two_step: report.missingTotp.length, passkeys: report.passkeyCount,
     }} />
 
+    <LookalikeCard pairs={report.lookalikes} items={items} onOpen={onOpen} />
+
+    {onRotate && <RotationTasksCard identityId={identityId} items={items} onRotate={onRotate} />}
+
+    <MyBreachesCard tenantId={isOrganization ? tenantId : null} identityId={identityId} />
+
     {onRotate && <FixQueue tasks={buildFixQueue(items, report)} onRotate={onRotate} />}
+
+    <ExposedSecretsCard findings={report.exposedSecrets} onOpen={onOpen} />
+
+    <UpgradeCard suggestions={suggestions} onOpen={onOpen} loading={!directory} />
 
     <div className="risk-tiles">
       {tiles.map((tile) => { const meta = ISSUE_META[tile.id]; const Icon = meta.icon; const active = filter === tile.id; return <button key={tile.id} className={`risk-tile tone-${tile.value ? meta.tone : "clear"} ${active ? "active" : ""}`} onClick={() => setFilter(active ? "all" : tile.id)} disabled={tile.id === "breached" && !report.breachChecked}>

@@ -1,8 +1,33 @@
 import type { Config } from "@netlify/functions";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
+import { POLICY_SCHEMA, TRIAGE_SCHEMA, validatePolicyAdvice, validateTriage } from "../../lib/security/ai-output";
 
-const USE_CASES = new Set(["security_posture", "access_review", "spend_review", "incident_summary", "vault_health"]);
+const USE_CASES = new Set(["security_posture", "access_review", "spend_review", "incident_summary", "vault_health",
+  "alert_triage", "policy_advisor", "weekly_summary"]);
+// Organization security use cases: the database builds the context (counts, alert kinds and
+// policy settings only) and checks that the caller may see the organization's security posture.
+const SECURITY_USE_CASES = new Set(["alert_triage", "policy_advisor", "weekly_summary"]);
+
+const POLICY_CATALOGUE = [
+  'passkey_required {"required": boolean} - members must register an account passkey',
+  'mfa_required {"required": boolean} - members must use two-step verification',
+  'device_approval_required {"required": boolean} - new devices need approval',
+  'minimum_vault_password {"min_length": 12-128, "min_strength": 0-4} - vault password strength',
+  'session_timeout_minutes {"minutes": 1-480} - automatic vault lock',
+  'clipboard_clear_seconds {"seconds": 5-300} - clear copied secrets',
+  'breach_monitoring {"mode": "off"|"optional"|"required"} - breached password checks',
+  'password_rotation {"days": 30-730} - flag old passwords',
+  'sharing_mode {"mode": "open"|"internal_only"|"disabled"} - who items can be shared with',
+  'export_policy {"mode": "allowed"|"admins_only"|"blocked"} - who may export vault data',
+  'organization_recovery {"enabled": boolean} - admins can help members recover vault access',
+].join("\n");
+
+const SYSTEM_PROMPTS: Record<string, string> = {
+  alert_triage: "You are the Passkey-X security operations assistant for an organization administrator. You receive only groups of open security alerts: kind, severity, count, age in hours and how many members are involved. No names, emails, secrets or vault content. Rank the alert kinds: priority 1 = act now, 5 = informational. For each kind give why it matters in one plain sentence and the next concrete step (use Passkey-X admin tabs: Alerts, People, Audit log, Policies, Breach watch, Rotation, or contacting the member). Use only kinds present in the input. The summary is at most two sentences.",
+  policy_advisor: `You are the Passkey-X policy advisor for an organization administrator. You receive aggregate security posture (counts and percentages) and the policies already enforced. Recommend at most 5 policy changes that would clearly improve security for these numbers, most important first. Only use this catalogue, and put the exact configuration as a JSON object string in configuration_json:\n${POLICY_CATALOGUE}\nDo not recommend a policy that is already enforced with the same value. Each reason is one sentence that refers to the numbers. The summary is at most two sentences.`,
+  weekly_summary: "You write the weekly Passkey-X security summary for a company owner who is not a security expert. You receive only counts. In at most 120 words of plain text (no headings, no markdown): say how the security score moved, then the three most important risks with one concrete action each. Never invent numbers.",
+};
 // Vault-health coaching receives only these on-device totals. Titles, sites, usernames and
 // passwords never leave the browser.
 const VAULT_HEALTH_KEYS = ["score", "logins", "weak", "reused", "old", "breached", "insecure_sites", "missing_two_step", "passkeys"] as const;
@@ -87,7 +112,13 @@ async function handle(request: Request, origin: string | null, desktop: boolean)
 
     let metrics: Record<string, unknown>;
     let categories: string[];
-    if (useCase === "vault_health") {
+    if (SECURITY_USE_CASES.has(useCase)) {
+      const { data: context, error: contextError } = await client.rpc("ai_security_context", { p_tenant_id: tenantId, p_use_case: useCase });
+      if (contextError?.code === "42501") return response(403, { error: "forbidden" });
+      if (contextError || !context || typeof context !== "object") throw new Error("context_unavailable");
+      metrics = context as Record<string, unknown>;
+      categories = ["security_counts"];
+    } else if (useCase === "vault_health") {
       const health = vaultHealthMetrics(body.metrics);
       if (!health) return response(400, { error: "invalid_request" });
       metrics = health;
@@ -129,22 +160,39 @@ async function handle(request: Request, origin: string | null, desktop: boolean)
       apiKey: required("OPENAI_API_KEY"),
       baseURL: required("OPENAI_BASE_URL"),
     });
+    const structured = useCase === "alert_triage" ? TRIAGE_SCHEMA : useCase === "policy_advisor" ? POLICY_SCHEMA : null;
     const completion = await openai.responses.create({
       model: "gpt-5-mini",
       reasoning: { effort: "minimal" },
-      max_output_tokens: 500,
+      max_output_tokens: structured ? 1200 : 500,
       input: [
         {
           role: "system",
-          content: useCase === "vault_health"
+          content: SYSTEM_PROMPTS[useCase] ?? (useCase === "vault_health"
             ? "You are the Passkey-X AI Security Coach for one person. You receive only counts about their password vault (a -1 value means not checked yet). Write a friendly, plain-language plan: first the single most important fix and why, then up to four short numbered steps in priority order that use Passkey-X screens (Security, Vault, Generator, Account security). Mention turning on two-step verification if relevant. Never ask for or guess passwords, sites or names. Under 180 words."
-            : "You are Passkey-X Security Advisor. Analyze only the supplied aggregate counts. Do not infer identities, credentials, secret values, or vault contents. Give concise, non-destructive recommendations and require human approval for access changes.",
+            : "You are Passkey-X Security Advisor. Analyze only the supplied aggregate counts. Do not infer identities, credentials, secret values, or vault contents. Give concise, non-destructive recommendations and require human approval for access changes."),
         },
         { role: "user", content: prompt },
       ],
+      ...(structured ? { text: { format: { type: "json_schema" as const, name: useCase, schema: structured as unknown as Record<string, unknown>, strict: true } } } : {}),
     });
-    const advice = completion.output_text?.trim();
-    if (!advice) throw new Error("empty_response");
+    const output = completion.output_text?.trim();
+    if (!output) throw new Error("empty_response");
+    let advice = output;
+    let result: Record<string, unknown> | null = null;
+    if (useCase === "alert_triage") {
+      const groups = Array.isArray(metrics.open_alert_groups) ? metrics.open_alert_groups as { kind?: unknown }[] : [];
+      const triage = validateTriage(JSON.parse(output), new Set(groups.map((group) => String(group.kind))));
+      if (!triage) throw new Error("invalid_response");
+      advice = triage.summary; result = triage;
+    } else if (useCase === "policy_advisor") {
+      const enforced = Array.isArray(metrics.enforced_policies) ? metrics.enforced_policies as { type: string; configuration: unknown }[] : [];
+      const policy = validatePolicyAdvice(JSON.parse(output), enforced);
+      if (!policy) throw new Error("invalid_response");
+      advice = policy.summary; result = policy;
+    } else if (useCase === "weekly_summary") {
+      advice = output.slice(0, 4000);
+    }
     await client.rpc("complete_ai_assistant_request", {
       p_request_id: requestId,
       p_status: "completed",
@@ -152,10 +200,18 @@ async function handle(request: Request, origin: string | null, desktop: boolean)
       p_output_tokens: completion.usage?.output_tokens ?? 0,
       p_failure_code: null,
     });
+    if (useCase === "weekly_summary") {
+      // Saved only after the request is completed: the database accepts a summary only from the
+      // person who just received one (owners, admins and security admins).
+      const now = new Date();
+      const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
+      await client.rpc("save_security_report_summary", { p_tenant_id: tenantId, p_week_start: monday.toISOString().slice(0, 10), p_summary: advice });
+    }
     return response(200, {
       requestId,
       model: completion.model,
       advice,
+      ...(result ? { result } : {}),
       context: "aggregate_counts_only",
     });
   } catch (error) {

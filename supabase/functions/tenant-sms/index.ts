@@ -3,6 +3,7 @@ import {
   adminSupabase, corsHeaders, decryptCredential, encryptCredential, isUuid, json,
   publicError, requireTenantManager, requireUser, sha256, toBytea,
 } from "../_shared/control-plane.ts";
+import { sendSent, tenantSmsCredential } from "../_shared/sms-delivery.ts";
 
 type SmsRequest = {
   action?: "status" | "save_credential" | "enable" | "disable" | "send_verification" | "verify_phone" | "send_test";
@@ -27,12 +28,6 @@ type SentEnvelope = {
   success?: boolean;
   data?: SentAccount;
   error?: { code?: string };
-  meta?: { request_id?: string };
-};
-
-type SentMessageEnvelope = {
-  data?: { recipients?: Array<{ message_id?: string }> };
-  recipients?: Array<{ message_id?: string }>;
   meta?: { request_id?: string };
 };
 
@@ -65,32 +60,6 @@ async function validateSentCredential(apiKey: string, requestedProfileId?: strin
     ready: smsReady(profile),
     accountStatus: profile.status ?? account.status ?? "unknown",
   };
-}
-
-async function credential(admin: ReturnType<typeof adminSupabase>, tenantId: string) {
-  const { data, error } = await admin.from("tenant_sms_credentials")
-    .select("encrypted_api_key,encryption_nonce,sender_profile_id,revoked_at")
-    .eq("tenant_id", tenantId).maybeSingle();
-  if (error || !data || data.revoked_at) throw new Error("credential_not_verified");
-  const apiKey = await decryptCredential(tenantId, "sent-api-key", data.encrypted_api_key, data.encryption_nonce);
-  return { apiKey, profileId: data.sender_profile_id as string | null };
-}
-
-async function sendSent(apiKey: string, profileId: string | null, phone: string, text: string, idempotencyKey: string) {
-  const response = await fetch("https://api.sent.dm/v3/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
-      "x-api-key": apiKey,
-      ...(profileId ? { "x-profile-id": profileId } : {}),
-    },
-    body: JSON.stringify({ to: [phone], channel: ["sms"], text, sandbox: false }),
-  });
-  const payload = await response.json().catch(() => ({})) as SentMessageEnvelope;
-  const messageId = (payload.data?.recipients ?? payload.recipients ?? [])[0]?.message_id ?? null;
-  if (!response.ok || !messageId) throw new Error("sms_not_ready");
-  return { messageId, requestId: payload.meta?.request_id ?? null };
 }
 
 function maskPhone(phone: string): string {
@@ -184,7 +153,7 @@ Deno.serve(async (request: Request) => {
     const { data: membership, error: membershipError } = await context.client.from("tenant_memberships")
       .select("status").eq("tenant_id", tenantId).eq("identity_id", context.identityId).eq("status", "active").maybeSingle();
     if (membershipError || !membership) throw new Error("forbidden");
-    const providerCredential = await credential(admin, tenantId);
+    const providerCredential = await tenantSmsCredential(admin, tenantId);
 
     if (body.action === "send_verification") {
       const phone = body.phone?.trim() ?? "";

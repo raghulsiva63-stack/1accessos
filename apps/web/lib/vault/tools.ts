@@ -2,6 +2,7 @@ import type { VaultItem } from "@/lib/vault/items";
 
 // EFF large wordlist; attribution and source hash in THIRD_PARTY_NOTICES.md.
 import WORDS from "./eff-words.json";
+import { analyzeVaultHealth, summarizeHealth } from "@/lib/security/score";
 
 function randomIndex(max: number) {
   if (!Number.isSafeInteger(max) || max < 1) throw new Error("Invalid random range.");
@@ -47,62 +48,14 @@ export function generatePassphrase(words = 7, separator = " ") {
   return Array.from({ length: count }, () => WORDS[randomIndex(WORDS.length)]).join(separator);
 }
 
-export type HealthFinding = {
-  id: string;
-  severity: "critical" | "warning" | "good";
-  title: string;
-  detail: string;
-  itemIds: string[];
-};
+export type { HealthFinding } from "@/lib/security/score";
 
-export function passwordHealth(items: VaultItem[], now = Date.now()) {
-  const logins = items.filter((item) => !item.deletedAt && !item.payload.archived && item.contentType === "login" && item.payload.secret);
-  const bySecret = new Map<string, VaultItem[]>();
-  for (const item of logins) {
-    const secret = item.payload.secret!;
-    bySecret.set(secret, [...(bySecret.get(secret) ?? []), item]);
-  }
-  const reused = [...bySecret.values()].filter((group) => group.length > 1);
-  const weak = logins.filter((item) => {
-    const value = item.payload.secret!;
-    return value.length < 14 || !/[A-Z]/u.test(value) || !/[a-z]/u.test(value) || !/\d/u.test(value);
-  });
-  const old = logins.filter((item) => now - Date.parse(item.payload.updatedAt) > 365 * 86_400_000);
-  const findings: HealthFinding[] = [
-    ...reused.map((group, index) => ({
-      id: `reused-${index}`,
-      severity: "critical" as const,
-      title: "Reused password",
-      detail: `${group.length} logins share the same password. Change each to a unique value.`,
-      itemIds: group.map((item) => item.id),
-    })),
-    ...(weak.length ? [{
-      id: "weak",
-      severity: "warning" as const,
-      title: "Weak passwords",
-      detail: `${weak.length} login${weak.length === 1 ? "" : "s"} should use a longer, more varied password.`,
-      itemIds: weak.map((item) => item.id),
-    }] : []),
-    ...(old.length ? [{
-      id: "old",
-      severity: "warning" as const,
-      title: "Login records not updated for a year",
-      detail: `${old.length} login${old.length === 1 ? "" : "s"} may need review.`,
-      itemIds: old.map((item) => item.id),
-    }] : []),
-  ];
-  const deductions = Math.min(100, reused.reduce((sum, group) => sum + group.length * 12, 0) + weak.length * 5 + old.length * 2);
-  return {
-    score: Math.max(0, 100 - deductions),
-    findings: findings.length ? findings : [{
-      id: "healthy",
-      severity: "good" as const,
-      title: "No obvious password risks",
-      detail: "Passkey-X found no reused, weak, or stale login passwords in this vault.",
-      itemIds: [],
-    }],
-    loginCount: logins.length,
-  };
+/**
+ * Home and reminder summary. Uses the same analysis as the Security page, so both always show the
+ * same score (breach results are added on the Security page once a check has run).
+ */
+export function passwordHealth(items: VaultItem[], now = Date.now(), rotationDays = 365) {
+  return summarizeHealth(analyzeVaultHealth(items, undefined, now, rotationDays));
 }
 
 export type CsvLogin = { title: string; username?: string; secret?: string; url?: string; notes?: string };
@@ -127,7 +80,7 @@ function parseCsvRow(row: string) {
 }
 
 export function parseLoginCsv(csv: string): CsvLogin[] {
-  const rows = csv.replace(/^\uFEFF/u, "").split(/\r?\n/u).filter((row) => row.trim());
+  const rows = (csv.charCodeAt(0) === 0xfeff ? csv.slice(1) : csv).split(/\r?\n/u).filter((row) => row.trim());
   if (rows.length < 2) throw new Error("The CSV does not contain any records.");
   const headers = parseCsvRow(rows[0]).map((value) => value.trim().toLowerCase());
   const find = (...names: string[]) => names.map((name) => headers.indexOf(name)).find((index) => index >= 0) ?? -1;
