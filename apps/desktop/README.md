@@ -1,13 +1,61 @@
-# Passkey-X desktop 0.3.0
+# Passkey-X desktop 1.0
 
-Desktop opens `https://passkey-x.com/app/desktop` directly to account login or vault unlock. The focused home screen provides local search, favorites, recently updated logins, recovery items and quick actions. The full encrypted vault, workspaces, sharing and account tools remain available.
+A self-contained desktop app for Windows, macOS and Linux (Tauri 2).
 
-Native 0.3 controls: system-tray quick access, 480-pixel compact window, full workspace, lock and hide, add-login shortcut, reload and browser fallback. Ctrl/Cmd+K opens quick access, Ctrl/Cmd+Shift+N adds a login, and Ctrl/Cmd+L locks while the application is focused. Closing locks and hides when a tray is available; Quit exits. On desktops without a tray host the close button closes normally.
+## How it works
 
-The native shell grants no remote command permissions. It permits only the exact production HTTPS origin and a bundled connection screen. External HTTP(S) links open in the browser. Focus loss locks the vault; recovery and export downloads go to Downloads with unique filenames. Vault keys remain in webview memory and are wiped on lock. Internet access is required.
+- **Bundled vault.** `scripts/build-frontend.mjs` builds the Passkey-X web app (`apps/web`) as a static export into `dist/`. The app loads it from its own local origin: `http://tauri.localhost` on Windows, `tauri://localhost` elsewhere.
+  - The window never loads passkey-x.com or any other website. Other links open in the default browser.
+  - Public client settings (Supabase URL, publishable key) live in `desktop.config.json`.
+- **Browser sign-in (PKCE + loopback, RFC 7636 / RFC 8252).** The app never shows a password form.
+  1. It creates a PKCE verifier and starts a one-shot listener on `127.0.0.1:<random port>`.
+  2. It opens `https://passkey-x.com/desktop-link/` in the default browser. There the person signs in (security check, passkeys, SSO, two-step verification) and chooses **Allow**.
+  3. The browser returns a one-time code to the listener.
+  4. The app redeems code + verifier once through the `desktop-session` Edge Function.
+  - Codes expire after 2 minutes, and a wrong verifier burns the code (`supabase/migrations/20261003090000_desktop_sign_in.sql`).
+  - Accounts with two-step verification must still complete it in the app before vault data is readable (the RLS aal2 policies).
+- **Session storage.** Supabase tokens are kept in an AES-256-GCM encrypted file. Its key is in the system credential store: Keychain, Credential Manager or Secret Service. Without a credential store, the session is memory-only.
 
-The Chrome/Edge extension provides website save prompts and filling. Desktop does not inspect other native applications or provide systemwide autofill. Passkey/CAPTCHA compatibility depends on the OS webview; Open in browser is the fallback. Native biometric vault unlock and signed automatic binary updates are not included.
+## Security features
 
-`desktop-release.yml` builds Windows x64 NSIS, macOS universal DMG and Ubuntu 24.04-compatible x64 DEB. Each artifact includes source, workflow, Cargo.lock and SHA-256 provenance. Windows/Linux are unsigned; macOS is ad-hoc signed and not notarized. The public download version is independently selected in `apps/web/lib/client-releases.json`; bump it only after verified static release assets are available.
+| Feature | Windows | macOS | Linux |
+|---|---|---|---|
+| Fingerprint/face unlock | Windows Hello. The key is derived from a Hello signature, so it is cryptographically bound to Hello. | Touch ID gate, plus a key in the login Keychain (see note) | — (vault password) |
+| Clipboard | Hidden from history and cloud clipboard, wiped after 30 s | Hidden from history, wiped | Password-manager hint, wiped |
+| Screenshot / screen-share blocking | ✓ | ✓ | — |
+| Lock on sleep | ✓ | ✓ | ✓ |
+| Lock on screen lock | ✓ | ✓ | idle timeout only |
+| Lock on quit / close / idle; optional on app switch or hide | ✓ | ✓ | ✓ |
+| Quick access over any app | Ctrl+Shift+Space | ⌘⇧Space | Ctrl+Shift+Space |
 
-For a local build, install the official Tauri prerequisites, run `npm ci` here and `npm run build`. No backend keys or account credentials are required to build the shell.
+- **Command allow-list.** Only the bundled pages in the `main` window can call native commands. The commands are declared in `build.rs`, and the allow-list is `capabilities/desktop.json`.
+- **Content Security Policy.** `tauri.conf.json` sets a strict CSP. Inline scripts are allowed only by build-time hashes.
+- **Biometric unlock is bound to the vault password envelope.** After a vault password change it stops working and is deleted. It is also removed on sign-out.
+- **macOS Touch ID note.** Touch ID is currently a gate in front of a normal Keychain item, and only Passkey-X can read that item without a system prompt. Binding the item to biometry (SecAccessControl) needs a Developer ID-signed build; see Owner actions.
+
+## Build
+
+```bash
+npm ci
+npm run build   # builds dist/ (web app) then the installer
+```
+
+- Signed automatic updates are included only when `updater.pub` is committed and `TAURI_SIGNING_PRIVATE_KEY` is set (`scripts/tauri-build.mjs`).
+- Linux uses `.deb` packages, which the Tauri updater cannot update. Linux users download new versions.
+
+## Owner actions
+
+1. **Updater signing key.**
+   - Run `npx tauri signer generate -w ~/.tauri/passkey-x.key` on your own computer.
+   - Commit the public key as `apps/desktop/updater.pub`.
+   - Add the private key and its password as GitHub secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+   - Update the workflow from `docs/desktop/desktop-release.yml`.
+2. **Code signing.**
+   - Windows: an OV/EV code-signing certificate, or Azure Trusted Signing.
+   - macOS: an Apple Developer ID certificate plus notarization.
+   - Until then, Windows SmartScreen and macOS Gatekeeper warn on install.
+3. **Publish a release.**
+   - Download the three installers from the workflow run.
+   - Add them under `releases/desktop/1.0.0/` (see `scripts/prepare-desktop-downloads.mjs`).
+   - Set `"desktop": "1.0.0"` in `apps/web/lib/client-releases.json`.
+   - With the updater on, also publish `latest.json`.

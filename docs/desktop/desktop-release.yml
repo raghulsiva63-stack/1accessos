@@ -1,0 +1,84 @@
+# Proposed replacement for .github/workflows/desktop-release.yml (workflow files cannot be
+# pushed by the automation, so paste this in the GitHub UI). Changes: updater signing
+# secrets, rebuild when the bundled web app changes, and desktop-v* tags.
+name: Passkey-X desktop packages
+
+on:
+  push:
+    branches: [main, 'codex/desktop-autosave*', 'codex/distinct-native-clients*']
+    tags: ['desktop-v*']
+    paths: ['apps/desktop/**', 'apps/web/**', '.github/workflows/desktop-release.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            bundles: nsis
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            name: macos-universal
+            bundles: dmg
+            target: universal-apple-darwin
+          - os: ubuntu-24.04
+            name: linux-x64
+            bundles: deb
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.7.0'
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb
+      - name: Cache Rust dependencies and builds
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: desktop-v1-${{ runner.os }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+      - name: Use stable Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Install macOS targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: npm ci --no-audit --no-fund
+      - name: Generate platform icons
+        run: node scripts/build-frontend.mjs
+      - name: Test native boundaries
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Build installer
+        env:
+          # Signed automatic updates (see apps/desktop/README.md). Without these the app is
+          # built without the updater.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} -- --locked
+      - name: Verify Linux application starts
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python3 scripts/smoke-desktop.py src-tauri/target/${{ matrix.target }}/release/passkey-x
+      - name: Collect installer and provenance
+        run: node scripts/collect-release.mjs ${{ matrix.name }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: passkey-x-desktop-${{ matrix.name }}
+          path: apps/desktop/artifacts/*
+          if-no-files-found: error
+          retention-days: 30
