@@ -4,6 +4,7 @@ import {
   adminSupabase, expectedStripeLivemode, json, priceMetadata, required, safeCode,
   stripeClient, stripeId,
 } from "../_shared/billing.ts";
+import { handleReferralRewards } from "../_shared/referrals.ts";
 
 type SubscriptionSnapshot = {
   tenantId: string;
@@ -140,6 +141,9 @@ Deno.serve(async (request: Request) => {
       }
       throw error;
     }
+    // Referral rewards never block billing: a failure is logged and retried on the next paid invoice.
+    try { await handleReferralRewards(stripe, admin, event, subscription, tenantId); }
+    catch (reason) { console.error(JSON.stringify({ function: "stripe-webhook", eventId: event.id, code: "referral_reward_deferred", detail: safeCode(reason) })); }
     return json(request, 200, { received: true });
   } catch (reason) {
     const code = safeCode(reason);
