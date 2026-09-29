@@ -64,3 +64,14 @@
   html.print-rollout .print-only { display: block; color: #444; }
   html.print-rollout .rollout-panel, html.print-rollout .rollout-people { border: 0; background: none; }
 }
+
+/* Home: referrals */
+.referral-card { display: flex; flex-wrap: wrap; gap: .9rem 1rem; padding: 1rem 1.2rem; border: 1px solid color-mix(in srgb, #7c3aed 30%, var(--border)); border-radius: 1.1rem; background: linear-gradient(135deg, color-mix(in srgb, #7c3aed 8%, var(--card)), var(--card) 70%); }
+.referral-card h3 { margin: 0; font-size: 1.05rem; }
+.referral-card p { margin: .25rem 0 0; color: var(--muted-foreground); font-size: .9rem; }
+.referral-body { flex: 1; min-width: 240px; display: grid; gap: .5rem; }
+.referral-icon { display: inline-grid; place-items: center; width: 2.6rem; height: 2.6rem; flex: none; border-radius: .8rem; background: #7c3aed; color: white; }
+.referral-icon svg { width: 1.2rem; height: 1.2rem; }
+.referral-link { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.referral-link code { flex: 1 1 220px; min-width: 0; overflow: hidden; padding: .45rem .6rem; border-radius: .6rem; background: var(--muted); font-size: .85rem; text-overflow: ellipsis; white-space: nowrap; }
+.referral-stats strong { color: var(--foreground); }

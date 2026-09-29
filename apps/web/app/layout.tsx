@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AppRuntime } from "@/components/app-install";
+import { ReferralCapture } from "@/components/referral-capture";
 import "./globals.css";
 import "./clients.css";
 import "./enterprise.css";
@@ -21,4 +22,4 @@ export const metadata: Metadata = {
   icons: { icon: "/favicon.png", shortcut: "/favicon-16.png", apple: "/brand/passkey-x-app-icon.png" },
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#050b1f" };
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang="en"><body><AppRuntime />{children}</body></html>; }
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang="en"><body><AppRuntime /><ReferralCapture />{children}</body></html>; }

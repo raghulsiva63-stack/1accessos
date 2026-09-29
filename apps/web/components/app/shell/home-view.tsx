@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { BreachWatchCard } from "@/components/app/breach-watch";
+import { ReferralCard } from "@/components/app/referral-card";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import { Button } from "@/components/ui/button";
 import { loadPublicPlanCatalog, type PublicCatalogPlan } from "@/lib/billing/client";
@@ -83,6 +84,8 @@ export function Dashboard({ items, trash, health, entitlement, identityId, tenan
         <span><small>Devices</small><strong>{entitlement.max_devices ?? "Unlimited"}</strong><em>{entitlement.max_devices ? "allowed on your plan" : "on your plan"}</em></span>
       </button>
     </div>
+
+    <ReferralCard />
 
     <div className="home-columns">
       <section className="home-panel" aria-labelledby="recent-title">
