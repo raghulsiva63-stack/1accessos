@@ -19,6 +19,7 @@ import {
   type WorkspaceMember, type WorkspaceRole, type WorkspaceSuite,
 } from "@/lib/collaboration/phase2";
 import { ITEM_TYPES, customerError, DetailField, CopyButton } from "@/components/app/shell/shared";
+import { shareOrigin } from "@/lib/desktop/bridge";
 
 export function WorkspacesView({ identityId, rootKey, workspaces, vault, onSelect, onReload }: {
   identityId: string; rootKey: Uint8Array; workspaces: WorkspaceVault[]; vault: WorkspaceVault;
@@ -53,7 +54,7 @@ export function WorkspacesView({ identityId, rootKey, workspaces, vault, onSelec
   async function invite(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setMessage(""); setShareLink("");
     try {
-      const link = await createWorkspaceInvite(vault, recipient, role, new Date(Date.now() + expiresDays * 86_400_000).toISOString(), window.location.origin);
+      const link = await createWorkspaceInvite(vault, recipient, role, new Date(Date.now() + expiresDays * 86_400_000).toISOString(), shareOrigin());
       setShareLink(link); setRecipient(""); await refreshLists();
     } catch (reason) { setMessage(customerError(reason, "Unable to create this invitation. Try again.")); }
     finally { setBusy(false); }
@@ -110,7 +111,7 @@ export function SharingView({ vault, items }: { vault: WorkspaceVault; items: Va
   async function submit(event: React.FormEvent) {
     event.preventDefault(); const item = items.find((candidate) => candidate.id === itemId); if (!item) return;
     setBusy(true); setMessage(""); setShareLink("");
-    try { setShareLink(await createAccessCapsule(vault, item, recipient, policy, purpose, new Date(Date.now() + expiresDays * 86_400_000).toISOString(), oneTime ? 1 : 0, window.location.origin)); setRecipient(""); await refresh(); }
+    try { setShareLink(await createAccessCapsule(vault, item, recipient, policy, purpose, new Date(Date.now() + expiresDays * 86_400_000).toISOString(), oneTime ? 1 : 0, shareOrigin())); setRecipient(""); await refresh(); }
     catch (reason) { setMessage(customerError(reason, "Unable to create this Access Capsule. Try again.")); }
     finally { setBusy(false); }
   }
