@@ -42,3 +42,11 @@ verify_jwt = true
 # verifier are the credential; both are checked once in the database.
 [functions.desktop-session]
 verify_jwt = false
+
+# Security notification and breach-watch workers: pg_cron calls them through pg_net with a
+# one-time token (checked in the database), so they carry no Supabase JWT.
+[functions.security-notify]
+verify_jwt = false
+
+[functions.breach-watch]
+verify_jwt = false
