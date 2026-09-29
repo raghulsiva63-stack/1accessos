@@ -6,6 +6,7 @@ import {
   recallBreachResults, rememberBreachResults, forgetBreachResults,
 } from "../../apps/web/lib/enterprise/breach-watch.ts";
 import { buildFixQueue, changePasswordUrl } from "../../apps/web/lib/vault/change-password.ts";
+import { readAppShell } from "../../scripts/lib/app-source.mjs";
 
 const DAY = 86_400_000;
 
@@ -68,7 +69,7 @@ test("fix queue orders breached, then reused, then weak, once per item", () => {
 });
 
 test("Home and Security are wired to Breach Watch and the fix queue", async () => {
-  const page = await readFile("apps/web/app/page.tsx", "utf8");
+  const page = await readAppShell();
   const card = await readFile("apps/web/components/app/breach-watch.tsx", "utf8");
   const center = await readFile("apps/web/components/enterprise/security-center.tsx", "utf8");
   assert.match(page, /<BreachWatchCard key=\{tenantId \?\? "none"\} identityId=\{identityId\} tenantId=\{tenantId\}/);
