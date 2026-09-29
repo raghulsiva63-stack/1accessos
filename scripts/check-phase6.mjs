@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readAppShell } from "./lib/app-source.mjs";
 
 const migration = await readFile("supabase/migrations/20260905042216_phase6_commercial_catalog.sql", "utf8");
 const sqlTest = await readFile("supabase/tests/phase6_commercial_catalog.sql", "utf8");
@@ -10,7 +11,7 @@ const publicSite = [
 ].join("\n");
 const marketingNav = await readFile("apps/web/components/marketing/marketing-shell.tsx", "utf8");
 const marketingCatalog = await readFile("apps/web/lib/marketing/catalog.ts", "utf8");
-const page = await readFile("apps/web/app/page.tsx", "utf8");
+const page = await readAppShell();
 const scope = await readFile("docs/phase6/commercial-experience-scope.md", "utf8");
 const traceability = await readFile("docs/phase6/requirements-traceability.md", "utf8");
 

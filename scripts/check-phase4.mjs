@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readAppShell } from "./lib/app-source.mjs";
 
 const migration = await readFile("supabase/migrations/20260905021321_phase4_billing.sql", "utf8");
 const advisorFixes = await readFile("supabase/migrations/20260905021623_phase4_advisor_fixes.sql", "utf8");
@@ -13,7 +14,7 @@ const billing = await readFile("supabase/functions/billing/index.ts", "utf8");
 const webhook = await readFile("supabase/functions/stripe-webhook/index.ts", "utf8");
 const config = await readFile("supabase/config.toml", "utf8");
 // The pricing UI lives in the Plans & billing component; the page wires it in.
-const page = `${await readFile("apps/web/app/page.tsx", "utf8")}\n${await readFile("apps/web/components/billing/plans-view.tsx", "utf8")}`;
+const page = `${await readAppShell()}\n${await readFile("apps/web/components/billing/plans-view.tsx", "utf8")}`;
 const client = await readFile("apps/web/lib/billing/client.ts", "utf8");
 const environment = await readFile("apps/web/.env.example", "utf8");
 const netlify = await readFile("netlify.toml", "utf8");

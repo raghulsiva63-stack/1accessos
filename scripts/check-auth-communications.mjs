@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readAppShell } from "./lib/app-source.mjs";
 
 const [page, client, netlify, config, smsHook, sentWebhook, sentShared, migration, checkpoint] = await Promise.all([
-  readFile("apps/web/app/page.tsx", "utf8"),
+  readAppShell(),
   readFile("apps/web/lib/supabase/client.ts", "utf8"),
   readFile("netlify.toml", "utf8"),
   readFile("supabase/config.toml", "utf8"),
