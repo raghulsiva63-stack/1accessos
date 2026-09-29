@@ -329,6 +329,7 @@ export const FAQ: [string, string][] = [
   ["Who can change the plan?", "The owner of the vault or organisation, or an organisation admin."],
   ["Is there a free trial?", "Paid plans include a trial the first time you subscribe: 14 days for Personal, Family and Professional, 21 days for Team and Business."],
   ["What are AI credits?", "AI credits pay for the AI Security Coach (and, on Business, the organisation Security Advisor). Each request uses 1 credit. Only totals such as how many weak or reused passwords you have are sent, never the passwords themselves. Credits refill on the 1st of each month."],
+  ["How do invitations work?", "On Home, copy your invite link and send it to a friend. When they create a new account with it, their first paid plan starts with a 30-day free trial. When they make their first payment, you get one month of your own plan free, added as credit to your next bill. If you are on Free, the credit waits until you start a paid plan."],
   ["Can I cancel or get a refund?", "Yes. Cancel any time in Plans & billing → Manage billing and keep access until the end of the paid period. If you are not happy, email support@vlightsoft.com within 30 days of your first payment for a full refund. Details: passkey-x.com/refunds."],
   ["How do I get help?", "Use Help & guides in the app, visit passkey-x.com/help, email support@vlightsoft.com, or contact us at passkey-x.com/contact."],
 ];
