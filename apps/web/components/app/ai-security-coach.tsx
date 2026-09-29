@@ -4,6 +4,7 @@ import { useState } from "react";
 import { LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase/client";
+import { webUrl } from "@/lib/desktop/bridge";
 
 /** Only these totals are sent. Titles, sites, usernames and passwords stay on this device. */
 export type CoachMetrics = {
@@ -23,7 +24,7 @@ export function AiSecurityCoach({ tenantId, metrics }: { tenantId: string | null
     try {
       const { data } = await supabase!.auth.getSession();
       if (!data.session?.access_token) throw new Error("session_required");
-      const response = await fetch("/api/ai/security-advice", {
+      const response = await fetch(webUrl("/api/ai/security-advice"), {
         method: "POST",
         headers: { "Authorization": `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ tenantId, useCase: "vault_health", metrics }),

@@ -21,6 +21,9 @@ function vaultHealthMetrics(value: unknown): Record<string, number> | null {
   return metrics.score <= 100 ? metrics : null;
 }
 const ALLOWED_ORIGINS = new Set(["https://passkey-x.com", "https://www.passkey-x.com", "https://passkey-x.netlify.app"]);
+// The bundled desktop app runs on its own local origin and calls this endpoint cross-origin
+// with the user's bearer token (no cookies).
+const DESKTOP_ORIGINS = new Set(["tauri://localhost", "http://tauri.localhost"]);
 
 function response(status: number, body: Record<string, unknown>) {
   return Response.json(body, {
@@ -48,9 +51,19 @@ async function hash(value: string): Promise<string> {
 }
 
 export default async (request: Request) => {
-  if (request.method !== "POST") return response(405, { error: "method_not_allowed" });
   const origin = request.headers.get("origin");
-  if (origin && !ALLOWED_ORIGINS.has(origin)) return response(403, { error: "origin_forbidden" });
+  const desktop = Boolean(origin && DESKTOP_ORIGINS.has(origin));
+  if (desktop && request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": origin!, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Max-Age": "86400", "Vary": "Origin" } });
+  }
+  const result = await handle(request, origin, desktop);
+  if (desktop) { result.headers.set("Access-Control-Allow-Origin", origin!); result.headers.set("Vary", "Origin"); }
+  return result;
+};
+
+async function handle(request: Request, origin: string | null, desktop: boolean): Promise<Response> {
+  if (request.method !== "POST") return response(405, { error: "method_not_allowed" });
+  if (origin && !desktop && !ALLOWED_ORIGINS.has(origin)) return response(403, { error: "origin_forbidden" });
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) return response(401, { error: "authentication_required" });
 
@@ -160,10 +173,10 @@ export default async (request: Request) => {
     console.error(JSON.stringify({ function: "security-advice", code: "advisor_unavailable" }));
     return response(503, { error: "advisor_unavailable" });
   }
-};
+}
 
 export const config: Config = {
   path: "/api/ai/security-advice",
-  method: "POST",
+  method: ["POST", "OPTIONS"],
   rateLimit: { action: "rate_limit", aggregateBy: ["domain", "ip"], windowSize: 60, windowLimit: 12 },
 };

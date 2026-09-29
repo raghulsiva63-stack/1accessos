@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
+import { webUrl } from "@/lib/desktop/bridge";
 
 const USE_CASE_LABELS: Record<string, string> = {
   security_posture: "Security posture",
@@ -25,7 +26,7 @@ export function HostedAiAdvisor({ tenantId }: { tenantId: string }) {
     try {
       const { data } = await supabase!.auth.getSession();
       if (!data.session?.access_token) throw new Error("session_required");
-      const response = await fetch("/api/ai/security-advice", {
+      const response = await fetch(webUrl("/api/ai/security-advice"), {
         method: "POST",
         headers: { "Authorization": `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ tenantId, useCase }),

@@ -8,6 +8,7 @@ import {
   claimMessage, parseStoredReferral, REFERRAL_STORAGE_KEY, referralLink, type ReferralSummary,
 } from "@/lib/referral-codes";
 import { claimReferral, loadReferralSummary } from "@/lib/referrals";
+import { shareOrigin } from "@/lib/desktop/bridge";
 
 /**
  * Home card: "Give a month, get a month". First applies an invite code this person arrived
@@ -39,7 +40,7 @@ export function ReferralCard() {
 
   if (!summary) return notice ? <section className="referral-card"><span className="referral-icon"><Gift /></span><div><h3>Invitation applied</h3><p>{notice}</p></div></section> : null;
 
-  const link = referralLink(window.location.origin, summary.code);
+  const link = referralLink(shareOrigin(), summary.code);
   const credits = Object.entries(summary.credits).filter(([, amount]) => (amount ?? 0) > 0)
     .map(([currency, amount]) => formatPrice(amount ?? 0, currency as "inr" | "usd")).join(" + ");
 

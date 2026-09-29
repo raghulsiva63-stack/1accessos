@@ -12,6 +12,7 @@ import type { MemberOverview } from "@/lib/enterprise/admin";
 import type { StoredPolicy } from "@/lib/enterprise/policies";
 import { reminderMessage, rolloutCsv, STAGE_LABEL, summarizeRollout, type RolloutStage } from "@/lib/enterprise/rollout";
 import type { WorkspaceVault } from "@/lib/vault/items";
+import { shareOrigin } from "@/lib/desktop/bridge";
 
 const STAGE_TONE: Record<RolloutStage, string> = { not_started: "bad", signed_in: "warn", vault_in_use: "warn", protected: "good" };
 
@@ -37,7 +38,7 @@ export function RolloutPanel({ vault, members, policies, loading, onNavigate }: 
   ];
 
   async function copyReminder() {
-    try { await navigator.clipboard.writeText(reminderMessage(vault.name, window.location.origin)); setMessage("Reminder copied. Paste it into an email or chat to the people listed below."); }
+    try { await navigator.clipboard.writeText(reminderMessage(vault.name, shareOrigin())); setMessage("Reminder copied. Paste it into an email or chat to the people listed below."); }
     catch { setMessage("Your browser blocked the clipboard. Select the people below and remind them directly."); }
   }
 
