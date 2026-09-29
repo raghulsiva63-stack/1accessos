@@ -20,6 +20,7 @@ import {
   type OrganizationScopeType, type OrganizationSnapshot,
 } from "@/lib/organization/phase5";
 import { copySecret } from "@/components/enterprise/vault-guards";
+import { shareOrigin } from "@/lib/desktop/bridge";
 
 type BulkResult = { email: string; status: "created" | "failed"; link?: string; detail?: string };
 
@@ -136,7 +137,7 @@ export function OrganizationGovernance({
     await run("invite",async () => {
       const link = await createOrganizationInvitation(
         vault.tenantId,vault.identityId,inviteEmail,inviteName,
-        invitationExpiry(),window.location.origin,
+        invitationExpiry(),shareOrigin(),
         { jobTitle: inviteTitle,departmentId: inviteDepartment,teamId: inviteTeam },
       );
       setInviteLink(link); setInviteEmail(""); setInviteName(""); setInviteTitle("");
@@ -160,7 +161,7 @@ export function OrganizationGovernance({
         try {
           const link = await createOrganizationInvitation(
             vault.tenantId,vault.identityId,row.email,row.displayName,
-            expiresAt,window.location.origin,
+            expiresAt,shareOrigin(),
             { jobTitle: row.jobTitle,departmentId: department?.id,teamId: team?.id,teamRole: row.teamRole },
           );
           results.push({ email: row.email,status: "created",link });
