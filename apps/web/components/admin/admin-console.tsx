@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Activity, BellRing, Building2, FileCheck2, FileClock, FolderLock, KeyRound, LayoutDashboard, Lock, ShieldCheck, SlidersHorizontal, Users,
+  Activity, BellRing, Building2, FileCheck2, FileClock, FolderLock, KeyRound, LayoutDashboard, Lock, Rocket, ShieldCheck, SlidersHorizontal, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { IntegrationsPanel } from "@/components/admin/integrations-panel";
 import { AlertsPanel } from "@/components/admin/alerts-panel";
 import { ReportsPanel } from "@/components/admin/reports-panel";
 import { IdentityPanel } from "@/components/admin/identity-panel";
+import { RolloutPanel } from "@/components/admin/rollout-panel";
 import { OrganizationView } from "@/components/organization-view";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import type { TenantEntitlement } from "@/lib/billing/client";
@@ -22,10 +23,11 @@ import { loadMemberOverview, type MemberOverview } from "@/lib/enterprise/admin"
 import { loadTenantPolicies, type StoredPolicy } from "@/lib/enterprise/policies";
 import type { WorkspaceVault } from "@/lib/vault/items";
 
-export type AdminTab = "overview" | "alerts" | "people" | "identity" | "policies" | "access" | "audit" | "reports" | "integrations" | "directory";
+export type AdminTab = "overview" | "rollout" | "alerts" | "people" | "identity" | "policies" | "access" | "audit" | "reports" | "integrations" | "directory";
 
 const TABS: { id: AdminTab; label: string; icon: typeof Users }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "rollout", label: "Team rollout", icon: Rocket },
   { id: "alerts", label: "Alerts", icon: BellRing },
   { id: "people", label: "People", icon: Users },
   { id: "identity", label: "Identity & SSO", icon: KeyRound },
@@ -93,7 +95,7 @@ export function AdminConsole({
 
   return <div className="feature-page admin-console">
     <div className="admin-hero">
-      <div><span className="status-pill"><ShieldCheck /> Zero-knowledge administration</span><h2>Organization control center</h2><p>Manage access and enforce security without ever seeing a member&apos;s passwords. Every change here is written to a hash-chained audit log.</p></div>
+      <div><span className="status-pill"><ShieldCheck /> Zero-knowledge administration</span><h2>Run Passkey-X for your organization</h2><p>Invite people, set security rules and see who is protected — without ever seeing anyone&apos;s passwords. Every change here is written to a tamper-evident audit log.</p></div>
       <div className="admin-hero-meta"><span><Lock /> Your role: <strong>{tenantRole ?? "member"}</strong></span><span><Activity /> {members.filter((member) => member.membership_status === "active").length} active members</span></div>
     </div>
     {!businessActive && <div className="billing-notice admin-plan-notice"><strong>Business plan required for changes.</strong> You can review your organization, but creating policies and directory changes need an active Business plan. <Button size="sm" variant="outline" onClick={onOpenBilling}>Upgrade</Button></div>}
@@ -103,6 +105,7 @@ export function AdminConsole({
     </nav>
     <div role="tabpanel">
       {tab === "overview" && <AdminOverview vault={vault} members={members} policies={policies} loading={loading} onNavigate={setTab} onChanged={reload} canEdit={businessActive} />}
+      {tab === "rollout" && <RolloutPanel vault={vault} members={members} policies={policies} loading={loading} onNavigate={setTab} />}
       {tab === "alerts" && <AlertsPanel vault={vault} members={members} />}
       {tab === "identity" && <IdentityPanel vault={vault} canEdit={businessActive} />}
       {tab === "reports" && (businessActive ? <ReportsPanel vault={vault} organizationName={vault.name} /> : <BusinessOnly feature="Compliance reports" onOpenBilling={onOpenBilling} />)}

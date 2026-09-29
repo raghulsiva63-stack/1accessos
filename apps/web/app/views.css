@@ -21,3 +21,46 @@
 .settings-v3 .settings-section { margin: 1.4rem 0 .6rem; font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); }
 .settings-v3 .settings-section.danger { color: #d23c5a; }
 .settings-v3 .settings-grid { margin-top: 0; }
+
+/* Admin: team rollout */
+.rollout-panel { display: grid; gap: 1rem; }
+.rollout-hero { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; padding: clamp(1rem, 2.5vw, 1.4rem); border: 1px solid var(--border); border-radius: 1.1rem; background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 9%, var(--card)), var(--card) 70%); }
+.rollout-hero > div:first-child { flex: 1 1 380px; }
+.rollout-hero h3 { margin: .6rem 0 .3rem; font-size: 1.4rem; letter-spacing: -.02em; }
+.rollout-hero p { margin: 0; color: var(--muted-foreground); max-width: 62ch; }
+.rollout-bar { height: .55rem; margin: .9rem 0 .6rem; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.rollout-bar i { display: block; height: 100%; border-radius: inherit; background: #1f9d5c; }
+.rollout-counts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .88rem; color: var(--muted-foreground); }
+.rollout-counts strong { color: var(--foreground); }
+.rollout-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-start; }
+.rollout-checklist, .rollout-people { display: grid; gap: .7rem; padding: clamp(1rem, 2.5vw, 1.3rem); border: 1px solid var(--border); border-radius: 1.1rem; background: var(--card); }
+.rollout-checklist h3, .rollout-people h3 { margin: 0; font-size: 1.1rem; }
+.rollout-checklist ol { list-style: none; margin: 0; padding: 0; display: grid; }
+.rollout-checklist li { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; padding: .8rem 0; }
+.rollout-checklist li + li { border-top: 1px solid var(--border); }
+.rollout-checklist li > div { flex: 1; min-width: 220px; }
+.rollout-checklist li p { margin: .15rem 0 0; color: var(--muted-foreground); font-size: .88rem; }
+.rollout-checklist li.done strong { color: var(--muted-foreground); text-decoration: line-through; }
+.rollout-check { display: inline-grid; place-items: center; width: 2.2rem; height: 2.2rem; flex: none; border-radius: .7rem; background: color-mix(in srgb, var(--primary) 12%, var(--card)); color: var(--primary); }
+.rollout-checklist li.done .rollout-check { background: color-mix(in srgb, #1f9d5c 14%, var(--card)); color: #1f9d5c; }
+.rollout-check svg { width: 1.1rem; height: 1.1rem; }
+.rollout-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.rollout-table th { padding: .55rem .6rem; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: .76rem; font-weight: 700; text-align: left; text-transform: uppercase; letter-spacing: .04em; }
+.rollout-table td { padding: .6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.rollout-table td small { display: block; color: var(--muted-foreground); font-size: .8rem; }
+.rollout-table td svg { width: 1.05rem; height: 1.05rem; color: var(--muted-foreground); }
+.rollout-table td svg[aria-label="Yes"] { color: #1f9d5c; }
+.rollout-stage { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.rollout-stage.tone-good, .rollout-counts .tone-good strong { color: #1f9d5c; }
+.rollout-stage.tone-good { background: color-mix(in srgb, #1f9d5c 14%, var(--card)); }
+.rollout-stage.tone-warn { background: color-mix(in srgb, #e59b16 16%, var(--card)); color: #a86b00; }
+.rollout-stage.tone-bad { background: color-mix(in srgb, #d23c5a 12%, var(--card)); color: #d23c5a; }
+.table-scroll { overflow-x: auto; }
+.print-only { display: none; }
+@media print {
+  html.print-rollout .vault-sidebar, html.print-rollout .vault-content > header, html.print-rollout .admin-hero,
+  html.print-rollout .admin-tabs, html.print-rollout .admin-plan-notice, html.print-rollout .rollout-actions,
+  html.print-rollout .rollout-checklist, html.print-rollout .vault-content > :not(.feature-page) { display: none !important; }
+  html.print-rollout .print-only { display: block; color: #444; }
+  html.print-rollout .rollout-panel, html.print-rollout .rollout-people { border: 0; background: none; }
+}
