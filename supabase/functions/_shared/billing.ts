@@ -55,9 +55,12 @@ export function appOrigins(): string[] {
   return configured.split(",").map((value) => value.trim()).filter(Boolean);
 }
 
+/** The bundled desktop app. Allowed for CORS only; never used as a Stripe return URL. */
+export const DESKTOP_ORIGINS = ["tauri://localhost", "http://tauri.localhost"];
+
 export function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("origin");
-  const allowed = appOrigins();
+  const allowed = [...appOrigins(), ...DESKTOP_ORIGINS];
   return {
     "Access-Control-Allow-Origin": origin && allowed.includes(origin) ? origin : allowed[0],
     "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
@@ -232,6 +235,6 @@ export async function requireTenantManager(request: Request, tenantId: string) {
 export function safeCode(reason: unknown): string {
   const message = reason instanceof Error ? reason.message : String(reason ?? "unknown");
   if (/^(unauthorized|forbidden|invalid_tenant|invalid_request|invalid_quantity|billing_not_configured|subscription_exists|customer_missing|plan_not_available_for_workspace)$/u.test(message)) return message;
-  if (message.startsWith("missing:")) return "billing_not_configured";
+  if (message.startsWith("missing:")) return "billing_unavailable";
   return "billing_unavailable";
 }
