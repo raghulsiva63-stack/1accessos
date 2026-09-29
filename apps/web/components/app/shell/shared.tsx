@@ -78,6 +78,13 @@ export const NAV_SECTIONS: { label: string; views: View[] }[] = [
   { label: "Manage", views: ["admin", "saas-ai", "runtime", "automations", "billing", "settings", "help"] },
 ];
 
+/** Deep links from security emails, e.g. /?view=account-security. Only known views are accepted. */
+export function viewFromUrl(): View | null {
+  if (typeof window === "undefined") return null;
+  const requested = new URLSearchParams(window.location.search).get("view");
+  return NAV.some((entry) => entry.id === requested) ? requested as View : null;
+}
+
 export function Brand({ compact = false }: { compact?: boolean }) {
   return <div className={`brand ${compact ? "brand-compact" : ""}`}><Image src={compact ? "/brand/passkey-x-mark.png" : "/brand/passkey-x-horizontal.png"} alt="Passkey-X by Vlightsoft" width={compact ? 48 : 230} height={compact ? 48 : 66} priority /></div>;
 }

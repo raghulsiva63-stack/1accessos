@@ -1,5 +1,5 @@
 type PendingLogin = { id: string; username: string; origin: string; modes: Record<string, "save" | "update" | "same"> };
-type Status = { ok: boolean; connected?: boolean; email?: string; unlocked?: boolean; matches?: { id: string; title: string; username: string }[]; workspaces?: { id: string; name: string }[]; ignored?: boolean; candidate?: PendingLogin | null; error?: string };
+type Status = { ok: boolean; connected?: boolean; email?: string; unlocked?: boolean; matches?: { id: string; title: string; username: string }[]; workspaces?: { id: string; name: string }[]; ignored?: boolean; candidate?: PendingLogin | null; lookalike?: { resembles: string; reason: string } | null; error?: string };
 const get = <T extends Element>(selector: string) => document.querySelector<T>(selector)!;
 const disconnected = get<HTMLElement>("#disconnected");
 const locked = get<HTMLElement>("#locked");
@@ -42,6 +42,11 @@ function render(status: Status) {
   get<HTMLElement>("#candidate-username").textContent = pending?.username || "No username detected";
   updateSaveAction();
   get<HTMLButtonElement>("#allow").hidden = !status.ignored;
+  const warning = get<HTMLElement>("#lookalike");
+  warning.hidden = !status.lookalike;
+  get<HTMLElement>("#lookalike-text").textContent = status.lookalike
+    ? `You have a login saved for ${status.lookalike.resembles}, but this is ${origin ? new URL(origin).hostname : "a different site"}. Passkey-X won't fill here. Don't type your password unless you're sure this is the real site.`
+    : "";
   for (const credential of status.matches ?? []) {
     const button = document.createElement("button"), text = document.createElement("span"), title = document.createElement("strong"), username = document.createElement("span"), action = document.createElement("em");
     title.textContent = credential.title; username.textContent = credential.username || "No username"; action.textContent = "Fill";
