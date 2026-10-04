@@ -18,6 +18,8 @@
     "allow-biometric-enrolled",
     "allow-biometric-enroll",
     "allow-biometric-unlock",
-    "allow-biometric-remove"
+    "allow-biometric-remove",
+    "allow-desktop-policy",
+    "allow-browser-link-send"
   ]
 }

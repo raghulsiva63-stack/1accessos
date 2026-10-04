@@ -1,4 +1,4 @@
-# Passkey-X desktop 1.0
+# Passkey-X desktop 1.1
 
 A self-contained desktop app for Windows, macOS and Linux (Tauri 2).
 
@@ -32,6 +32,18 @@ A self-contained desktop app for Windows, macOS and Linux (Tauri 2).
 - **Content Security Policy.** `tauri.conf.json` sets a strict CSP. Inline scripts are allowed only by build-time hashes.
 - **Biometric unlock is bound to the vault password envelope.** After a vault password change it stops working and is deleted. It is also removed on sign-out.
 - **macOS Touch ID note.** Touch ID is currently a gate in front of a normal Keychain item, and only Passkey-X can read that item without a system prompt. Binding the item to biometry (SecAccessControl) needs a Developer ID-signed build; see Owner actions.
+
+## For organizations (1.1)
+
+- **Managed settings.** IT can enforce settings through Group Policy / Intune (`policy/windows/PasskeyX.admx`), an MDM profile (`policy/macos/…mobileconfig`) or `/etc/passkey-x/policy.json`. The settings include allowed email domains, lock rules, clipboard time, idle limit, Windows Hello / Touch ID, updates, auto-start, offline access and browser pairing. See `docs/desktop/managed-deployment.md`. The policy is read in `src-tauri/src/managed.rs`, only from locations standard users cannot write.
+- **MSI.** Windows builds produce a per-machine `.msi` next to the per-user NSIS `.exe` (set `PASSKEY_X_SKIP_MSI=1` to skip it).
+- **Start at sign-in.** Optional, and can be enforced by policy. The app starts hidden in the tray (`--hidden`) with the vault locked (`src-tauri/src/autostart.rs`).
+- **Browser extension pairing.**
+  - The app registers a native messaging host (`com.vlightsoft.passkeyx`) for Chrome, Edge, Brave and Chromium. The browser starts this same binary as the host, which only relays messages to the running app over an authenticated loopback connection (`src-tauri/src/browser_link.rs`).
+  - Pairing is an ECDH key agreement approved in the app with a matching 6-digit code (`apps/web/lib/desktop/browser-link.ts`, `apps/extension/src/desktop-link.ts`).
+  - A paired extension unlocks while the app is unlocked and locks when it locks.
+  - Store extension IDs are added at build time with `PASSKEY_X_EXTENSION_IDS=<id>,<id>`; the preview (UAT) ID is built in.
+- **Offline access.** Every sync keeps an encrypted copy (`apps/web/lib/desktop/offline-cache.ts`). Without internet, the vault unlocks read-only with the vault password.
 
 ## Build
 

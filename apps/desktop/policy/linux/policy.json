@@ -1,0 +1,14 @@
+{
+  "organizationName": "Acme Corp",
+  "supportUrl": "https://help.acme.example/passkey-x",
+  "allowedEmailDomains": [
+    "acme.com"
+  ],
+  "lockOnBlur": true,
+  "maxClipboardSeconds": 30,
+  "idleLockMinutes": 15,
+  "autoStart": true,
+  "offlineAccess": true,
+  "browserIntegration": true,
+  "disableUpdates": false
+}

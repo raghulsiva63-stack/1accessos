@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>Passkey-X</displayName>
+  <description>Passkey-X desktop policies</description>
+  <resources>
+    <stringTable>
+      <string id="PasskeyX">Passkey-X</string>
+      <string id="SUPPORTED_1_1">Passkey-X desktop 1.1 or later</string>
+      <string id="lockOnBlur">Lock when switching apps</string>
+      <string id="lockOnBlur_Help">Locks the vault whenever Passkey-X loses focus. Enabled: always on. Disabled: always off. Not configured: people choose.</string>
+      <string id="lockOnHide">Lock when the window is hidden</string>
+      <string id="lockOnHide_Help">Locks the vault whenever the Passkey-X window is hidden.</string>
+      <string id="hotkeyEnabled">Quick access shortcut</string>
+      <string id="hotkeyEnabled_Help">Enables or disables the global quick access shortcut (Ctrl+Shift+Space).</string>
+      <string id="disableBiometric">Turn off Windows Hello unlock</string>
+      <string id="disableBiometric_Help">When enabled, people must type their vault password; Windows Hello unlock is unavailable.</string>
+      <string id="disableUpdates">Updates are deployed by IT</string>
+      <string id="disableUpdates_Help">When enabled, Passkey-X does not check for or install updates. Deploy new MSI versions instead.</string>
+      <string id="autoStart">Start at sign-in</string>
+      <string id="autoStart_Help">Enabled: Passkey-X starts hidden in the tray when people sign in. Disabled: it never starts automatically.</string>
+      <string id="offlineAccess">Offline vault access</string>
+      <string id="offlineAccess_Help">Enabled: an encrypted copy of the vault is kept for use without internet. Disabled: no copy is kept and existing copies are deleted.</string>
+      <string id="browserIntegration">Browser extension pairing</string>
+      <string id="browserIntegration_Help">Enabled: people may pair the Passkey-X browser extension with the desktop app. Disabled: pairing is off.</string>
+      <string id="maxClipboardSeconds">Longest clipboard time</string>
+      <string id="maxClipboardSeconds_Help">Copied passwords are cleared after at most this many seconds (10–120).</string>
+      <string id="idleLockMinutes">Idle lock limit</string>
+      <string id="idleLockMinutes_Help">The vault locks after at most this many idle minutes (1–480).</string>
+      <string id="organizationName">Organization name</string>
+      <string id="organizationName_Help">Shown in the app, for example on the sign-in screen and in settings.</string>
+      <string id="supportUrl">Support link</string>
+      <string id="supportUrl_Help">An https:// link to your IT help page, shown in settings.</string>
+      <string id="allowedEmailDomains">Allowed email domains</string>
+      <string id="allowedEmailDomains_Help">Only accounts with these email domains may sign in on this computer. Separate several domains with commas, for example: acme.com, acme.co.uk</string>
+      <string id="extensionIds">Additional extension IDs</string>
+      <string id="extensionIds_Help">IDs of internally published builds of the Passkey-X browser extension that may pair (comma-separated). Store versions are already allowed.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="maxClipboardSeconds"><decimalTextBox refId="maxClipboardSeconds" defaultValue="10">Longest clipboard time</decimalTextBox></presentation>
+      <presentation id="idleLockMinutes"><decimalTextBox refId="idleLockMinutes" defaultValue="1">Idle lock limit</decimalTextBox></presentation>
+      <presentation id="organizationName"><textBox refId="organizationName"><label>Organization name</label></textBox></presentation>
+      <presentation id="supportUrl"><textBox refId="supportUrl"><label>Support link</label></textBox></presentation>
+      <presentation id="allowedEmailDomains"><textBox refId="allowedEmailDomains"><label>Allowed email domains</label></textBox></presentation>
+      <presentation id="extensionIds"><textBox refId="extensionIds"><label>Additional extension IDs</label></textBox></presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>
