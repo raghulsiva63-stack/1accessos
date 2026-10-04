@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Copy, ShieldCheck } from "lucide-react";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import { watchVaultLifetime } from "@/lib/browser/vault-lifecycle";
-import { desktop, isDesktopApp } from "@/lib/desktop/bridge";
+import { desktop, desktopPolicy, isDesktopApp } from "@/lib/desktop/bridge";
 
 /**
  * Runs the idle/visibility vault lock using the organisation's session timeout and
@@ -13,7 +13,14 @@ import { desktop, isDesktopApp } from "@/lib/desktop/bridge";
 export function PolicyLifecycle({ onLock, tenantId }: { onLock: () => void; tenantId: string | null }) {
   const { policy, record, loading } = useEnterprise();
   const lock = useEffectEvent(() => onLock());
-  const minutes = policy.sessionTimeoutMinutes;
+  // A managed computer can set a shorter idle limit than the organization's account policy.
+  const [computerLimit, setComputerLimit] = useState<number | null>(null);
+  useEffect(() => {
+    let active = true;
+    desktopPolicy().then((managed) => { if (active) setComputerLimit(managed.idleLockMinutes); });
+    return () => { active = false; };
+  }, []);
+  const minutes = computerLimit ? Math.min(policy.sessionTimeoutMinutes, computerLimit) : policy.sessionTimeoutMinutes;
   // Desktop: a hidden window (after a quick copy) stays unlocked until the idle limit,
   // unless the person chose "lock when hidden". Until the setting loads, hidden locks.
   const [lockWhenHidden, setLockWhenHidden] = useState(true);

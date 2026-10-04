@@ -15,3 +15,16 @@
 .desktop-settings-icon { display: inline-grid; place-items: center; width: 2.2rem; height: 2.2rem; flex: none; border-radius: .7rem; background: color-mix(in srgb, var(--primary) 12%, var(--card)); color: var(--primary); }
 .desktop-settings-icon svg { width: 1.1rem; height: 1.1rem; }
 .switch-row { display: inline-flex; align-items: center; gap: .45rem; font-size: .88rem; cursor: pointer; }
+
+/* Browser extension pairing */
+.browser-link-approval .browser-link-code { margin: .25rem 0; font: 700 2.2rem/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-align: center; }
+.browser-pairings { list-style: none; margin: .4rem 0 0; padding: 0; display: grid; gap: .4rem; }
+.browser-pairings li { display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem; border: 1px solid var(--border); border-radius: .7rem; }
+.browser-pairings li > svg { width: 1rem; height: 1rem; color: var(--primary); flex: none; }
+.browser-pairings li > div { display: grid; flex: 1; min-width: 0; }
+.browser-pairings small { color: var(--muted-foreground); }
+.desktop-managed-note { display: flex; gap: .5rem; align-items: flex-start; margin: 0; padding: .6rem .8rem; border-radius: .7rem; background: var(--secondary, #eef2ff); color: var(--secondary-foreground, #1b3dba); font-size: .86rem; }
+.desktop-managed-note svg { width: 1rem; height: 1rem; flex: none; margin-top: .1rem; }
+.offline-banner { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: space-between; margin: 0 0 .8rem; padding: .6rem .9rem; border: 1px solid #f1c56b; border-radius: .8rem; background: #fff8e8; color: #6b4700; font-size: .88rem; }
+html[data-theme="dark"] .vault-app .offline-banner { border-color: #7a5a1a; background: #2a2010; color: #f2d79b; }
+.managed-hint { flex-basis: 100%; color: var(--muted-foreground); font-size: .78rem; text-align: right; }
