@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.breach-watch]
 verify_jwt = false
+
+[functions.org-api]
+verify_jwt = false

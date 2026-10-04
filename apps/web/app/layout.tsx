@@ -14,6 +14,9 @@ import "./home.css";
 import "./views.css";
 import "./desktop.css";
 import "./security-intel.css";
+import "./migration.css";
+import "./connectors.css";
+import "./team-admin.css";
 
 export const metadata: Metadata = {
   title: "Passkey-X — Your private digital vault",
