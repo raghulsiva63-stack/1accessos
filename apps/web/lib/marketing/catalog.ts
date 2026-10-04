@@ -144,7 +144,11 @@ export const PRODUCTS: MarketingEntry[] = [
       { icon: "FileClock", title: "Tamper-evident audit", body: "SHA-256 chained events with one-click verification and CSV/JSON export." },
       { icon: "FolderLock", title: "Access reviews", body: "Every shared vault, who has access, last activity and expiry — with evidence export." },
       { icon: "UserX", title: "Lifecycle", body: "Suspend, reactivate and offboard with key revocation and rotation flags." },
-      { icon: "Activity", title: "Audit streaming", body: "Stream audit events to your SIEM or any HTTPS endpoint with signed webhooks." },
+      { icon: "Activity", title: "SIEM connectors", body: "Native Splunk HEC, Datadog, Microsoft Sentinel and Elastic streaming, or signed webhooks to any HTTPS endpoint." },
+      { icon: "Send", title: "Slack & Teams alerts", body: "Security alerts, breach watch, rotation reminders and the weekly report posted to your channels." },
+      { icon: "Users", title: "SCIM groups → workspaces", body: "Okta and Entra ID groups add and remove workspace access automatically; keys stay end-to-end encrypted." },
+      { icon: "Repeat2", title: "Team migration", body: "Import 1Password, Bitwarden, LastPass, Keeper or KeePass exports and turn shared folders into team workspaces." },
+      { icon: "Code2", title: "Organization API", body: "Scoped, expiring API keys for audit events, alerts, members and reports — ready for Zapier and Make." },
     ],
     faq: [
       ["Can admins read member passwords?", "No. Admins manage access and policy, and see aggregate risk counts — never vault contents."],
