@@ -45,6 +45,7 @@ import { VaultView, ItemEditor, HistoryDialog } from "@/components/app/shell/vau
 import { DesktopSettingsPanel } from "@/components/desktop/desktop-settings";
 import { desktop, isDesktopApp } from "@/lib/desktop/bridge";
 import { reportSignInContext } from "@/lib/security/client";
+import { syncKeyGrants } from "@/lib/enterprise/key-sharing";
 
 export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts, onPasswordFacts, onProfileChange, onLock }: { clientMode: ClientMode; email: string; profile: CryptoProfile; rootKey: Uint8Array; passwordFacts: VaultPasswordFacts; onPasswordFacts: (facts: VaultPasswordFacts) => void; onProfileChange: (profile: CryptoProfile) => void; onLock: () => void }) {
   const [view, setView] = useState<View>(() => readPlanSelection() || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("billing")) ? "billing" : viewFromUrl() ?? "home");
@@ -125,6 +126,13 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
       if (!next[0]) throw new Error("No accessible workspace.");
       setWorkspaces(next); selectWorkspace(next[0]);
       await Promise.all([refresh(next[0]), refreshEntitlement(next[0])]);
+      // Receive workspaces shared directly by an administrator, and deliver keys this device holds.
+      void syncKeyGrants(profile.identity_id, rootKey, next).then((result) => {
+        if (active && version === workspaceLoadVersion.current && result.received.length) {
+          setNotice(`You were given access to ${result.received.length} workspace${result.received.length === 1 ? "" : "s"}. Use the workspace switcher to open ${result.received.length === 1 ? "it" : "them"}.`);
+          void reloadWorkspaces(next[0].workspaceId).catch(() => undefined);
+        }
+      });
     }).catch((reason) => { if (active && version === workspaceLoadVersion.current) setError(customerError(reason, "Unable to open this workspace. Try again.")); })
       .finally(() => { if (active && version === workspaceLoadVersion.current) setLoading(false); });
     const gate = requests.current;
@@ -221,7 +229,7 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
         {view === "vault" && vault && <VaultView vault={vault} items={visibleItems} allItems={items} trash={trash} filter={filter} query={query} selected={selected} revealed={revealed} onQuery={setQuery} onFilter={setFilter} onNew={() => setEditor("new")} onSelect={(item) => { setSelected(item); setRevealed(false); setHistory(null); }} onReveal={() => setRevealed(!revealed)} onClose={() => setSelected(null)} onEdit={(item) => setEditor(item)} onDelete={removeItem} onRestore={restoreItem} onToggle={toggle} onHistory={showHistory} onRotate={(item) => { setRotateSecret(generatePassword({ length: 24, uppercase: true, lowercase: true, numbers: true, symbols: true, avoidAmbiguous: true })); setEditor(item); }} onImport={() => setView("settings")} onGenerator={() => setView("generator")} />}
         {view === "workspaces" && vault && <WorkspacesView key={vault.workspaceId} identityId={profile.identity_id} rootKey={rootKey} workspaces={workspaces} vault={vault} onSelect={switchWorkspace} onReload={reloadWorkspaces} />}
         {view === "organization" && vault && <OrganizationView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
-        {view === "admin" && vault && <AdminConsole key={vault.tenantId} vault={vault} items={items} entitlement={entitlement} workspaceNames={new Map(workspaces.map((entry) => [entry.workspaceId, entry.name]))} onOpenBilling={() => setView("billing")} />}
+        {view === "admin" && vault && <AdminConsole key={vault.tenantId} vault={vault} items={items} workspaces={workspaces} rootKey={rootKey} onWorkspacesChanged={() => reloadWorkspaces(vault.workspaceId)} entitlement={entitlement} workspaceNames={new Map(workspaces.map((entry) => [entry.workspaceId, entry.name]))} onOpenBilling={() => setView("billing")} />}
         {view === "saas-ai" && vault && <SaasAiManager key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
         {view === "runtime" && vault && <RuntimeAccessView key={vault.tenantId} vault={vault} entitlement={entitlement} onOpenBilling={() => setView("billing")} />}
         {view === "notifications" && vault && <NotificationsView key={vault.tenantId} vault={vault} />}
