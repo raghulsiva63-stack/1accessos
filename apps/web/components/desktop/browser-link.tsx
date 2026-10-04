@@ -16,14 +16,17 @@ export function DesktopBrowserLink() {
   useEffect(() => { installBrowserLinkHost(); }, []);
   useSyncExternalStore(subscribeBrowserLink, browserLinkVersion, serverVersion);
   const request = typeof window !== "undefined" && isDesktopApp() ? pendingPairing() : null;
-  const [now, setNow] = useState(() => Date.now());
+  // Seconds left to approve; updated by a timer (no clock reads during render).
+  const [seconds, setSeconds] = useState<number | null>(null);
+  const expiresAt = request?.expiresAt ?? 0;
   useEffect(() => {
-    if (!request) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [request]);
+    if (!expiresAt) return;
+    const tick = () => setSeconds(Math.max(0, Math.round((expiresAt - Date.now()) / 1000)));
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 1000);
+    return () => { clearTimeout(first); clearInterval(timer); };
+  }, [expiresAt]);
   if (!request) return null;
-  const seconds = Math.max(0, Math.round((request.expiresAt - now) / 1000));
   return <div className="modal-backdrop" role="presentation">
     <Card className="item-editor browser-link-approval" role="alertdialog" aria-modal="true" aria-labelledby="browser-link-title" aria-describedby="browser-link-description">
       <CardHeader>
@@ -33,7 +36,7 @@ export function DesktopBrowserLink() {
       </CardHeader>
       <CardContent className="form-stack">
         <p className="browser-link-code" aria-label={`Verification code ${request.code.split("").join(" ")}`}>{request.code.slice(0, 3)} {request.code.slice(3)}</p>
-        <p className="field-hint">After pairing, the extension unlocks on its own while Passkey-X desktop is unlocked, and locks when this app locks. Only approve if you started this in your browser just now. ({seconds}s)</p>
+        <p className="field-hint">After pairing, the extension unlocks on its own while Passkey-X desktop is unlocked, and locks when this app locks. Only approve if you started this in your browser just now.{seconds !== null ? ` (${seconds}s)` : ""}</p>
         <div className="inline-actions">
           <Button onClick={() => void answerPairing(true)}><ShieldCheck /> Codes match — pair</Button>
           <Button variant="outline" onClick={() => void answerPairing(false)}>Deny</Button>
