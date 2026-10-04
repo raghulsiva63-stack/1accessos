@@ -7,6 +7,7 @@ export type ProvisionedUser = { id: string; external_id: string | null; user_nam
 export type SsoConnection = {
   tenant_id: string; domain: string; verification_token: string; domain_verified_at: string | null;
   metadata_url: string | null; status: "draft" | "requested" | "active" | "disabled"; enforce_sso: boolean; updated_at: string;
+  activation_error?: string | null;
 };
 
 function db() {
@@ -63,7 +64,7 @@ export async function claimProvisionedMembership(id: string) {
 
 export async function loadSsoConnection(tenantId: string): Promise<SsoConnection | null> {
   const { data, error } = await db().from("sso_connections")
-    .select("tenant_id,domain,verification_token,domain_verified_at,metadata_url,status,enforce_sso,updated_at")
+    .select("tenant_id,domain,verification_token,domain_verified_at,metadata_url,status,enforce_sso,updated_at,activation_error")
     .eq("tenant_id", tenantId).maybeSingle();
   if (error) throw error;
   return data as SsoConnection | null;
@@ -79,6 +80,40 @@ export async function verifySsoDomain(tenantId: string): Promise<boolean> {
   if (error) throw new Error(await functionErrorCode(error));
   return data?.verified === true;
 }
+
+export type SsoActivationResult = "active" | "requested";
+
+/**
+ * Self-serve activation: registers the identity provider with Supabase Auth through the
+ * identity-admin function. When SAML is not enabled for the project yet, the connection
+ * stays "requested" and Vlightsoft completes it.
+ */
+export async function activateSso(tenantId: string): Promise<SsoActivationResult> {
+  const { data, error } = await db().functions.invoke<{ active?: boolean; error?: string }>("identity-admin", { body: { action: "activate_sso", tenantId } });
+  if (error) {
+    const code = await functionErrorCode(error);
+    if (code === "saml_not_enabled") return "requested";
+    throw new Error(code);
+  }
+  if (data?.error === "saml_not_enabled") return "requested";
+  return data?.active ? "active" : "requested";
+}
+
+export async function deactivateSso(tenantId: string) {
+  const { error } = await db().functions.invoke("identity-admin", { body: { action: "deactivate_sso", tenantId } });
+  if (error) throw new Error(await functionErrorCode(error));
+}
+
+export const SSO_ACTIVATION_ERRORS: Record<string, string> = {
+  domain_not_verified: "Verify your domain first.",
+  metadata_missing: "Add your identity provider's metadata URL first.",
+  metadata_invalid: "The metadata URL could not be read as SAML 2.0 metadata. Check that it is public and starts with https://.",
+  domain_in_use: "This domain is already connected to another identity provider.",
+  idp_in_use: "This identity provider (entity ID) is already connected to another organization.",
+  business_plan_required: "Single sign-on needs an active Business plan.",
+  activation_failed: "The identity provider could not be connected. Check the metadata URL and try again.",
+  saml_not_enabled: "SAML is being enabled for your organization. Vlightsoft will finish the connection and email you.",
+};
 
 export async function requestSsoActivation(tenantId: string) {
   const { error } = await db().rpc("request_sso_activation", { p_tenant_id: tenantId });
