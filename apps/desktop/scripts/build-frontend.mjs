@@ -16,6 +16,20 @@ const dist = join(root, 'dist');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const run = (command, args, options) => execFileSync(command, args, { stdio: 'inherit', shell: process.platform === 'win32' && command.endsWith('.cmd'), ...options });
 
+// 0. Cargo.lock. CI builds use `cargo --locked`. When Cargo.toml gained dependencies that the
+// committed lockfile does not list yet, resolve only the missing entries (existing pins stay),
+// warn, and ship the result in the build artifacts so it can be committed.
+if (process.env.CI && process.env.PASSKEY_X_LOCK_CHECKED !== '1') {
+  process.env.PASSKEY_X_LOCK_CHECKED = '1';
+  const manifest = join(root, 'src-tauri', 'Cargo.toml');
+  try {
+    execFileSync('cargo', ['metadata', '--locked', '--format-version', '1', '--manifest-path', manifest], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'] });
+  } catch {
+    console.log('::warning title=Cargo.lock out of date::Resolved missing dependencies for this build. Commit Cargo.lock from the build artifacts.');
+    execFileSync('cargo', ['metadata', '--format-version', '1', '--manifest-path', manifest], { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] });
+  }
+}
+
 // 1. Icons
 run(process.execPath, ['node_modules/@tauri-apps/cli/tauri.js', 'icon', 'icons/icon.png', '--output', 'src-tauri/icons'], { cwd: root });
 
