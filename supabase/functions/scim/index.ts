@@ -11,6 +11,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.115.0";
  * they first sign in, then joins with one click. Deactivating or deleting a user
  * suspends their organization membership, removes workspace access and key envelopes,
  * and flags the affected workspaces for key rotation.
+ *
+ * Groups (/Groups) can be mapped to workspaces in the admin console. Group membership then
+ * adds or removes workspace access; an administrator's device delivers the encrypted
+ * workspace key to new members (the server never holds it).
  */
 
 const SCHEMA_USER = "urn:ietf:params:scim:schemas:core:2.0:User";
@@ -18,6 +22,65 @@ const SCHEMA_ENTERPRISE = "urn:ietf:params:scim:schemas:extension:enterprise:2.0
 const SCHEMA_LIST = "urn:ietf:params:scim:api:messages:2.0:ListResponse";
 const SCHEMA_ERROR = "urn:ietf:params:scim:api:messages:2.0:Error";
 const SCHEMA_PATCH = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
+const SCHEMA_GROUP = "urn:ietf:params:scim:schemas:core:2.0:Group";
+
+type ProvisionedGroup = {
+  id: string; external_id: string | null; display_name: string; created_at: string; updated_at: string;
+  members: { value: string; display: string }[];
+};
+
+function toGroupResource(group: ProvisionedGroup, base: string, includeMembers = true) {
+  return {
+    schemas: [SCHEMA_GROUP],
+    id: group.id,
+    externalId: group.external_id ?? undefined,
+    displayName: group.display_name,
+    ...(includeMembers ? { members: group.members.map((member) => ({ value: member.value, display: member.display, $ref: `${base}/Users/${member.value}` })) } : {}),
+    meta: { resourceType: "Group", created: group.created_at, lastModified: group.updated_at, location: `${base}/Groups/${group.id}`,
+      version: `W/"${Date.parse(group.updated_at)}"` },
+  };
+}
+
+type PatchOperation = { op?: string; path?: string; value?: unknown };
+
+function memberIds(value: unknown): string[] {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  return list.map((entry) => typeof entry === "string" ? entry : String((entry as { value?: unknown })?.value ?? ""))
+    .filter((id) => UUID.test(id));
+}
+
+/** Okta and Entra ID PatchOp styles for groups. */
+export function parseGroupPatch(operations: PatchOperation[]) {
+  const result: { displayName?: string; externalId?: string; add: string[]; remove: string[]; replace?: string[] } = { add: [], remove: [] };
+  for (const operation of operations) {
+    const op = operation.op?.toLowerCase();
+    const path = operation.path?.trim() ?? "";
+    const filtered = path.match(/^members\[\s*value\s+eq\s+"([^"]+)"\s*\]$/iu);
+    if (op === "remove" && filtered) { if (UUID.test(filtered[1])) result.remove.push(filtered[1]); continue; }
+    if (/^members$/iu.test(path)) {
+      if (op === "add") result.add.push(...memberIds(operation.value));
+      else if (op === "remove") result.remove.push(...memberIds(operation.value));
+      else if (op === "replace") result.replace = memberIds(operation.value);
+      continue;
+    }
+    if ((op === "replace" || op === "add") && /^displayName$/iu.test(path)) { result.displayName = String(operation.value ?? ""); continue; }
+    if ((op === "replace" || op === "add") && /^externalId$/iu.test(path)) { result.externalId = String(operation.value ?? ""); continue; }
+    if ((op === "replace" || op === "add") && !path && operation.value && typeof operation.value === "object") {
+      const value = operation.value as Record<string, unknown>;
+      if (typeof value.displayName === "string") result.displayName = value.displayName;
+      if (typeof value.externalId === "string") result.externalId = value.externalId;
+      if ("members" in value) { if (op === "replace") result.replace = memberIds(value.members); else result.add.push(...memberIds(value.members)); }
+    }
+  }
+  return result;
+}
+
+function parseGroupFilter(filter: string | null) {
+  if (!filter) return { displayName: null as string | null, externalId: null as string | null };
+  const match = filter.match(/^\s*(displayName|externalId)\s+eq\s+"([^"]{1,200})"\s*$/iu);
+  if (!match) throw new Error("invalid_filter");
+  return match[1].toLowerCase() === "externalid" ? { displayName: null, externalId: match[2] } : { displayName: match[2], externalId: null };
+}
 
 type ProvisionedUser = {
   id: string; external_id: string | null; user_name: string; display_name: string; job_title: string | null;
@@ -160,16 +223,86 @@ Deno.serve(async (request: Request) => {
       });
     }
     if (request.method === "GET" && path === "/v2/ResourceTypes") {
-      return scim(200, { schemas: [SCHEMA_LIST], totalResults: 1, Resources: [{
-        schemas: ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"], id: "User", name: "User", endpoint: "/Users", schema: SCHEMA_USER,
-      }] });
+      return scim(200, { schemas: [SCHEMA_LIST], totalResults: 2, Resources: [
+        { schemas: ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"], id: "User", name: "User", endpoint: "/Users", schema: SCHEMA_USER },
+        { schemas: ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"], id: "Group", name: "Group", endpoint: "/Groups", schema: SCHEMA_GROUP },
+      ] });
     }
     if (request.method === "GET" && path === "/v2/Schemas") {
-      return scim(200, { schemas: [SCHEMA_LIST], totalResults: 1, Resources: [{ id: SCHEMA_USER, name: "User" }] });
+      return scim(200, { schemas: [SCHEMA_LIST], totalResults: 2, Resources: [{ id: SCHEMA_USER, name: "User" }, { id: SCHEMA_GROUP, name: "Group" }] });
     }
-    if (path === "/v2/Groups" || path.startsWith("/v2/Groups/")) {
-      if (request.method === "GET" && path === "/v2/Groups") return scim(200, { schemas: [SCHEMA_LIST], totalResults: 0, startIndex: 1, itemsPerPage: 0, Resources: [] });
-      return scimError(501, "Group provisioning is not supported. Assign people to the Passkey-X app instead.");
+    if (path === "/v2/Groups" && request.method === "GET") {
+      const { displayName, externalId } = parseGroupFilter(url.searchParams.get("filter"));
+      const startIndex = Math.max(1, Number(url.searchParams.get("startIndex") ?? 1) || 1);
+      const count = Math.min(200, Math.max(0, Number(url.searchParams.get("count") ?? 100) || 0));
+      const { data, error } = await admin.rpc("scim_list_groups", {
+        p_tenant_id: tenantId, p_display_name: displayName, p_external_id: externalId, p_offset: startIndex - 1, p_limit: count,
+      });
+      if (error) throw error;
+      const row = (Array.isArray(data) ? data[0] : data) as { total: number; groups: ProvisionedGroup[] };
+      const withMembers = !/members/iu.test(url.searchParams.get("excludedAttributes") ?? "");
+      return scim(200, { schemas: [SCHEMA_LIST], totalResults: Number(row?.total ?? 0), startIndex, itemsPerPage: row?.groups?.length ?? 0,
+        Resources: (row?.groups ?? []).map((group) => toGroupResource(group, base, withMembers)) });
+    }
+    if (path === "/v2/Groups" && request.method === "POST") {
+      const body = await request.json() as { displayName?: string; externalId?: string; members?: unknown };
+      if (!body.displayName?.trim()) return scimError(400, "displayName is required.", "invalidValue");
+      const { data, error } = await admin.rpc("scim_upsert_group", {
+        p_tenant_id: tenantId, p_id: null, p_external_id: body.externalId?.trim() || null, p_display_name: body.displayName.trim(),
+        p_members: memberIds(body.members),
+      });
+      if (error) throw error;
+      return scim(201, toGroupResource(data as ProvisionedGroup, base));
+    }
+    const groupMatch = path.match(/^\/v2\/Groups\/([^/]+)$/u);
+    if (groupMatch) {
+      const id = groupMatch[1];
+      if (!UUID.test(id)) return scimError(404, "Group not found.");
+      const loadGroup = async () => {
+        const { data, error } = await admin.rpc("scim_get_group", { p_tenant_id: tenantId, p_id: id });
+        if (error) throw error;
+        return (data ?? null) as ProvisionedGroup | null;
+      };
+      const current = await loadGroup();
+      if (!current) return scimError(404, "Group not found.");
+      if (request.method === "GET") return scim(200, toGroupResource(current, base, !/members/iu.test(url.searchParams.get("excludedAttributes") ?? "")));
+      if (request.method === "DELETE") {
+        const { error } = await admin.rpc("scim_delete_group", { p_tenant_id: tenantId, p_id: id });
+        if (error) throw error;
+        return scim(204, null);
+      }
+      if (request.method === "PUT") {
+        const body = await request.json() as { displayName?: string; externalId?: string; members?: unknown };
+        const { data, error } = await admin.rpc("scim_upsert_group", {
+          p_tenant_id: tenantId, p_id: id, p_external_id: body.externalId?.trim() || null, p_display_name: body.displayName?.trim() || null,
+          p_members: memberIds(body.members),
+        });
+        if (error) throw error;
+        return scim(200, toGroupResource(data as ProvisionedGroup, base));
+      }
+      if (request.method === "PATCH") {
+        const body = await request.json() as { schemas?: string[]; Operations?: PatchOperation[] };
+        if (!body.schemas?.includes(SCHEMA_PATCH)) return scimError(400, "PatchOp schema is required.", "invalidSyntax");
+        const patch = parseGroupPatch(Array.isArray(body.Operations) ? body.Operations : []);
+        let result: ProvisionedGroup = current;
+        if (patch.displayName !== undefined || patch.externalId !== undefined || patch.replace) {
+          const members = patch.replace
+            ? [...new Set([...patch.replace, ...patch.add])].filter((member) => !patch.remove.includes(member))
+            : null;
+          const { data, error } = await admin.rpc("scim_upsert_group", {
+            p_tenant_id: tenantId, p_id: id, p_external_id: patch.externalId?.trim() || null,
+            p_display_name: patch.displayName?.trim() || null, p_members: members,
+          });
+          if (error) throw error;
+          result = data as ProvisionedGroup;
+        }
+        if (!patch.replace && (patch.add.length || patch.remove.length)) {
+          const { data, error } = await admin.rpc("scim_patch_group_members", { p_tenant_id: tenantId, p_id: id, p_add: patch.add, p_remove: patch.remove });
+          if (error) throw error;
+          result = data as ProvisionedGroup;
+        }
+        return scim(200, toGroupResource(result, base));
+      }
     }
 
     if (path === "/v2/Users" && request.method === "GET") {
@@ -240,7 +373,7 @@ Deno.serve(async (request: Request) => {
   } catch (reason) {
     const message = reason instanceof Error ? reason.message : String((reason as { message?: string })?.message ?? "");
     const code = String((reason as { code?: string })?.code ?? "");
-    if (message === "invalid_filter") return scimError(400, "Only 'userName eq' and 'externalId eq' filters are supported.", "invalidFilter");
+    if (message === "invalid_filter") return scimError(400, "Only 'eq' filters on userName, displayName or externalId are supported.", "invalidFilter");
     if (code === "23505") return scimError(409, "A user with this userName or externalId already exists.", "uniqueness");
     if (code === "22023") return scimError(400, "userName must be an email address.", "invalidValue");
     if (code === "42501") return scimError(403, "Organization owners cannot be deprovisioned through SCIM.");

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BadgeCheck, Check, Copy, Download, FileKey, Globe, KeyRound, LifeBuoy, LoaderCircle, RefreshCw, ShieldCheck, Trash2, Upload, UserCog, Users,
+  BadgeCheck, Check, Copy, Download, FileKey, Globe, KeyRound, LifeBuoy, Link2, LoaderCircle, Network, Power, PowerOff, RefreshCw, Send, ShieldCheck, Trash2, Upload, UserCog, Users, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,10 +12,12 @@ import { adminErrorMessage } from "@/components/admin/admin-console";
 import { useEnterprise } from "@/components/enterprise/policy-context";
 import { copySecret } from "@/components/enterprise/vault-guards";
 import { downloadBlob } from "@/lib/browser/download";
-import { relativeTime } from "@/lib/enterprise/admin";
+import { relativeTime, type MemberOverview } from "@/lib/enterprise/admin";
+import { deleteGroupMapping, listGroupMappings, listScimGroups, setGroupMapping, type GroupMapping, type ScimGroup } from "@/lib/enterprise/groups";
+import { listGrantsToSeal, sealPendingGrants, trustRecipientKey, type GrantToSeal, type SealOutcome } from "@/lib/enterprise/key-sharing";
 import {
-  createScimToken, listProvisionedUsers, listScimTokens, loadSsoConnection, requestSsoActivation, revokeScimToken,
-  saveSsoConnection, scimBaseUrl, setSsoEnforcement, verifySsoDomain,
+  activateSso, createScimToken, deactivateSso, listProvisionedUsers, listScimTokens, loadSsoConnection, requestSsoActivation, revokeScimToken,
+  saveSsoConnection, scimBaseUrl, setSsoEnforcement, SSO_ACTIVATION_ERRORS, verifySsoDomain,
   type ProvisionedUser, type ScimToken, type SsoConnection,
 } from "@/lib/enterprise/identity";
 import {
@@ -26,6 +28,8 @@ import type { WorkspaceVault } from "@/lib/vault/items";
 
 function identityError(reason: unknown, fallback: string) {
   const detail = typeof reason === "object" && reason !== null && "message" in reason ? String(reason.message) : "";
+  if (/turn off single sign-on before changing the domain/iu.test(detail)) return "Turn off single sign-on before changing the domain.";
+  if (/only the workspace owner or an administrator/iu.test(detail)) return detail.charAt(0).toUpperCase() + detail.slice(1) + ".";
   if (/own email domain/iu.test(detail)) return "Use your organization's own email domain, not a public email provider.";
   if (/verify your domain/iu.test(detail)) return "Verify your domain first.";
   if (/metadata URL/iu.test(detail)) return "Add your identity provider's SAML metadata URL first.";
@@ -40,13 +44,22 @@ function CopyValue({ value, label }: { value: string; label: string }) {
   return <Button size="sm" variant="outline" onClick={async () => { try { await copySecret(value, 120); setCopied(true); } catch { /* clipboard blocked */ } }}>{copied ? <Check /> : <Copy />} {copied ? "Copied" : label}</Button>;
 }
 
+const isActivationCode = (code: string) => Object.prototype.hasOwnProperty.call(SSO_ACTIVATION_ERRORS, code);
+
+function ssoError(reason: unknown, fallback: string) {
+  if (reason instanceof Error && isActivationCode(reason.message)) return SSO_ACTIVATION_ERRORS[reason.message];
+  return identityError(reason, fallback);
+}
+
+const SUPPORTED_IDPS = "Okta, Microsoft Entra ID, Google Workspace, JumpCloud, OneLogin or any other SAML 2.0 identity provider";
+
 function SsoCard({ vault, canEdit }: { vault: WorkspaceVault; canEdit: boolean }) {
   const { isTenantAdmin } = useEnterprise();
   const [connection, setConnection] = useState<SsoConnection | null>(null);
   const [domain, setDomain] = useState("");
   const [metadataUrl, setMetadataUrl] = useState("");
   const [busy, setBusy] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; tone: "error" | "success" | "info" } | null>(null);
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
@@ -54,45 +67,205 @@ function SsoCard({ vault, canEdit }: { vault: WorkspaceVault; canEdit: boolean }
     loadSsoConnection(vault.tenantId).then((row) => {
       if (!active) return;
       setConnection(row); setDomain(row?.domain ?? ""); setMetadataUrl(row?.metadata_url ?? "");
-    }, (reason) => { if (active) setMessage(identityError(reason, "Single sign-on settings could not be loaded.")); });
+    }, (reason) => { if (active) setMessage({ text: identityError(reason, "Single sign-on settings could not be loaded."), tone: "error" }); });
     return () => { active = false; };
   }, [vault.tenantId, version]);
 
   async function run(key: string, action: () => Promise<void>) {
-    setBusy(key); setMessage("");
+    setBusy(key); setMessage(null);
     try { await action(); setVersion((value) => value + 1); }
-    catch (reason) { setMessage(identityError(reason, "The change could not be saved.")); }
+    catch (reason) { setMessage({ text: ssoError(reason, "The change could not be saved."), tone: "error" }); setVersion((value) => value + 1); }
     finally { setBusy(""); }
   }
 
+  function activate(key: "activate" | "refresh") {
+    void run(key, async () => {
+      const result = await activateSso(vault.tenantId);
+      setMessage(result === "active"
+        ? { text: key === "refresh" ? "SSO settings were updated from your identity provider's metadata." : `SSO is live — members of ${connection?.domain ?? domain} can now choose “Sign in with SSO”.`, tone: "success" }
+        : { text: SSO_ACTIVATION_ERRORS.saml_not_enabled, tone: "info" });
+    });
+  }
+
+  function turnOff() {
+    if (!connection) return;
+    if (!window.confirm(`Turn off single sign-on for ${connection.domain}? Members go back to signing in with their email and account password, and “Require SSO” is turned off. Vault data and vault passwords are not affected.`)) return;
+    void run("deactivate", async () => {
+      await deactivateSso(vault.tenantId);
+      setMessage({ text: "Single sign-on is off. Members sign in with their email and account password again.", tone: "info" });
+    });
+  }
+
   const editable = isTenantAdmin && canEdit;
+  const verified = Boolean(connection?.domain_verified_at);
+  const isActive = connection?.status === "active";
+  const savedMetadata = Boolean(connection?.metadata_url);
+  const canActivate = editable && verified && savedMetadata && !isActive;
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/u, "");
+  const activationError = connection?.activation_error
+    ? (isActivationCode(connection.activation_error) ? SSO_ACTIVATION_ERRORS[connection.activation_error] : connection.activation_error)
+    : "";
   const steps = [
-    { done: Boolean(connection), label: "Add your email domain and identity provider" },
-    { done: Boolean(connection?.domain_verified_at), label: "Verify the domain with a DNS TXT record" },
-    { done: connection?.status === "requested" || connection?.status === "active", label: "Request activation" },
-    { done: connection?.status === "active", label: "Vlightsoft connects your identity provider" },
+    { done: Boolean(connection), label: "Add your email domain" },
+    { done: verified, label: "Verify the domain with a DNS TXT record" },
+    { done: savedMetadata, label: "Create a SAML app in your identity provider and paste its metadata URL" },
+    { done: isActive, label: "Activate single sign-on" },
   ];
 
   return <Card>
-    <CardHeader><CardTitle><Globe /> Single sign-on (SAML)</CardTitle>
-      <CardDescription>Members sign in to their account through Okta, Microsoft Entra ID, Google Workspace or any SAML 2.0 provider. Vault passwords stay separate, so SSO never gives your identity provider access to vault data.</CardDescription></CardHeader>
+    <CardHeader><CardTitle><Globe /> Single sign-on (SAML 2.0)</CardTitle>
+      <CardDescription>Members sign in to their account through {SUPPORTED_IDPS}. Providers that only support OpenID Connect (OIDC) can&apos;t be connected — use their SAML 2.0 option. Vault passwords stay separate, so SSO never gives your identity provider access to vault data.</CardDescription></CardHeader>
     <CardContent>
       <ol className="identity-steps">{steps.map((step) => <li key={step.label} className={step.done ? "done" : ""}>{step.done ? <BadgeCheck /> : <span />}{step.label}</li>)}</ol>
       <form className="form-stack" onSubmit={(event) => { event.preventDefault(); void run("save", () => saveSsoConnection(vault.tenantId, domain, metadataUrl)); }}>
         <div className="inline-fields">
           <div><Label htmlFor="sso-domain">Email domain</Label><Input id="sso-domain" required disabled={!editable} value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="acme.com" /></div>
-          <div><Label htmlFor="sso-metadata">IdP metadata URL</Label><Input id="sso-metadata" type="url" pattern="https://.*" disabled={!editable} value={metadataUrl} onChange={(event) => setMetadataUrl(event.target.value)} placeholder="https://login.example.com/app/…/sso/saml/metadata" /></div>
+          <div><Label htmlFor="sso-metadata">IdP metadata URL</Label><Input id="sso-metadata" type="url" pattern="https://.*" disabled={!editable} value={metadataUrl} onChange={(event) => setMetadataUrl(event.target.value)} placeholder="https://login.example.com/app/…/sso/saml/metadata" aria-describedby="sso-metadata-hint" /></div>
         </div>
-        {editable && <Button disabled={busy !== ""}>{busy === "save" ? <LoaderCircle className="spin" /> : <Check />} Save</Button>}
+        <p id="sso-metadata-hint" className="field-hint">In your identity provider, create a SAML 2.0 app with ACS (reply) URL <code className="wrap-code">{`${supabaseUrl}/auth/v1/sso/saml/acs`}</code> and Entity ID (audience) <code className="wrap-code">{`${supabaseUrl}/auth/v1/sso/saml/metadata`}</code>, set the Name ID to the email address, then copy the app&apos;s metadata URL here.</p>
+        {editable && <Button variant={canActivate ? "outline" : "default"} disabled={busy !== ""}>{busy === "save" ? <LoaderCircle className="spin" /> : <Check />} Save</Button>}
       </form>
-      {connection && !connection.domain_verified_at && <div className="one-time-link"><strong>Add this TXT record to {connection.domain}</strong><code>{connection.verification_token}</code>
+      {connection && !verified && <div className="one-time-link"><strong>Add this TXT record to {connection.domain}</strong><code>{connection.verification_token}</code>
         <div className="inline-actions"><CopyValue value={connection.verification_token} label="Copy record" />
           {editable && <Button size="sm" disabled={busy !== ""} onClick={() => void run("verify", async () => { if (!await verifySsoDomain(vault.tenantId)) throw new Error("The TXT record was not found yet. DNS changes can take up to an hour."); })}>{busy === "verify" ? <LoaderCircle className="spin" /> : <RefreshCw />} Check DNS</Button>}</div>
         <small>You can also add it at _passkey-x.{connection.domain}.</small></div>}
-      {connection?.domain_verified_at && connection.status === "draft" && editable && <Button onClick={() => void run("request", () => requestSsoActivation(vault.tenantId))} disabled={busy !== ""}>Request activation</Button>}
-      {connection?.status === "requested" && <p className="field-hint">Activation requested. Vlightsoft will connect your identity provider and email you. In your IdP use ACS URL <code>{`${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/auth/v1/sso/saml/acs`}</code> and Entity ID <code>{`${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/auth/v1/sso/saml/metadata`}</code>.</p>}
-      {connection?.status === "active" && <label className="toggle-row"><input type="checkbox" disabled={!editable || busy !== ""} checked={connection.enforce_sso} onChange={(event) => void run("enforce", () => setSsoEnforcement(vault.tenantId, event.target.checked))} /> Require SSO for everyone with an @{connection.domain} email</label>}
-      {message && <p className="form-message" role="status">{message}</p>}
+      {activationError && <p className="form-message" role="alert">Last activation attempt failed: {activationError}</p>}
+      {canActivate && <div className="tm-sso-activate">
+        <Button onClick={() => activate("activate")} disabled={busy !== ""}>{busy === "activate" ? <LoaderCircle className="spin" /> : <Power />} Activate single sign-on</Button>
+        <small>Passkey-X reads your metadata and connects the identity provider right away. Nobody is forced to use SSO until you turn on “Require SSO”.</small>
+      </div>}
+      {verified && !savedMetadata && !isActive && <p className="field-hint">Save your identity provider&apos;s metadata URL to activate single sign-on.</p>}
+      {connection?.status === "requested" && <p className="field-hint">Activation requested. Vlightsoft will finish connecting your identity provider and email you. You can also try “Activate single sign-on” again later.</p>}
+      {canActivate && connection?.status === "draft" && <Button variant="ghost" size="sm" onClick={() => void run("request", () => requestSsoActivation(vault.tenantId))} disabled={busy !== ""}>Ask Vlightsoft to connect it instead</Button>}
+      {isActive && connection && <>
+        <p className="tm-sso-live" role="status"><BadgeCheck aria-hidden="true" /> SSO is live for @{connection.domain}. Members choose “Sign in with SSO” on the sign-in screen.</p>
+        <label className="toggle-row"><input type="checkbox" disabled={!editable || busy !== ""} checked={connection.enforce_sso} onChange={(event) => void run("enforce", () => setSsoEnforcement(vault.tenantId, event.target.checked))} /> Require SSO for everyone with an @{connection.domain} email</label>
+        {editable && <div className="inline-actions">
+          <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => activate("refresh")}>{busy === "refresh" ? <LoaderCircle className="spin" /> : <RefreshCw />} Update from metadata</Button>
+          <Button size="sm" variant="ghost" disabled={busy !== ""} onClick={turnOff}>{busy === "deactivate" ? <LoaderCircle className="spin" /> : <PowerOff />} Turn off SSO</Button>
+        </div>}
+      </>}
+      {message && <p className={`form-message${message.tone === "error" ? "" : " neutral-message"}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p>}
+    </CardContent>
+  </Card>;
+}
+
+const MAPPING_ROLES: { value: GroupMapping["role"]; label: string }[] = [
+  { value: "viewer", label: "Viewer — can use items" },
+  { value: "editor", label: "Editor — can add and change items" },
+  { value: "manager", label: "Manager — can also manage access" },
+];
+const ROLE_NAMES: Record<GroupMapping["role"], string> = { viewer: "Viewer", editor: "Editor", manager: "Manager" };
+
+function GroupsCard({ vault, canEdit, workspaces, members }: { vault: WorkspaceVault; canEdit: boolean; workspaces: WorkspaceVault[]; members: MemberOverview[] }) {
+  const { isTenantAdmin } = useEnterprise();
+  const [groups, setGroups] = useState<ScimGroup[]>([]);
+  const [mappings, setMappings] = useState<GroupMapping[]>([]);
+  const [pending, setPending] = useState<GrantToSeal[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [groupId, setGroupId] = useState("");
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [role, setRole] = useState<GroupMapping["role"]>("viewer");
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState<{ text: string; tone: "error" | "info" } | null>(null);
+  const [version, setVersion] = useState(0);
+  const autoSealed = useRef(false);
+  const [keyChanged, setKeyChanged] = useState<SealOutcome["keyChanged"]>([]);
+
+  const editable = isTenantAdmin && canEdit;
+  const manageable = useMemo(() => workspaces.filter((entry) => entry.tenantId === vault.tenantId
+    && (entry.role === "owner" || entry.role === "manager") && entry.kind !== "vault"), [workspaces, vault.tenantId]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([listScimGroups(vault.tenantId), listGroupMappings(vault.tenantId), listGrantsToSeal(vault.tenantId)]).then(([nextGroups, nextMappings, nextPending]) => {
+      if (!active) return;
+      if (nextGroups.status === "fulfilled") setGroups(nextGroups.value);
+      if (nextMappings.status === "fulfilled") setMappings(nextMappings.value);
+      if (nextPending.status === "fulfilled") setPending(nextPending.value);
+      const failure = [nextGroups, nextMappings].find((result) => result.status === "rejected");
+      if (failure && failure.status === "rejected") setMessage({ text: identityError(failure.reason, "Groups could not be loaded."), tone: "error" });
+      setLoaded(true);
+    });
+    return () => { active = false; };
+  }, [vault.tenantId, version]);
+
+  // Quietly deliver only access this administrator asked for themselves (for people who had not
+  // unlocked Passkey-X yet). Group-driven access waits for an explicit "Deliver" below.
+  useEffect(() => {
+    if (autoSealed.current || !isTenantAdmin || !manageable.length) return;
+    autoSealed.current = true;
+    sealPendingGrants(vault.tenantId, workspaces, { sealerIdentityId: vault.identityId, approvedOnly: true })
+      .then(({ sealed, keyChanged: changed }) => { setKeyChanged(changed); if (sealed) setVersion((value) => value + 1); }, () => { /* retried on next unlock */ });
+  }, [isTenantAdmin, manageable.length, vault.identityId, vault.tenantId, workspaces]);
+
+  async function run(key: string, action: () => Promise<void>) {
+    setBusy(key); setMessage(null);
+    try { await action(); setVersion((value) => value + 1); }
+    catch (reason) { setMessage({ text: identityError(reason, "The change could not be saved."), tone: "error" }); }
+    finally { setBusy(""); }
+  }
+
+  const groupName = (id: string) => groups.find((group) => group.id === id)?.display_name ?? "Removed group";
+  const workspaceName = (id: string) => workspaces.find((entry) => entry.workspaceId === id)?.name ?? "Workspace you can't open";
+  const personName = (grant: GrantToSeal) => grant.display_name || members.find((member) => member.identity_id === grant.recipient_identity_id)?.display_name || "A member";
+  const waitingPeople = [...new Set(pending.map(personName))];
+
+  function removeMapping(mapping: GroupMapping) {
+    if (!window.confirm(`Stop giving “${groupName(mapping.group_id)}” access to “${workspaceName(mapping.workspace_id)}”? People lose access that came from this group (access given to them directly stays), and the workspace will ask for a key rotation.`)) return;
+    void run(`remove:${mapping.id}`, () => deleteGroupMapping(mapping.id));
+  }
+
+  function deliverNow() {
+    const names = waitingPeople.slice(0, 10).join(", ");
+    if (!window.confirm(`Encrypt workspace keys for ${names}${waitingPeople.length > 10 ? ` and ${waitingPeople.length - 10} more` : ""}? Only approve people you expect to have this access.`)) return;
+    void run("deliver", async () => {
+      const { sealed, waiting, keyChanged: changed } = await sealPendingGrants(vault.tenantId, workspaces, { sealerIdentityId: vault.identityId });
+      setKeyChanged(changed);
+      setMessage({ tone: "info", text: `${waiting
+        ? `Delivered ${sealed}. ${waiting} ${waiting === 1 ? "person hasn't" : "people haven't"} opened Passkey-X since they were added — deliver again after they do.`
+        : `Delivered ${sealed}.`}${changed.length ? ` ${changed.length} ${changed.length === 1 ? "person's" : "people's"} key changed — see below.` : ""}` });
+    });
+  }
+
+  return <Card>
+    <CardHeader><CardTitle><Network /> Groups → workspaces</CardTitle>
+      <CardDescription>Groups pushed by your identity provider through SCIM (/Groups) can be mapped to workspaces. Everyone in a mapped group gets access with the role you choose, and loses it when they leave the group. Workspace keys are encrypted to each person on an administrator&apos;s device, so the server never sees them.</CardDescription></CardHeader>
+    <CardContent>
+      <div className="tm-deliveries">
+        <div><span>Key deliveries waiting</span><strong>{pending.length}</strong>
+          {waitingPeople.length > 0 && <small>{waitingPeople.slice(0, 5).join(", ")}{waitingPeople.length > 5 ? ` and ${waitingPeople.length - 5} more` : ""}</small>}</div>
+        {editable && <Button size="sm" variant="outline" disabled={busy !== "" || !pending.length || !manageable.length} title={manageable.length ? undefined : "Open the workspaces you manage on this device first"} onClick={deliverNow}>{busy === "deliver" ? <LoaderCircle className="spin" /> : <Send />} Deliver now</Button>}
+      </div>
+      {keyChanged.length > 0 && <div className="tm-key-changed" role="alert">
+        <strong>Sharing key changed</strong>
+        <p>These people have a new sharing key (for example after resetting their vault password). Ask each person to read the fingerprint from Account security → Sign-in security and compare it before trusting it.</p>
+        <ul>{keyChanged.map((entry) => <li key={entry.identityId}><span>{entry.name}</span><code>{entry.fingerprint}</code>
+          {editable && <Button size="sm" variant="outline" onClick={() => { trustRecipientKey(vault.identityId, entry.identityId, entry.fingerprint); setKeyChanged((current) => current.filter((item) => item.identityId !== entry.identityId)); }}>Fingerprint matches — trust</Button>}</li>)}</ul>
+      </div>}
+      {loaded && groups.length === 0 ? <p className="tm-empty">No groups yet. Turn on group push in your IdP (Okta: Push Groups; Entra ID: assign groups to the enterprise app) using the SCIM base URL above.</p> :
+        <ul className="tm-group-list" aria-label="SCIM groups">{groups.map((group) => {
+          const own = mappings.filter((mapping) => mapping.group_id === group.id);
+          return <li key={group.id}>
+            <div className="tm-group-head"><strong>{group.display_name}</strong><small>{group.member_count} {group.member_count === 1 ? "member" : "members"}</small></div>
+            {own.length === 0 ? <small className="tm-muted">Not mapped</small> :
+              <ul className="tm-chips" aria-label={`Workspaces for ${group.display_name}`}>{own.map((mapping) => <li key={mapping.id} className="tm-chip">
+                <span>{workspaceName(mapping.workspace_id)} · {ROLE_NAMES[mapping.role]}</span>
+                {editable && <button type="button" aria-label={`Remove ${group.display_name} from ${workspaceName(mapping.workspace_id)}`} disabled={busy !== ""} onClick={() => removeMapping(mapping)}><X aria-hidden="true" /></button>}
+              </li>)}</ul>}
+          </li>;
+        })}</ul>}
+      {editable && groups.length > 0 && <form className="tm-map-form" onSubmit={(event) => { event.preventDefault(); if (groupId && workspaceId) void run("map", async () => { await setGroupMapping(groupId, workspaceId, role); setGroupId(""); setWorkspaceId(""); }); }}>
+        <div><Label htmlFor="tm-map-group">Group</Label><select id="tm-map-group" className="tm-select" required value={groupId} onChange={(event) => setGroupId(event.target.value)}>
+          <option value="">Choose a group</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.display_name}</option>)}</select></div>
+        <div><Label htmlFor="tm-map-workspace">Workspace</Label><select id="tm-map-workspace" className="tm-select" required value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
+          <option value="">{manageable.length ? "Choose a workspace" : "No workspaces you manage"}</option>{manageable.map((entry) => <option key={entry.workspaceId} value={entry.workspaceId}>{entry.name}</option>)}</select></div>
+        <div><Label htmlFor="tm-map-role">Role</Label><select id="tm-map-role" className="tm-select" value={role} onChange={(event) => setRole(event.target.value as GroupMapping["role"])}>
+          {MAPPING_ROLES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+        <div className="align-end"><Button disabled={busy !== "" || !groupId || !workspaceId}>{busy === "map" ? <LoaderCircle className="spin" /> : <Link2 />} Map to workspace</Button></div>
+      </form>}
+      {editable && groups.length > 0 && !manageable.length && <p className="field-hint">Only workspaces you own or manage, and that are unlocked on this device, can be mapped.</p>}
+      {message && <p className={`form-message${message.tone === "error" ? "" : " neutral-message"}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p>}
     </CardContent>
   </Card>;
 }
@@ -213,10 +386,16 @@ function RecoveryCard({ vault }: { vault: WorkspaceVault }) {
   </Card>;
 }
 
-export function IdentityPanel({ vault, canEdit }: { vault: WorkspaceVault; canEdit: boolean }) {
+const NO_WORKSPACES: WorkspaceVault[] = [];
+const NO_MEMBERS: MemberOverview[] = [];
+
+export function IdentityPanel({ vault, canEdit, workspaces = NO_WORKSPACES, members = NO_MEMBERS }: {
+  vault: WorkspaceVault; canEdit: boolean; workspaces?: WorkspaceVault[]; members?: MemberOverview[];
+}) {
   return <div className="identity-panel">
     <SsoCard vault={vault} canEdit={canEdit} />
     <ScimCard vault={vault} canEdit={canEdit} />
+    <GroupsCard vault={vault} canEdit={canEdit} workspaces={workspaces} members={members} />
     <RecoveryCard vault={vault} />
   </div>;
 }

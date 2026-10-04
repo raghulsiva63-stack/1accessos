@@ -30,3 +30,10 @@ grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+
+-- SSO users and identities (subset of Supabase Auth).
+alter table auth.users add column if not exists is_sso_user boolean not null default false;
+create table if not exists auth.identities (id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade,
+  provider text not null, provider_id text, identity_data jsonb default '{}', created_at timestamptz default now());
+create table if not exists auth.sso_domains (id uuid primary key default gen_random_uuid(), sso_provider_id uuid not null, domain text not null,
+  created_at timestamptz default now());
