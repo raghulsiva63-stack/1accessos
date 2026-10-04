@@ -1,5 +1,5 @@
-import { readdir, readFile, mkdir, copyFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readdir, readFile, mkdir, copyFile, writeFile, stat } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { createHash } from 'node:crypto';
 const platform = process.argv[2];
 const extensions = { 'windows-x64': ['.exe', '.msi'], 'macos-universal': ['.dmg'], 'linux-x64': ['.deb'] }[platform];
@@ -25,15 +25,20 @@ async function walkAll(directory) {
 await mkdir('artifacts', { recursive: true });
 const installers = [];
 for (const extension of extensions) {
-  const files = await walk('src-tauri/target', extension);
-  if (files.length !== 1) {
+  // The build cache can still hold installers of earlier versions: keep this version's only.
+  const found = (await walk('src-tauri/target', extension)).filter((file) => basename(file).includes(`_${version}_`));
+  const files = [];
+  for (const file of found) files.push({ file, modified: (await stat(file)).mtimeMs });
+  files.sort((a, b) => b.modified - a.modified);
+  if (files.length > 1) console.log(`::warning::Found ${files.length} ${extension} installers for ${version}; using the newest.`);
+  if (files.length === 0) {
     // The MSI is optional (PASSKEY_X_SKIP_MSI=1); every other installer is required.
     if (extension === '.msi' && files.length === 0) continue;
     throw new Error(`Expected one ${extension} installer, found ${files.length}`);
   }
   const filename = `passkey-x-desktop-${version}-${platform}${extension}`;
-  await copyFile(files[0], join('artifacts', filename));
-  const bytes = await readFile(files[0]);
+  await copyFile(files[0].file, join('artifacts', filename));
+  const bytes = await readFile(files[0].file);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   await writeFile(join('artifacts', filename + '.sha256'), `${sha256}  ${filename}\n`);
   installers.push({ filename, sha256, bytes: bytes.length });
