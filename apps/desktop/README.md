@@ -68,6 +68,6 @@ npm run build   # builds dist/ (web app) then the installer
    - Until then, Windows SmartScreen and macOS Gatekeeper warn on install.
 3. **Publish a release.**
    - Download the three installers from the workflow run.
-   - Add them under `releases/desktop/1.0.0/` (see `scripts/prepare-desktop-downloads.mjs`).
-   - Set `"desktop": "1.0.0"` in `apps/web/lib/client-releases.json`.
+   - Add them under `releases/desktop/1.1.0/` (see `scripts/prepare-desktop-downloads.mjs`).
+   - Set `"desktop": "1.1.0"` in `apps/web/lib/client-releases.json`.
    - With the updater on, also publish `latest.json`.
