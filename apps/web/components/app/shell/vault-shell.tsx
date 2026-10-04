@@ -46,6 +46,8 @@ import { DesktopSettingsPanel } from "@/components/desktop/desktop-settings";
 import { desktop, isDesktopApp } from "@/lib/desktop/bridge";
 import { reportSignInContext } from "@/lib/security/client";
 import { syncKeyGrants } from "@/lib/enterprise/key-sharing";
+import { setBrowserLinkVault } from "@/lib/desktop/browser-link";
+import { clearOfflineCache, isOffline, onOfflineChange } from "@/lib/desktop/offline-cache";
 
 export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts, onPasswordFacts, onProfileChange, onLock }: { clientMode: ClientMode; email: string; profile: CryptoProfile; rootKey: Uint8Array; passwordFacts: VaultPasswordFacts; onPasswordFacts: (facts: VaultPasswordFacts) => void; onProfileChange: (profile: CryptoProfile) => void; onLock: () => void }) {
   const [view, setView] = useState<View>(() => readPlanSelection() || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("billing")) ? "billing" : viewFromUrl() ?? "home");
@@ -73,6 +75,14 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
   const [notice, setNotice] = useState("");
   const [entitlement, setEntitlement] = useState<Entitlement>(FREE_ENTITLEMENT);
   const initials = useMemo(() => email.slice(0, 2).toUpperCase(), [email]);
+  const [offline, setOffline] = useState(isOffline);
+  useEffect(() => onOfflineChange(setOffline), []);
+  // Desktop: a paired browser extension may unlock while this vault is unlocked (see browser-link.ts).
+  useEffect(() => {
+    if (!isDesktopApp()) return;
+    setBrowserLinkVault({ identityId: profile.identity_id, rootKey });
+    return () => setBrowserLinkVault(null);
+  }, [profile.identity_id, rootKey]);
 
   async function refresh(openVault: WorkspaceVault) {
     const ticket = requests.current.issue(openVault.workspaceId, "items");
@@ -185,7 +195,7 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
   async function showHistory(item: VaultItem) { if (!vault) return; try { const entries = await listVaultItemHistory(vault, item); setHistory({ itemId: item.id, entries }); } catch (reason) { setError(customerError(reason, "Revision history could not be decrypted. Try again.")); } }
   function openVault(filterValue: VaultFilter = "all") { setFilter(filterValue); setView("vault"); setSelected(null); }
   function lockVault() { clearPendingClipboard(); forgetBreachResults(); document.documentElement.classList.add("vault-privacy-lock"); requests.current.select(null); workspaceLoadVersion.current += 1; workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); pendingEmergency?.token.fill(0); onLock(); }
-  async function signOut() { lockVault(); requests.current.select(null); workspaceLoadVersion.current += 1; workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); if (isDesktopApp()) await desktop.biometric.remove(profile.identity_id).catch(() => undefined); await supabase!.auth.signOut(); }
+  async function signOut() { lockVault(); requests.current.select(null); workspaceLoadVersion.current += 1; workspaces.forEach((entry) => entry.key.fill(0)); pendingLink?.token.fill(0); pendingOrganizationInvite?.token.fill(0); if (isDesktopApp()) { await desktop.biometric.remove(profile.identity_id).catch(() => undefined); await clearOfflineCache(); } await supabase!.auth.signOut(); }
   const autoLock = useEffectEvent(() => lockVault());
   useEffect(() => {
     document.documentElement.classList.remove("vault-privacy-lock");
@@ -218,6 +228,7 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
   return <EnterpriseProvider tenantId={vault?.tenantId ?? null} identityId={profile.identity_id} workspaceId={vault?.workspaceId ?? null} currentItemId={selected?.id ?? null}><PolicyLifecycle tenantId={vault?.tenantId ?? null} onLock={lockVault} /><RevealAudit revealed={revealed} itemId={selected?.id ?? null} /><main className={`vault-app client-${clientMode}`}>
     <aside className="vault-sidebar"><Brand /><nav>{NAV_SECTIONS.map((section) => <div className="nav-section" key={section.label}><span className="nav-section-label">{section.label}</span>{section.views.map((viewId) => { const entry = NAV.find((candidate) => candidate.id === viewId)!; const Icon = entry.icon; return <button key={entry.id} data-mobile-primary={["home", "vault", "generator", "account-security", "settings"].includes(entry.id)} className={`nav-item ${view === entry.id ? "active" : ""}`} onClick={() => { setView(entry.id); setSelected(null); }}><Icon /> {entry.label}{entry.id === "vault" && <span>{items.length}</span>}</button>; })}</div>)}</nav><div className="plan-chip"><Sparkles /><div><strong>{planLabel}</strong><span>{entitlement.ai_credits_remaining} private AI credits</span></div></div><div className="sidebar-account"><div className="avatar">{initials}</div><div><strong>{email.split("@")[0]}</strong><span>{vault?.name ?? "Opening workspace"}</span></div><MoreHorizontal /></div></aside>
     <section className="vault-content"><header><div><p className="eyebrow">Passkey-X {clientMode === "desktop" ? "Desktop" : clientMode === "android" || clientMode === "mobile" ? "Mobile" : ""} / {vault?.suite ?? "Personal"}</p><h1>{view === "home" ? companion ? "Your everyday vault" : "Home" : NAV.find((entry) => entry.id === view)?.label}</h1><select className="mobile-view-picker" aria-label="Go to section" value={view} onChange={event => { setView(event.target.value as View); setSelected(null); }}>{NAV.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></div><div className="header-actions">{!companion && <CommandPaletteButton />}<ThemeToggle /><Link className="client-header-link" href="/download" aria-label="Get Passkey-X apps"><Download /></Link>{workspaces.length > 0 && <select className="workspace-switcher" aria-label="Current workspace" value={vault?.workspaceId ?? ""} onChange={(event) => void switchWorkspace(event.target.value)}>{workspaces.map((entry) => <option key={entry.workspaceId} value={entry.workspaceId}>{entry.name}</option>)}</select>}<Button variant="outline" onClick={lockVault}><LockKeyhole /> Lock</Button><Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void signOut()}><LogOut /></Button></div></header>
+      {offline && <div className="offline-banner" role="status"><span>You&apos;re offline. This is the encrypted copy saved on this computer — changes can&apos;t be saved until you reconnect.</span><Button size="sm" variant="outline" onClick={() => window.location.reload()}>Try again</Button></div>}
       {error && <div className="vault-error" role="alert">{error}<button aria-label="Dismiss" onClick={() => setError("")}><X /></button></div>}
       {notice && <div className="vault-notice" role="status">{notice}<button aria-label="Dismiss" onClick={() => setNotice("")}><X /></button></div>}
       <ComplianceBanner passwordFacts={passwordFacts} onOpenAccountSecurity={() => { setView("account-security"); setSelected(null); }} onOpenSettings={() => { setView("settings"); setSelected(null); }} />
