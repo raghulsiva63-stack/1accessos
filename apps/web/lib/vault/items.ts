@@ -7,6 +7,7 @@ import {
   unwrapKey,
   wrapKey,
 } from "@/lib/crypto/vault";
+import { loadItemRows, loadWorkspaceRows, saveItemRows, saveWorkspaceRows, withOfflineCopy } from "@/lib/desktop/offline-cache";
 
 export type ItemKind =
   | "login"
@@ -100,9 +101,16 @@ export function workspaceNameAad(tenantId: string, workspaceId: string) {
   return `1accessos:workspace-name:v1:${tenantId}:${workspaceId}`;
 }
 
-export async function listWorkspaceVaults(identityId: string, accountRootKey: Uint8Array): Promise<WorkspaceVault[]> {
-  if (!supabase) throw new Error("Supabase is not configured.");
+type MembershipRow = { tenant_id: string; workspace_id: string; role: string; created_at: string };
+type WorkspaceRow = {
+  id: string; tenant_id: string; kind: string; suite: string; encrypted_name: string | null; name_nonce: string | null;
+  name_aad_hash: string | null; current_key_version: number; key_rotation_required: boolean; status: string;
+};
+type EnvelopeRow = { tenant_id: string; workspace_id: string; key_version: number; nonce: string; wrapped_key: string };
+type WorkspaceRows = { memberships: MembershipRow[]; workspaceRows: WorkspaceRow[]; envelopes: EnvelopeRow[] };
 
+async function fetchWorkspaceRows(identityId: string): Promise<WorkspaceRows> {
+  if (!supabase) throw new Error("Supabase is not configured.");
   const { data: memberships, error: membershipError } = await supabase
     .from("workspace_memberships")
     .select("tenant_id,workspace_id,role,created_at")
@@ -128,7 +136,19 @@ export async function listWorkspaceVaults(identityId: string, accountRootKey: Ui
   ]);
   if (workspaceError) throw workspaceError;
   if (envelopeError) throw envelopeError;
+  return { memberships: memberships as MembershipRow[], workspaceRows: (workspaceRows ?? []) as WorkspaceRow[], envelopes: (envelopes ?? []) as EnvelopeRow[] };
+}
 
+/**
+ * Opens every workspace this account can use. In the desktop app with offline access on, the
+ * rows are also kept as an encrypted copy, used when the server cannot be reached.
+ */
+export async function listWorkspaceVaults(identityId: string, accountRootKey: Uint8Array): Promise<WorkspaceVault[]> {
+  const { memberships, workspaceRows, envelopes } = await withOfflineCopy(
+    () => fetchWorkspaceRows(identityId),
+    (rows) => saveWorkspaceRows(identityId, accountRootKey, rows),
+    () => loadWorkspaceRows<WorkspaceRows>(identityId, accountRootKey),
+  );
   const rows = new Map((workspaceRows ?? []).map((workspace) => [workspace.id, workspace]));
   const opened: WorkspaceVault[] = [];
   for (const membership of memberships) {
@@ -258,6 +278,23 @@ export type VaultItemList = { items: VaultItem[]; unreadable: number };
  * never locks the user out of the rest of the vault.
  */
 export async function listVaultItemsWithStatus(vault: WorkspaceVault, options: { trash?: boolean } = {}): Promise<VaultItemList> {
+  const trash = Boolean(options.trash);
+  const rows = await withOfflineCopy(
+    () => fetchHeadRows(vault, options),
+    (value) => saveItemRows(vault.workspaceId, vault.key, trash, value),
+    () => loadItemRows<HeadRow[]>(vault.workspaceId, vault.key, trash),
+  );
+  const results = await Promise.allSettled(rows.map((row) => decryptHead(vault, row)));
+  const items: VaultItem[] = [];
+  let unreadable = 0;
+  for (const result of results) {
+    if (result.status === "fulfilled") items.push(result.value);
+    else unreadable += 1;
+  }
+  return { items, unreadable };
+}
+
+async function fetchHeadRows(vault: WorkspaceVault, options: { trash?: boolean }): Promise<HeadRow[]> {
   if (!supabase) throw new Error("Supabase is not configured.");
   // vault_item_heads is a security_invoker view (not in the generated types).
   const client = supabase as unknown as SupabaseClient;
@@ -278,14 +315,7 @@ export async function listVaultItemsWithStatus(vault: WorkspaceVault, options: {
     rows.push(...((data ?? []) as HeadRow[]));
     if (!data || data.length < PAGE_SIZE) break;
   }
-  const results = await Promise.allSettled(rows.map((row) => decryptHead(vault, row)));
-  const items: VaultItem[] = [];
-  let unreadable = 0;
-  for (const result of results) {
-    if (result.status === "fulfilled") items.push(result.value);
-    else unreadable += 1;
-  }
-  return { items, unreadable };
+  return rows;
 }
 
 export async function listVaultItems(vault: WorkspaceVault, options: { trash?: boolean } = {}): Promise<VaultItem[]> {

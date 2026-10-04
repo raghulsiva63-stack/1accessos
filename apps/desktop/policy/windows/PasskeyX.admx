@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Passkey-X desktop policies. Copy to C:\Windows\PolicyDefinitions (or the central store) with en-US\PasskeyX.adml. -->
+<policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="passkeyx" namespace="Vlightsoft.Policies.PasskeyX" />
+    <using prefix="windows" namespace="Microsoft.Policies.Windows" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_1_1" displayName="$(string.SUPPORTED_1_1)" />
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="PasskeyX" displayName="$(string.PasskeyX)" />
+  </categories>
+  <policies>
+    <policy name="lockOnBlur" class="Machine" displayName="$(string.lockOnBlur)" explainText="$(string.lockOnBlur_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="lockOnBlur">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="lockOnHide" class="Machine" displayName="$(string.lockOnHide)" explainText="$(string.lockOnHide_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="lockOnHide">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="hotkeyEnabled" class="Machine" displayName="$(string.hotkeyEnabled)" explainText="$(string.hotkeyEnabled_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="hotkeyEnabled">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="disableBiometric" class="Machine" displayName="$(string.disableBiometric)" explainText="$(string.disableBiometric_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="disableBiometric">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="disableUpdates" class="Machine" displayName="$(string.disableUpdates)" explainText="$(string.disableUpdates_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="disableUpdates">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="autoStart" class="Machine" displayName="$(string.autoStart)" explainText="$(string.autoStart_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="autoStart">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="offlineAccess" class="Machine" displayName="$(string.offlineAccess)" explainText="$(string.offlineAccess_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="offlineAccess">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="browserIntegration" class="Machine" displayName="$(string.browserIntegration)" explainText="$(string.browserIntegration_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="browserIntegration">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="maxClipboardSeconds" class="Machine" displayName="$(string.maxClipboardSeconds)" explainText="$(string.maxClipboardSeconds_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" presentation="$(presentation.maxClipboardSeconds)">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <elements><decimal id="maxClipboardSeconds" valueName="maxClipboardSeconds" minValue="10" maxValue="120" /></elements>
+    </policy>
+    <policy name="idleLockMinutes" class="Machine" displayName="$(string.idleLockMinutes)" explainText="$(string.idleLockMinutes_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" presentation="$(presentation.idleLockMinutes)">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <elements><decimal id="idleLockMinutes" valueName="idleLockMinutes" minValue="1" maxValue="480" /></elements>
+    </policy>
+    <policy name="organizationName" class="Machine" displayName="$(string.organizationName)" explainText="$(string.organizationName_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" presentation="$(presentation.organizationName)">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <elements><text id="organizationName" valueName="organizationName" maxLength="1024" /></elements>
+    </policy>
+    <policy name="supportUrl" class="Machine" displayName="$(string.supportUrl)" explainText="$(string.supportUrl_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" presentation="$(presentation.supportUrl)">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <elements><text id="supportUrl" valueName="supportUrl" maxLength="1024" /></elements>
+    </policy>
+    <policy name="allowedEmailDomains" class="Machine" displayName="$(string.allowedEmailDomains)" explainText="$(string.allowedEmailDomains_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" presentation="$(presentation.allowedEmailDomains)">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <elements><text id="allowedEmailDomains" valueName="allowedEmailDomains" maxLength="1024" /></elements>
+    </policy>
+    <policy name="extensionIds" class="Machine" displayName="$(string.extensionIds)" explainText="$(string.extensionIds_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" presentation="$(presentation.extensionIds)">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_1" />
+      <elements><text id="extensionIds" valueName="extensionIds" maxLength="1024" /></elements>
+    </policy>
+  </policies>
+</policyDefinitions>

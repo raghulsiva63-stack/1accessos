@@ -5,7 +5,7 @@ type Sender = {
   frameId?: number;
   tab?: { id?: number; url?: string };
 };
-const POPUP_COMMANDS = new Set(['PX_STATUS', 'PX_CONNECT', 'PX_UNLOCK', 'PX_LOCK', 'PX_DISCONNECT', 'PX_SAVE', 'PX_DISMISS', 'PX_NEVER', 'PX_ALLOW', 'PX_FILL']);
+const POPUP_COMMANDS = new Set(['PX_STATUS', 'PX_CONNECT', 'PX_UNLOCK', 'PX_LOCK', 'PX_DISCONNECT', 'PX_SAVE', 'PX_DISMISS', 'PX_NEVER', 'PX_ALLOW', 'PX_FILL', 'PX_DESKTOP_PAIR', 'PX_DESKTOP_UNLOCK', 'PX_DESKTOP_UNPAIR']);
 function origin(value: unknown) {
   if (typeof value !== 'string') return '';
   try {

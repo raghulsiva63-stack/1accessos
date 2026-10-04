@@ -18,8 +18,10 @@ const KEY_ENTRY: &str = "session-encryption-key";
 const AAD: &[u8] = b"passkey-x:desktop-session:v1";
 const MAX_VALUE: usize = 64 * 1024;
 
+/// Supabase session keys (`sb-…`) and the app's own records (`px-…`, e.g. browser pairings).
 pub fn valid_key(key: &str) -> bool {
-    key.len() > 3 && key.len() <= 83 && key.starts_with("sb-") && key[3..].bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    key.len() > 3 && key.len() <= 83 && (key.starts_with("sb-") || key.starts_with("px-"))
+        && key[3..].bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
 pub struct SecureStore {
@@ -133,8 +135,9 @@ mod tests {
     #[test]
     fn only_supabase_session_keys_are_accepted() {
         assert!(valid_key("sb-wkkmyacbhqloubtwvjom-auth-token"));
+        assert!(valid_key("px-browser-pairings"));
         let long = format!("sb-{}", "a".repeat(81));
-        for bad in ["", "sb-", "other", "sb-../../etc", "sb-UPPER", "sb-a b", long.as_str()] {
+        for bad in ["", "sb-", "px-", "other", "px-../x", "sb-../../etc", "sb-UPPER", "sb-a b", long.as_str()] {
             assert!(!valid_key(bad), "{bad}");
         }
     }

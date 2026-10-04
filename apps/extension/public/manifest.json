@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Passkey-X",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "minimum_chrome_version": "127",
   "description": "Automatic save prompts and explicit, encrypted login fill for your Passkey-X vault.",
   "action": {
@@ -34,6 +34,9 @@
     "activeTab",
     "storage",
     "tabs"
+  ],
+  "optional_permissions": [
+    "nativeMessaging"
   ],
   "commands": {
     "fill-login": {

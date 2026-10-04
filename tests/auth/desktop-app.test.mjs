@@ -49,7 +49,7 @@ test("a pending approval survives an SSO redirect for 10 minutes only", () => {
 
 test("desktop never shows a password form or loads the website in its window", async () => {
   const page = await read("apps/web/app/page.tsx");
-  assert.match(page, /inDesktopApp \? <DesktopSignIn \/> : <AuthScreen/);
+  assert.match(page, /inDesktopApp \? <DesktopSignIn notice=\{policyNotice\} \/> : <AuthScreen/);
   assert.match(page, /!profile && inDesktopApp\) return <DesktopFinishSetup/);
   const signIn = await read("apps/web/components/desktop/desktop-sign-in.tsx");
   assert.match(signIn, /functions\.invoke<\{ tokenHash\?: string \}>\("desktop-session"/);

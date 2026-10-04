@@ -10,17 +10,24 @@
 //! * screen-capture protection, lock on sleep / screen lock / quit / optional app switch;
 //! * a global quick-access shortcut;
 //! * browser sign-in handoff via a one-shot 127.0.0.1 listener (RFC 8252);
-//! * signed automatic updates (when built with a signing key).
+//! * signed automatic updates (when built with a signing key);
+//! * settings an organization enforces on managed computers (see managed.rs);
+//! * start at sign-in, hidden in the tray;
+//! * pairing with the Passkey-X browser extension (see browser_link.rs).
 
+mod autostart;
 mod biometric;
+mod browser_link;
 mod clipboard;
 mod crypto;
 mod guard;
 mod loopback;
+mod managed;
 mod secure_store;
 mod settings;
 
 use serde::Serialize;
+use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -48,6 +55,7 @@ pub struct AppState {
     /// A Windows Hello / Touch ID prompt is open: its window takes focus, which must not lock or hide the vault.
     native_prompt: AtomicBool,
     sign_in: loopback::Loopback,
+    browser: Arc<browser_link::Server>,
 }
 
 // ---------------------------------------------------------------------------
@@ -168,12 +176,20 @@ struct DesktopInfo {
     hotkey_active: bool,
     updater: bool,
     content_protection: bool,
+    /// Settings are enforced by the organization's IT (see desktop_policy).
+    managed: bool,
+    organization_name: Option<String>,
 }
 
 #[tauri::command]
 async fn desktop_info(app: AppHandle, state: State<'_, AppState>) -> Result<DesktopInfo, String> {
     let secure_storage = state.store.is_persistent();
-    let biometric = tauri::async_runtime::spawn_blocking(biometric::kind).await.unwrap_or(None);
+    let policy = state.settings.policy().clone();
+    let biometric = if policy.disable_biometric {
+        None
+    } else {
+        tauri::async_runtime::spawn_blocking(biometric::kind).await.unwrap_or(None)
+    };
     Ok(DesktopInfo {
         version: app.package_info().version.to_string(),
         os: if cfg!(target_os = "macos") { "macos" } else if cfg!(target_os = "windows") { "windows" } else { "linux" },
@@ -181,9 +197,16 @@ async fn desktop_info(app: AppHandle, state: State<'_, AppState>) -> Result<Desk
         secure_storage,
         hotkey: Some(hotkey_label()),
         hotkey_active: state.hotkey_active.load(Ordering::SeqCst),
-        updater: cfg!(feature = "updater"),
+        updater: cfg!(feature = "updater") && !policy.disable_updates,
         content_protection: cfg!(any(target_os = "macos", target_os = "windows")),
+        managed: policy.managed,
+        organization_name: policy.organization_name.clone(),
     })
+}
+
+#[tauri::command]
+fn desktop_policy(state: State<'_, AppState>) -> managed::Policy {
+    state.settings.policy().clone()
 }
 
 #[tauri::command]
@@ -198,7 +221,22 @@ fn desktop_settings_set(app: AppHandle, state: State<'_, AppState>, settings: se
     if before.hotkey_enabled != saved.hotkey_enabled {
         apply_hotkey(&app, saved.hotkey_enabled);
     }
+    if before.auto_start != saved.auto_start {
+        autostart::set(saved.auto_start)?;
+    }
+    if before.browser_integration != saved.browser_integration {
+        apply_browser_link(&app, saved.browser_integration)?;
+    }
     Ok(saved)
+}
+
+/// Replies to the browser extension on a relay connection (see browser_link.rs).
+#[tauri::command]
+fn browser_link_send(state: State<'_, AppState>, connection: u64, message: Value) -> Result<(), String> {
+    if !state.settings.get().browser_integration || !message.is_object() {
+        return Err("browser_link_disabled".into());
+    }
+    state.browser.send(connection, &message)
 }
 
 #[tauri::command]
@@ -253,8 +291,15 @@ fn sign_in_listen(app: AppHandle, state: State<'_, AppState>, state_token: Strin
 }
 
 #[tauri::command]
-async fn update_check(app: AppHandle) -> Result<&'static str, String> {
+async fn update_check(app: AppHandle, state: State<'_, AppState>) -> Result<&'static str, String> {
+    if state.settings.policy().disable_updates {
+        return Ok("managed");
+    }
     updates::check(app, true).await
+}
+
+fn biometric_allowed(state: &AppState) -> Result<(), String> {
+    if state.settings.policy().disable_biometric { Err("disabled_by_policy".into()) } else { Ok(()) }
 }
 
 #[tauri::command]
@@ -267,6 +312,7 @@ async fn biometric_enrolled(state: State<'_, AppState>, account: String, fingerp
 
 #[tauri::command]
 async fn biometric_enroll(app: AppHandle, state: State<'_, AppState>, account: String, secret: String, fingerprint: String) -> Result<(), String> {
+    biometric_allowed(&state)?;
     let dir = state.unlock_dir.clone();
     let secret = zeroize::Zeroizing::new(secret);
     state.native_prompt.store(true, Ordering::SeqCst);
@@ -280,6 +326,7 @@ async fn biometric_enroll(app: AppHandle, state: State<'_, AppState>, account: S
 
 #[tauri::command]
 async fn biometric_unlock(app: AppHandle, state: State<'_, AppState>, account: String, fingerprint: String) -> Result<Option<String>, String> {
+    biometric_allowed(&state)?;
     let dir = state.unlock_dir.clone();
     state.native_prompt.store(true, Ordering::SeqCst);
     let result = tauri::async_runtime::spawn_blocking(move || biometric::unlock(&dir, &account, &fingerprint))
@@ -296,6 +343,35 @@ async fn biometric_remove(state: State<'_, AppState>, account: String) -> Result
     tauri::async_runtime::spawn_blocking(move || biometric::remove(&dir, &account))
         .await
         .map_err(|_| "unavailable".to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Browser extension pairing
+// ---------------------------------------------------------------------------
+
+/// Registers the native messaging host with the browsers and starts (or stops) the relay.
+/// Every message is handed to the vault pages, which decide what (if anything) to answer.
+fn apply_browser_link(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let ids = browser_link::allowed_ids(&state.settings.policy().extension_ids);
+    browser_link::register(enabled, &ids)?;
+    if !enabled {
+        state.browser.disable();
+        return Ok(());
+    }
+    let relay_app = app.clone();
+    state.browser.enable(ids, move |connection, origin, message| {
+        let pairing = message.get("type").and_then(Value::as_str) == Some("pair");
+        let detail = serde_json::json!({ "connection": connection, "origin": origin, "message": message });
+        let target = relay_app.clone();
+        let _ = relay_app.run_on_main_thread(move || {
+            if pairing {
+                // The person must see and approve a pairing request in the app.
+                show(&target, None);
+            }
+            eval(&target, &format!("window.dispatchEvent(new CustomEvent('passkey-x:browser-link',{{detail:{detail}}}));"));
+        });
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +422,18 @@ mod updates {
 // App
 // ---------------------------------------------------------------------------
 
+/// The browser started this program as the extension's native messaging host.
+pub fn browser_host_origin() -> Option<String> {
+    browser_link::host_origin(&std::env::args().collect::<Vec<_>>())
+}
+
+/// Runs the native messaging relay (no window) and returns the exit code.
+pub fn run_browser_host(origin: String) -> i32 {
+    browser_link::run_host(origin)
+}
+
 pub fn run() {
+    let hidden = std::env::args().any(|arg| arg == autostart::HIDDEN_ARG);
     let mut builder = tauri::Builder::default()
         // Must be first: a second launch focuses the running app.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app, None)))
@@ -367,6 +454,7 @@ pub fn run() {
     }
     builder = builder.invoke_handler(tauri::generate_handler![
         desktop_info,
+        desktop_policy,
         desktop_settings_get,
         desktop_settings_set,
         secure_get,
@@ -381,15 +469,17 @@ pub fn run() {
         biometric_enroll,
         biometric_unlock,
         biometric_remove,
+        browser_link_send,
     ]);
 
     builder
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
             let config_dir = app.path().app_config_dir().ok();
             let data_dir = app.path().app_data_dir().ok();
+            let policy = managed::load();
             app.manage(AppState {
-                settings: settings::SettingsStore::load(config_dir.map(|d| d.join("settings.json"))),
+                settings: settings::SettingsStore::load(config_dir.map(|d| d.join("settings.json")), policy),
                 store: secure_store::SecureStore::new(data_dir.as_ref().map(|d| d.join("session.json"))),
                 clipboard: Arc::new(clipboard::SecretClipboard::default()),
                 unlock_dir: data_dir.unwrap_or_else(std::env::temp_dir).join("unlock"),
@@ -398,6 +488,7 @@ pub fn run() {
                 has_tray: AtomicBool::new(false),
                 native_prompt: AtomicBool::new(false),
                 sign_in: loopback::Loopback::default(),
+                browser: Arc::new(browser_link::Server::default()),
             });
 
             // Menus
@@ -449,6 +540,8 @@ pub fn run() {
                 .title("Passkey-X")
                 .inner_size(1240.0, 820.0)
                 .min_inner_size(380.0, 560.0)
+                // Started at sign-in: stay in the tray until opened.
+                .visible(!(hidden && has_tray))
                 .content_protected(true)
                 .devtools(cfg!(debug_assertions))
                 .on_navigation(move |url| {
@@ -520,16 +613,28 @@ pub fn run() {
             });
 
             // Quick-access shortcut.
-            apply_hotkey(&handle, app.state::<AppState>().settings.get().hotkey_enabled);
+            let effective = app.state::<AppState>().settings.get();
+            apply_hotkey(&handle, effective.hotkey_enabled);
 
-            // Background update check shortly after start.
+            // Keep the sign-in entry pointing at this copy of the app (it moves on updates),
+            // or remove it when turned off (also when the organization turned it off).
+            let _ = autostart::set(effective.auto_start);
+
+            // Browser extension pairing.
+            if effective.browser_integration {
+                let _ = apply_browser_link(&handle, true);
+            }
+
+            // Background update check shortly after start (not when IT deploys updates).
             #[cfg(feature = "updater")]
             {
-                let update_app = handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    tokio_sleep(std::time::Duration::from_secs(20)).await;
-                    let _ = updates::check(update_app, false).await;
-                });
+                if !app.state::<AppState>().settings.policy().disable_updates {
+                    let update_app = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio_sleep(std::time::Duration::from_secs(20)).await;
+                        let _ = updates::check(update_app, false).await;
+                    });
+                }
             }
             Ok(())
         })
@@ -557,7 +662,9 @@ pub fn run() {
                 app.exit(0);
             }
             "updates" => {
-                if cfg!(feature = "updater") {
+                if app.state::<AppState>().settings.policy().disable_updates {
+                    // Updates are deployed by the organization's IT.
+                } else if cfg!(feature = "updater") {
                     let app = app.clone();
                     tauri::async_runtime::spawn(async move {
                         let _ = updates::check(app, true).await;

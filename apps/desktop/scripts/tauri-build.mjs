@@ -24,6 +24,12 @@ if (canSign) {
 } else {
   console.log('desktop build: no updater signing key, building without automatic updates');
 }
+// Windows: build the MSI (for IT deployment through Intune, Group Policy or SCCM) next to the
+// per-user NSIS installer.
+const bundles = args.indexOf('--bundles');
+if (process.platform === 'win32' && bundles !== -1 && args[bundles + 1] === 'nsis' && process.env.PASSKEY_X_SKIP_MSI !== '1') {
+  args[bundles + 1] = 'nsis,msi';
+}
 const split = args.indexOf('--');
 const tauriArgs = split === -1 ? [...args, ...extra] : [...args.slice(0, split), ...extra, ...args.slice(split)];
 execFileSync(process.execPath, [join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js'), 'build', ...tauriArgs], { cwd: root, stdio: 'inherit' });

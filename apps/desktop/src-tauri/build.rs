@@ -5,6 +5,7 @@ const COMMANDS: &[&str] = &[
     "secure_get", "secure_set", "secure_remove",
     "clipboard_copy", "clipboard_clear", "quick_hide", "sign_in_listen", "update_check",
     "biometric_enrolled", "biometric_enroll", "biometric_unlock", "biometric_remove",
+    "desktop_policy", "browser_link_send",
 ];
 
 fn main() {

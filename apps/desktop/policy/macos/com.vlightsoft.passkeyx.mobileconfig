@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Example Passkey-X configuration profile. Edit the values, give both PayloadUUIDs new UUIDs (uuidgen), and deploy with your MDM. -->
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadType</key>
+			<string>com.vlightsoft.passkeyx</string>
+			<key>PayloadIdentifier</key>
+			<string>com.vlightsoft.passkeyx.policy</string>
+			<key>PayloadUUID</key>
+			<string>6B1F4C52-3C8E-4C1B-9D7A-1F2E3D4C5B6A</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>organizationName</key>
+			<string>Acme Corp</string>
+			<key>supportUrl</key>
+			<string>https://help.acme.example/passkey-x</string>
+			<key>allowedEmailDomains</key>
+			<string>acme.com</string>
+			<key>lockOnBlur</key>
+			<true/>
+			<key>maxClipboardSeconds</key>
+			<integer>30</integer>
+			<key>idleLockMinutes</key>
+			<integer>15</integer>
+			<key>autoStart</key>
+			<true/>
+			<key>offlineAccess</key>
+			<true/>
+			<key>browserIntegration</key>
+			<true/>
+		</dict>
+	</array>
+	<key>PayloadDisplayName</key>
+	<string>Passkey-X</string>
+	<key>PayloadIdentifier</key>
+	<string>com.vlightsoft.passkeyx.profile</string>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>9C2D7E14-5A6B-4F3C-8E1D-2A3B4C5D6E7F</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+</dict>
+</plist>

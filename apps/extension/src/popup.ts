@@ -1,5 +1,6 @@
 type PendingLogin = { id: string; username: string; origin: string; modes: Record<string, "save" | "update" | "same"> };
-type Status = { ok: boolean; connected?: boolean; email?: string; unlocked?: boolean; matches?: { id: string; title: string; username: string }[]; workspaces?: { id: string; name: string }[]; ignored?: boolean; candidate?: PendingLogin | null; lookalike?: { resembles: string; reason: string } | null; error?: string };
+type Desktop = { available: boolean; paired: boolean; pendingCode: string | null };
+type Status = { ok: boolean; desktop?: Desktop; desktopCode?: string; connected?: boolean; email?: string; unlocked?: boolean; matches?: { id: string; title: string; username: string }[]; workspaces?: { id: string; name: string }[]; ignored?: boolean; candidate?: PendingLogin | null; lookalike?: { resembles: string; reason: string } | null; error?: string };
 const get = <T extends Element>(selector: string) => document.querySelector<T>(selector)!;
 const disconnected = get<HTMLElement>("#disconnected");
 const locked = get<HTMLElement>("#locked");
@@ -12,6 +13,7 @@ const candidate = get<HTMLElement>("#candidate");
 const message = get<HTMLElement>("#message");
 let tabId = 0, origin = "";
 let pending: PendingLogin | null = null;
+let triedDesktop = false;
 const show = (value = "") => { message.textContent = value; };
 async function request(payload: Record<string, unknown>): Promise<Status> {
   try { return await chrome.runtime.sendMessage({ ...payload, tabId, origin }) as Status; }
@@ -24,6 +26,19 @@ function render(status: Status) {
   unlocked.hidden = !status.unlocked;
   lockButton.hidden = !status.unlocked;
   get<HTMLElement>("#account").textContent = status.email ?? "Account connected";
+  const desktop = status.desktop;
+  const code = status.desktopCode ?? desktop?.pendingCode ?? null;
+  get<HTMLElement>("#desktop-unlock-row").hidden = !desktop?.paired;
+  get<HTMLButtonElement>("#desktop-pair").hidden = Boolean(desktop?.paired);
+  get<HTMLButtonElement>("#desktop-unpair").hidden = !desktop?.paired;
+  const codeView = get<HTMLElement>("#desktop-code");
+  codeView.hidden = !code;
+  codeView.textContent = code ? `Check that Passkey-X desktop shows ${code.slice(0, 3)} ${code.slice(3)}, then approve it there.` : "";
+  // Paired: try the desktop app first, once per popup.
+  if (status.connected && !status.unlocked && desktop?.paired && desktop.available && !triedDesktop) {
+    triedDesktop = true;
+    setTimeout(() => void perform({ type: "PX_DESKTOP_UNLOCK" }, "Unlocking with Passkey-X desktop…"), 0);
+  }
   pending = status.candidate ?? null;
   get<HTMLElement>("#pending-unlock").hidden = !pending;
   get<HTMLElement>("#pending-locked-actions").hidden = !pending;
@@ -84,6 +99,16 @@ form.addEventListener("submit", event => {
   void perform({ type: "PX_UNLOCK", vaultPassword }, "Unlocking…");
 });
 lockButton.addEventListener("click", () => void perform({ type: "PX_LOCK" }));
+get<HTMLButtonElement>("#desktop-unlock").addEventListener("click", () => void perform({ type: "PX_DESKTOP_UNLOCK" }, "Unlocking with Passkey-X desktop…"));
+get<HTMLButtonElement>("#desktop-unpair").addEventListener("click", () => void perform({ type: "PX_DESKTOP_UNPAIR" }, "", "This browser is no longer paired."));
+get<HTMLButtonElement>("#desktop-pair").addEventListener("click", async () => {
+  // Talking to a desktop app needs the browser's "native messaging" permission (asked once).
+  let allowed = false;
+  try { allowed = await chrome.permissions.request({ permissions: ["nativeMessaging"] }); } catch { allowed = false; }
+  if (!allowed) { show("Passkey-X needs permission to talk to the desktop app."); return; }
+  const browser = navigator.userAgent.includes("Edg/") ? "Microsoft Edge" : navigator.userAgent.includes("Brave") ? "Brave" : "Chrome";
+  await perform({ type: "PX_DESKTOP_PAIR", browser }, "Contacting Passkey-X desktop…", "Approve the request in Passkey-X desktop.");
+});
 get<HTMLButtonElement>("#disconnect").addEventListener("click", () => void perform({ type: "PX_DISCONNECT" }, "Disconnecting…"));
 get<HTMLSelectElement>("#save-workspace").addEventListener("change", updateSaveAction);
 get<HTMLButtonElement>("#save").addEventListener("click", () => void perform({ type: "PX_SAVE", candidateId: pending?.id, workspaceId: get<HTMLSelectElement>("#save-workspace").value }, "Encrypting and saving…", "Login saved. It will sync to your web and desktop vaults."));

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Brand } from "@/components/app/shell/shared";
 import { challengeFor, parsePastedCode, randomToken, signInUrl, STATE_PATTERN, CODE_PATTERN } from "@/lib/desktop/handoff";
-import { desktop, WEB_ORIGIN } from "@/lib/desktop/bridge";
+import { desktop, desktopPolicy, WEB_ORIGIN } from "@/lib/desktop/bridge";
 import { functionErrorCode } from "@/lib/supabase/function-error";
 import { supabase } from "@/lib/supabase/client";
 
@@ -19,8 +19,9 @@ type Pending = { verifier: string; state: string };
  * browser (security check, passkeys, SSO), approves this computer, and the browser hands a
  * one-time code back. The secret that makes the code usable never leaves this app.
  */
-export function DesktopSignIn() {
+export function DesktopSignIn({ notice = "" }: { notice?: string }) {
   const pending = useRef<Pending | null>(null);
+  const [managedBy, setManagedBy] = useState("");
   const [waiting, setWaiting] = useState(false);
   const [pasted, setPasted] = useState("");
   const [message, setMessage] = useState("");
@@ -45,6 +46,16 @@ export function DesktopSignIn() {
       setWaiting(false);
     } finally { setBusy(false); }
   }
+
+  useEffect(() => {
+    let active = true;
+    desktopPolicy().then((policy) => {
+      if (!active || !policy.managed) return;
+      const domains = policy.allowedEmailDomains.map((domain) => `@${domain}`).join(", ");
+      setManagedBy(`${policy.organizationName ?? "Your organization"} manages this computer.${domains ? ` Use your ${domains} account.` : ""}`);
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     function handoff(event: Event) {
@@ -91,6 +102,8 @@ export function DesktopSignIn() {
       ? "Sign in on the page that opened, then choose Allow. You'll come straight back here."
       : "You sign in with your browser, where your passkeys, company sign-in and security checks already work. Your vault password is only ever typed into this app."}</CardDescription>
   </CardHeader><CardContent><div className="form-stack">
+    {notice && <p className="form-message" role="alert">{notice}</p>}
+    {managedBy && !notice && <p className="field-hint" role="note">{managedBy}</p>}
     {!waiting && <Button size="lg" disabled={busy} onClick={() => void start()}><Globe /> Sign in with your browser</Button>}
     {waiting && <>
       <form className="form-stack" onSubmit={submitCode}>
