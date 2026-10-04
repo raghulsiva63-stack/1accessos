@@ -1,5 +1,9 @@
 import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.115.0";
+import {
+  CHAT_FORMATS, SIEM_FORMATS, elasticBulkFailed, hostAllowedForFormat, sentinelTokenRequest, shapeChat, shapeSiem,
+  type AuditPayload, type ChatPayload,
+} from "../_shared/connector-formats.ts";
 
 /**
  * Audit webhook relay. The database never contacts customer endpoints directly
@@ -8,9 +12,54 @@ import { createClient } from "npm:@supabase/supabase-js@2.115.0";
  * claims the delivery with the service role, resolves the destination over DNS,
  * refuses private / loopback / link-local addresses, and forwards the exact signed
  * body. It answers with the destination's status code (or 421 when blocked).
+ *
+ * Deliveries with a vendor format (Slack, Teams, Splunk HEC, Datadog, Sentinel, Elastic) are
+ * shaped here and authenticated with the destination credential, which is never logged.
  */
 
-type Delivery = { url: string; headers: Record<string, string>; body: string };
+type Delivery = { url: string; headers: Record<string, string>; body: string; format?: string; config?: Record<string, unknown>; credential?: string | null };
+
+const sentinelTokens = new Map<string, { token: string; expires: number }>();
+
+async function sentinelToken(config: Record<string, unknown>, secret: string) {
+  const request = sentinelTokenRequest(config, secret);
+  // The cache is keyed by the secret too, so a destination that copies another organization's
+  // tenant and client IDs can never reuse that organization's token.
+  const secretHash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret))),
+    (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const cacheKey = `${request.cacheKey}:${secretHash}`;
+  const cached = sentinelTokens.get(cacheKey);
+  if (cached && cached.expires > Date.now() + 60_000) return cached.token;
+  const response = await fetch(request.url, {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: request.body,
+    signal: AbortSignal.timeout(6_000),
+  });
+  if (!response.ok) { await response.body?.cancel(); throw new Error("sentinel_auth_failed"); }
+  const result = await response.json() as { access_token?: string; expires_in?: number };
+  if (!result.access_token) throw new Error("sentinel_auth_failed");
+  if (sentinelTokens.size > 200) sentinelTokens.clear();
+  sentinelTokens.set(cacheKey, { token: result.access_token, expires: Date.now() + Math.max(60, Number(result.expires_in ?? 3600)) * 1000 });
+  return result.access_token;
+}
+
+/** Applies the vendor format, returning the headers and body to send. */
+async function prepare(delivery: Delivery): Promise<{ headers: Record<string, string>; body: string }> {
+  const format = delivery.format ?? "raw";
+  if (format === "raw") return { headers: delivery.headers, body: delivery.body };
+  const base = { "User-Agent": delivery.headers["User-Agent"] ?? "Passkey-X/1" };
+  if (CHAT_FORMATS.has(format)) {
+    const shaped = shapeChat(format, JSON.parse(delivery.body) as ChatPayload);
+    return { headers: { ...base, ...shaped.headers }, body: shaped.body };
+  }
+  if (SIEM_FORMATS.has(format)) {
+    if (!delivery.credential) throw new Error("missing_credential");
+    const config = delivery.config ?? {};
+    const credential = format === "sentinel" ? await sentinelToken(config, delivery.credential) : delivery.credential;
+    const shaped = shapeSiem(format, config, credential, JSON.parse(delivery.body) as AuditPayload);
+    return { headers: { ...base, ...shaped.headers }, body: shaped.body };
+  }
+  throw new Error("unsupported_format");
+}
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -96,22 +145,34 @@ Deno.serve(async (request: Request) => {
 
   let target: URL;
   try { target = new URL(delivery.url); } catch { return json(421, { error: "destination_not_allowed" }); }
+  if (!hostAllowedForFormat(delivery.format ?? "raw", target)) return json(421, { error: "destination_not_allowed" });
   try {
     if (!await destinationAllowed(target)) return json(421, { error: "destination_not_allowed" });
   } catch {
     return json(504, { error: "dns_lookup_failed" });
   }
 
+  let prepared: { headers: Record<string, string>; body: string };
+  try { prepared = await prepare(delivery); } catch (reason) {
+    const code = reason instanceof Error ? reason.message : "prepare_failed";
+    // 401 tells the database that the destination credential needs attention.
+    return json(code === "sentinel_auth_failed" ? 401 : 422, { error: code });
+  }
+
   try {
     const upstream = await fetch(target, {
       method: "POST",
-      headers: delivery.headers,
-      body: delivery.body,
+      headers: prepared.headers,
+      body: prepared.body,
       redirect: "manual",
       signal: AbortSignal.timeout(7_000),
     });
-    await upstream.body?.cancel();
-    const status = upstream.status >= 200 && upstream.status <= 599 ? upstream.status : 502;
+    let status = upstream.status >= 200 && upstream.status <= 599 ? upstream.status : 502;
+    if (delivery.format === "elastic" && status >= 200 && status <= 299) {
+      if (elasticBulkFailed((await upstream.text()).slice(0, 200_000))) status = 502;
+    } else {
+      await upstream.body?.cancel();
+    }
     if (status === 204 || status === 205 || status === 304) return new Response(null, { status });
     return json(status, { forwarded: true, status: upstream.status });
   } catch {
