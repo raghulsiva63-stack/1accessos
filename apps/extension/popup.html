@@ -20,10 +20,16 @@
         <h1>Unlock your vault</h1>
         <p id="pending-unlock" hidden></p>
         <div id="pending-locked-actions" class="candidate-actions" hidden><button id="dismiss-locked" class="secondary">Not now</button><button id="never-locked" class="secondary">Never for this site</button></div>
+        <div id="desktop-unlock-row" class="desktop-row" hidden><button id="desktop-unlock">Unlock with Passkey-X desktop</button></div>
         <form id="unlock-form">
           <label>Vault password<input id="vault-password" type="password" autocomplete="off" required maxlength="4096" /></label>
           <button>Unlock locally</button>
         </form>
+        <div id="desktop-pairing" class="desktop-pairing">
+          <p id="desktop-code" class="desktop-code" hidden></p>
+          <button id="desktop-pair" class="secondary">Pair with Passkey-X desktop</button>
+          <button id="desktop-unpair" class="secondary" hidden>Unpair desktop app</button>
+        </div>
         <button id="disconnect" class="secondary">Disconnect account</button>
       </section>
       <section id="unlocked" hidden>

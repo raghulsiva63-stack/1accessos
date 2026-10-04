@@ -47,3 +47,7 @@ footer a { color: #a9c0ff; }
 footer p { margin-bottom: 0; }
 .lookalike { display: grid; gap: 4px; margin: 10px 0; padding: 10px 12px; border: 1px solid #f0a3a3; border-radius: 10px; background: #fff5f5; color: #5c1016; font-size: 12px; }
 .lookalike strong { color: #a3202a; font-size: 13px; }
+.desktop-row { margin: .4rem 0 .8rem; }
+.desktop-row button { width: 100%; }
+.desktop-pairing { display: grid; gap: .4rem; margin-top: .6rem; }
+.desktop-code { margin: 0; font-weight: 600; }
