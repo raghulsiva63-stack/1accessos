@@ -124,7 +124,7 @@ function HomeScreen() {
         // Offline in the desktop app: use the saved profile of this account, if there is one.
         const saved = await lastOfflineProfile<CryptoProfile>();
         if (!active) return;
-        if (saved?.userId === sessionUserId) { setProfile(saved.profile); setLoading(false); return; }
+        if (saved && saved.userId === sessionUserId) { setProfile(saved.profile); setLoading(false); return; }
       }
       if (profileError) setError(customerError(profileError, "Your secure vault profile could not be loaded. Try signing in again."));
       else if (data && isDesktopApp()) void saveOfflineProfile(sessionUserId, sessionEmail, data as CryptoProfile);
