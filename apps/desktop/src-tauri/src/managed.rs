@@ -100,7 +100,8 @@ fn list(value: &Value) -> Vec<String> {
         Value::String(s) => s.split([',', ';', '\n', ' ']).map(str::to_string).collect(),
         _ => Vec::new(),
     };
-    let mut out: Vec<String> = items.into_iter().map(|s| s.trim().to_ascii_lowercase()).filter(|s| !s.is_empty()).collect();
+    // "@acme.com" and "acme.com" mean the same domain; strip the @ before sorting and de-duplicating.
+    let mut out: Vec<String> = items.into_iter().map(|s| s.trim().trim_start_matches('@').to_ascii_lowercase()).filter(|s| !s.is_empty()).collect();
     out.sort();
     out.dedup();
     out.truncate(50);
@@ -128,8 +129,7 @@ impl Policy {
         let mut policy = Policy {
             organization_name: get("organizationName").and_then(text),
             support_url: get("supportUrl").and_then(text).filter(|url| url.starts_with("https://")),
-            allowed_email_domains: get("allowedEmailDomains").map(list).unwrap_or_default()
-                .into_iter().map(|d| d.trim_start_matches('@').to_string()).filter(|d| valid_domain(d)).collect(),
+            allowed_email_domains: get("allowedEmailDomains").map(list).unwrap_or_default().into_iter().filter(|d| valid_domain(d)).collect(),
             lock_on_blur: get("lockOnBlur").and_then(flag),
             lock_on_hide: get("lockOnHide").and_then(flag),
             hotkey_enabled: get("hotkeyEnabled").and_then(flag),
