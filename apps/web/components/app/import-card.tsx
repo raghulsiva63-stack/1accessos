@@ -5,7 +5,7 @@ import { FileUp, LoaderCircle, ShieldCheck, TriangleAlert, Upload } from "lucide
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEnterprise } from "@/components/enterprise/policy-context";
-import { FORMAT_LABELS, importFromText, type ImportResult } from "@/lib/vault/importers";
+import { FORMAT_LABELS, importFromFile, type ImportResult } from "@/lib/vault/importers";
 import { createVaultItem, type ItemKind, type WorkspaceVault } from "@/lib/vault/items";
 
 const KIND_LABELS: Partial<Record<ItemKind, string>> = { login: "logins", "secure-note": "secure notes", "payment-card": "cards", identity: "identities" };
@@ -20,8 +20,7 @@ export function ImportCard({ vault, onImported }: { vault: WorkspaceVault; onImp
   async function choose(file: File) {
     setError(""); setMessage(""); setPreview(null);
     try {
-      const text = await file.text();
-      setPreview({ ...importFromText(text, file.name), fileName: file.name });
+      setPreview({ ...(await importFromFile(file)), fileName: file.name });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "This file could not be read."); }
   }
 
@@ -53,9 +52,9 @@ export function ImportCard({ vault, onImported }: { vault: WorkspaceVault; onImp
   const counts = preview ? Object.entries(preview.entries.reduce<Record<string, number>>((acc, entry) => ({ ...acc, [entry.kind]: (acc[entry.kind] ?? 0) + 1 }), {})) : [];
 
   return <Card className="import-card">
-    <CardHeader><CardTitle>Import from another password manager</CardTitle><CardDescription>1Password, Bitwarden, LastPass, Dashlane, Chrome, Edge, Firefox or any CSV. The file is read on this device and each item is encrypted before upload.</CardDescription></CardHeader>
+    <CardHeader><CardTitle>Import from another password manager</CardTitle><CardDescription>1Password (.1pux or CSV), Bitwarden, LastPass, Dashlane, Keeper (JSON), KeePass (XML), KeePassXC, Apple Passwords, Chrome, Edge, Firefox or any CSV. The file is read on this device and each item is encrypted before upload.</CardDescription></CardHeader>
     <CardContent>
-      {!preview && !progress && <label className="file-action"><Upload /><span>Choose export file (.csv or .json)</span><input type="file" accept=".csv,.json,text/csv,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void choose(file); event.target.value = ""; }} /></label>}
+      {!preview && !progress && <label className="file-action"><Upload /><span>Choose export file (.csv, .json, .xml or .1pux)</span><input type="file" accept=".csv,.json,.xml,.1pux,text/csv,application/json,application/xml,text/xml" onChange={(event) => { const file = event.target.files?.[0]; if (file) void choose(file); event.target.value = ""; }} /></label>}
       {preview && !progress && <div className="import-preview">
         <div className="import-summary"><FileUp /><div><strong>{FORMAT_LABELS[preview.format]} detected</strong><span>{preview.fileName}</span></div></div>
         <ul>{counts.map(([kind, count]) => <li key={kind}><strong>{count}</strong> {KIND_LABELS[kind as ItemKind] ?? kind}</li>)}{preview.skipped > 0 && <li className="muted-text">{preview.skipped} empty or unsupported rows skipped</li>}</ul>

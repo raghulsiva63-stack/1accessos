@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabase/client";
 export type AuditWebhook = {
   id: string;
   name: string;
-  url: string;
+  /** Null for destinations addressed by settings (Microsoft Sentinel uses destination.endpoint). */
+  url: string | null;
   event_prefixes: string[];
   enabled: boolean;
   created_at: string;
@@ -15,6 +16,8 @@ export type AuditWebhook = {
   last_error: string | null;
   last_test_status: number | null;
   last_test_at: string | null;
+  format?: "generic" | "splunk_hec" | "datadog" | "sentinel" | "elastic";
+  destination?: Record<string, string>;
 };
 
 export const WEBHOOK_EVENT_FILTERS: { value: string; label: string }[] = [
@@ -35,7 +38,7 @@ function db() {
   return supabase as unknown as SupabaseClient;
 }
 
-const COLUMNS = "id,name,url,event_prefixes,enabled,created_at,failure_count,last_attempt_at,last_success_at,last_status,last_error,last_test_status,last_test_at";
+const COLUMNS = "id,name,url,event_prefixes,enabled,created_at,failure_count,last_attempt_at,last_success_at,last_status,last_error,last_test_status,last_test_at,format,destination";
 
 export async function listAuditWebhooks(tenantId: string) {
   const { data, error } = await db().from("audit_webhooks").select(COLUMNS).eq("tenant_id", tenantId).order("created_at");
