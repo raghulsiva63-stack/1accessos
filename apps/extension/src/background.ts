@@ -3,6 +3,7 @@ import { sessionStorageAdapter } from "./session-storage";
 import { createClient } from "@supabase/supabase-js";
 import { argon2id } from "hash-wasm";
 import { assessSite } from "../../web/lib/security/phishing";
+import { desktopState, forgetPairing, rootKeyFromDesktop, startPairing, whenDesktopLocks } from "./desktop-link";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -146,6 +147,23 @@ async function unlock(vaultPassword: string) {
   let root: Uint8Array;
   try { root = await open(master, bytea(profile.master_nonce), bytea(profile.master_wrapped_root), "1accessos:account-root:v1"); }
   finally { master.fill(0); }
+  await openWithRoot(root, profile.identity_id, generation);
+}
+
+/** Unlocks with the account key from the paired, unlocked Passkey-X desktop app. */
+async function unlockWithDesktop() {
+  clearVault(false);
+  const generation = vaultGeneration;
+  if (!(await restoreSession())) throw new Error("Connect this extension to Passkey-X first.");
+  const { data: profile, error: profileError } = await supabase.from("account_crypto_profiles").select("identity_id").single();
+  if (profileError) throw profileError;
+  const root = await rootKeyFromDesktop(profile.identity_id);
+  if (generation !== vaultGeneration) { root.fill(0); throw new Error("Vault unlock was cancelled."); }
+  await openWithRoot(root, profile.identity_id, generation);
+}
+
+async function openWithRoot(root: Uint8Array, identityId: string, generation: number) {
+  const profile = { identity_id: identityId };
   const { data: memberships, error: membershipError } = await supabase.from("workspace_memberships").select("tenant_id,workspace_id,role,created_at").eq("identity_id", profile.identity_id).eq("status", "active").order("created_at");
   if (membershipError || !memberships?.length) { root.fill(0); throw membershipError ?? new Error("No active workspace is available."); }
   const { data: envelopes, error: envelopeError } = await supabase.from("key_envelopes").select("tenant_id,workspace_id,key_version,nonce,wrapped_key").eq("recipient_identity_id", profile.identity_id).eq("key_kind", "workspace").is("revoked_at", null).order("key_version", { ascending: false });
@@ -360,7 +378,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return false;
   }
   const request = message as Record<string, unknown>;
-  const guarded = ["PX_UNLOCK", "PX_SAVE", "PX_FILL"].includes(String(request.type));
+  const guarded = ["PX_UNLOCK", "PX_DESKTOP_UNLOCK", "PX_SAVE", "PX_FILL"].includes(String(request.type));
   if (guarded && (vaultOperationBusy || pairingBusy)) { sendResponse({ ok: false, error: "Another vault operation is running. Try again shortly." }); return false; }
   if (guarded) vaultOperationBusy = true;
   void (async () => {
@@ -392,6 +410,16 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         await unlock(request.vaultPassword);
       }
       else if (request.type === "PX_LOCK") clearVault();
+      else if (request.type === "PX_DESKTOP_UNLOCK") await unlockWithDesktop();
+      else if (request.type === "PX_DESKTOP_UNPAIR") await forgetPairing();
+      else if (request.type === "PX_DESKTOP_PAIR") {
+        const browser = typeof request.browser === "string" ? request.browser.slice(0, 40) : "Browser";
+        const { code, finished } = await startPairing(browser);
+        void finished.catch(() => false);
+        const session = await restoreSession();
+        sendResponse({ ok: true, connected: Boolean(session), email: session?.user.email, unlocked: vaults.length > 0, desktopCode: code, desktop: await desktopState() });
+        return;
+      }
       else if (request.type === "PX_DISCONNECT") {
         if (pairingBusy) throw new Error("Wait for the connection to finish, then disconnect.");
         await disconnect();
@@ -447,6 +475,8 @@ chrome.runtime.onMessageExternal.addListener((message: unknown, sender, sendResp
   return true;
 });
 supabase.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") clearVault(); });
+// Paired with Passkey-X desktop: locking the desktop app locks this extension too.
+whenDesktopLocks(() => clearVault());
 chrome.runtime.onSuspend.addListener(clearVault);
 chrome.tabs.onRemoved.addListener(forgetCandidate);
 chrome.tabs.onUpdated.addListener((tabId, change) => {
