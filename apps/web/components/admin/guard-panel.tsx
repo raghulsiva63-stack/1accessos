@@ -271,7 +271,7 @@ function PolicyView({ tenantId, canEdit, initial, onSaved }: { tenantId: string;
 
 function DeployView() {
   return <div className="si-stack guard-deploy">
-    <p>Install Guard everywhere so every browser, computer and phone is protected. These settings can't be removed by the people who use the devices.</p>
+    <p>Install Guard everywhere so every browser, computer and phone is protected. These settings can&apos;t be removed by the people who use the devices.</p>
     <h4 className="guard-heading">Browser extension (Chrome and Edge)</h4>
     <p className="field-hint">Force-install the extension with your management tool. Google Admin console: Devices › Chrome › Apps &amp; extensions › add by ID › &quot;Force install&quot;. Microsoft Intune / Group Policy: the browser&apos;s <code>ExtensionInstallForcelist</code> policy.</p>
     <pre className="guard-code">{`Windows registry (Chrome):
