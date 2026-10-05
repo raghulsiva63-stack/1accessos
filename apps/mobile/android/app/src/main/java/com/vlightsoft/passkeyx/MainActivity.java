@@ -2,6 +2,9 @@ package com.vlightsoft.passkeyx;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.KeyguardManager;
+import android.content.SharedPreferences;
+import android.os.Build;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -20,6 +23,7 @@ import androidx.webkit.JavaScriptReplyProxy;
 import org.json.JSONObject;
 import java.util.Arrays;
 import java.util.Set;
+import java.util.UUID;
 
 public class MainActivity extends Activity {
     protected WebView web;
@@ -108,6 +112,10 @@ public class MainActivity extends Activity {
             case "status": reply(reply, requestId, new JSONObject().put("enabled", getSystemService(AutofillManager.class).hasEnabledAutofillServices()), null); break;
             case "enableAutofill": reply(reply, requestId, true, null); enableAutofill(); break;
             case "context": reply(reply, requestId, JSONObject.NULL, null); break;
+            // Passkey-X Guard: a link shared for checking, device security facts and a stable install id.
+            case "pendingLink": { String link = PendingLink.take(); reply(reply, requestId, link == null ? JSONObject.NULL : link, null); break; }
+            case "devicePosture": reply(reply, requestId, devicePosture(), null); break;
+            case "installId": reply(reply, requestId, installId(), null); break;
             case "export":
                 if (exportBytes != null) throw new IllegalStateException("Export in progress");
                 String encoded = body.optString("base64"), filename = body.optString("filename");
@@ -122,6 +130,39 @@ public class MainActivity extends Activity {
     }
     protected final void reply(JavaScriptReplyProxy proxy, String requestId, Object data, String error) {
         try { JSONObject response = new JSONObject().put("requestId", requestId); if (error != null) response.put("error", error); else response.put("data", data == null ? JSONObject.NULL : data); proxy.postMessage(response.toString()); } catch (Exception ignored) { /* Navigated or closed. Never log credential payloads. */ }
+    }
+    private JSONObject devicePosture() throws Exception {
+        KeyguardManager keyguard = getSystemService(KeyguardManager.class);
+        int developer = Settings.Global.getInt(getContentResolver(), Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0);
+        int adb = Settings.Global.getInt(getContentResolver(), Settings.Global.ADB_ENABLED, 0);
+        int patchAge = NativePolicy.patchAgeDays(Build.VERSION.SECURITY_PATCH, System.currentTimeMillis());
+        String version = "";
+        try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { /* unknown */ }
+        String model = (Build.MANUFACTURER + " " + Build.MODEL).trim();
+        return new JSONObject()
+            .put("os", "android").put("osName", "Android " + Build.VERSION.RELEASE).put("osVersion", Build.VERSION.RELEASE)
+            .put("screenLock", keyguard != null && keyguard.isDeviceSecure())
+            .put("rooted", NativePolicy.testKeys(Build.TAGS) || suPresent())
+            .put("developerMode", developer == 1).put("usbDebugging", adb == 1)
+            .put("patchAgeDays", patchAge < 0 ? JSONObject.NULL : patchAge)
+            .put("label", model.substring(0, Math.min(model.length(), 80))).put("appVersion", version == null ? "" : version);
+    }
+    private static boolean suPresent() {
+        for (String path : new String[]{"/system/bin/su", "/system/xbin/su", "/sbin/su", "/system/app/Superuser.apk", "/data/local/xbin/su", "/data/local/bin/su", "/system/sd/xbin/su"}) {
+            try { if (new java.io.File(path).exists()) return true; } catch (Exception ignored) { /* not readable */ }
+        }
+        return false;
+    }
+    private String installId() {
+        SharedPreferences preferences = getSharedPreferences("guard", MODE_PRIVATE);
+        String id = preferences.getString("install", null);
+        if (id == null || !id.matches("[a-f0-9-]{36}")) { id = UUID.randomUUID().toString(); preferences.edit().putString("install", id).apply(); }
+        return id;
+    }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // A link was shared to Passkey-X: the page asks for it through the native bridge.
+        if (web != null && PendingLink.waiting()) web.evaluateJavascript("window.dispatchEvent(new Event('passkey-x:pending-link'));", null);
     }
     protected void lockVault() { if (web != null) web.evaluateJavascript("window.dispatchEvent(new Event('passkey-x:lock'));", null); }
     private void enableAutofill() {

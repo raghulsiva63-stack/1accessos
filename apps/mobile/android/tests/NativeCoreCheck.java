@@ -28,6 +28,15 @@ public final class NativeCoreCheck {
         String rollback = store.add("rollback"); clock.decrementAndGet(); check(store.get(rollback) == null);
         String evicted = store.add("oldest"); for (int i=0;i<8;i++) store.add("pending-" + i); check(store.get(evicted) == null);
         check(store.get("unknown") == null); check(store.remaining("unknown") == 0);
+        // Guard: shared links and device facts.
+        check("https://paypa1-login.example/sign-in".equals(NativePolicy.firstWebLink("Your account is locked! Verify now: https://paypa1-login.example/sign-in.")));
+        check("http://bit.example/x?a=1".equals(NativePolicy.firstWebLink("see (http://bit.example/x?a=1)")));
+        check(NativePolicy.firstWebLink("javascript:alert(1) file:///etc/passwd intent://x") == null);
+        check(NativePolicy.firstWebLink("https://user:pw@evil.example https://safe.example/ok") .equals("https://safe.example/ok"));
+        check(NativePolicy.firstWebLink(null) == null); check(NativePolicy.firstWebLink("x".repeat(20_001)) == null);
+        long now = java.time.LocalDate.parse("2026-10-05").atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli();
+        check(NativePolicy.patchAgeDays("2026-08-05", now) == 61); check(NativePolicy.patchAgeDays("garbage", now) == -1); check(NativePolicy.patchAgeDays("2027-01-01", now) == -1);
+        check(NativePolicy.testKeys("release-keys,test-keys")); check(!NativePolicy.testKeys("release-keys")); check(!NativePolicy.testKeys(null));
         System.out.println("Passed " + checks + " native boundary checks.");
     }
 }
