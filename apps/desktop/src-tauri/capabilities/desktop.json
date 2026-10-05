@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "desktop-vault",
   "description": "The bundled Passkey-X pages in the main window may call these native commands. No remote website is listed, so passkey-x.com or any other site can never call them.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "allow-desktop-info",
     "allow-desktop-settings-get",
@@ -20,6 +22,10 @@
     "allow-biometric-unlock",
     "allow-biometric-remove",
     "allow-desktop-policy",
-    "allow-browser-link-send"
+    "allow-browser-link-send",
+    "allow-endpoint-inventory",
+    "allow-endpoint-posture",
+    "allow-endpoint-browsers",
+    "allow-guard-alert"
   ]
 }

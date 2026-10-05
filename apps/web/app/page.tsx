@@ -14,12 +14,13 @@ import { type CryptoProfile, Brand, customerError } from "@/components/app/shell
 import { VaultShell } from "@/components/app/shell/vault-shell";
 import { DesktopFinishSetup, DesktopSignIn } from "@/components/desktop/desktop-sign-in";
 import { DesktopBrowserLink } from "@/components/desktop/browser-link";
+import { DesktopGuardRunner } from "@/components/desktop/security-check";
 import { desktop, desktopPolicy, isDesktopApp, policyAllowsEmail } from "@/lib/desktop/bridge";
 import { isNetworkError, lastOfflineProfile, saveOfflineProfile, serverReachable, configureOfflineCache, type OfflineProfile } from "@/lib/desktop/offline-cache";
 import { parsePendingLink, PENDING_LINK_KEY } from "@/lib/desktop/handoff";
 
 export default function Home() {
-  return <><DesktopBrowserLink /><HomeScreen /></>;
+  return <><DesktopBrowserLink /><DesktopGuardRunner /><HomeScreen /></>;
 }
 
 function HomeScreen() {

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Security warning · Passkey-X</title>
+    <link rel="stylesheet" href="/src/warning.css" />
+  </head>
+  <body>
+    <main id="warning" role="alertdialog" aria-labelledby="title" aria-describedby="summary">
+      <div class="badge"><img src="/icons/icon-48.png" alt="" /><span>Passkey-X Guard</span></div>
+      <div class="sign" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="64" height="64"><path fill="currentColor" d="M12 2 1 21h22L12 2Zm0 6c.6 0 1 .4 1 1v5a1 1 0 1 1-2 0V9c0-.6.4-1 1-1Zm0 10.5a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"/></svg>
+      </div>
+      <h1 id="title">Dangerous site ahead</h1>
+      <p id="summary" class="summary">Passkey-X stopped this page to protect your passwords and your computer.</p>
+      <p class="site"><span>Site</span><strong id="site"></strong></p>
+      <ul id="reasons" class="reasons"></ul>
+      <p id="organization" class="organization" hidden></p>
+      <div class="actions">
+        <button id="leave" class="primary" autofocus>Back to safety</button>
+      </div>
+      <details id="more" hidden>
+        <summary>Advanced</summary>
+        <p>Only continue if you are sure this site is safe. Your organization will see that you continued.</p>
+        <button id="proceed" class="link">Continue to this site (unsafe)</button>
+      </details>
+      <p class="footnote">Was this a mistake? <button id="report-safe" class="link">Tell your IT team</button>. Passkey-X checks pages on this device; your browsing is not sent anywhere.</p>
+      <p id="status" class="status" role="status"></p>
+    </main>
+    <script type="module" src="/src/warning.ts"></script>
+  </body>
+</html>

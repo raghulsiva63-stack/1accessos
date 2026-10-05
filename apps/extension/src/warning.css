@@ -1,0 +1,28 @@
+:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: #8f1d1d; color: #fff; }
+body { display: grid; place-items: center; min-height: 100vh; padding: 24px; background: radial-gradient(circle at 50% 0%, #b42323 0%, #7a1414 60%, #5c0d0d 100%); }
+main { width: min(680px, 100%); }
+.badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: rgba(0,0,0,.25); font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+.badge img { width: 20px; height: 20px; }
+.sign { margin: 28px 0 8px; color: #ffd7d7; }
+h1 { margin: 0 0 12px; font-size: clamp(28px, 5vw, 40px); line-height: 1.15; letter-spacing: -.02em; }
+.summary { margin: 0 0 18px; font-size: 18px; line-height: 1.5; color: #ffe9e9; }
+.site { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; background: rgba(0,0,0,.25); }
+.site span { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #ffcaca; }
+.site strong { font: 600 16px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.reasons { margin: 0 0 18px; padding-left: 20px; line-height: 1.55; color: #fff3f3; }
+.reasons li + li { margin-top: 6px; }
+.organization { margin: 0 0 18px; padding: 10px 14px; border-left: 3px solid #ffd7d7; background: rgba(0,0,0,.18); }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 22px; }
+button { font: inherit; cursor: pointer; }
+.primary { min-height: 48px; padding: 0 26px; border: 0; border-radius: 12px; background: #fff; color: #8f1d1d; font-weight: 800; font-size: 16px; }
+.primary:focus-visible, .link:focus-visible, summary:focus-visible { outline: 3px solid #ffd7d7; outline-offset: 3px; }
+.link { padding: 0; border: 0; background: none; color: #ffe0e0; text-decoration: underline; }
+details { margin: 0 0 18px; color: #ffe0e0; }
+summary { cursor: pointer; font-weight: 600; }
+details p { margin: 10px 0; line-height: 1.5; }
+.footnote { font-size: 13px; line-height: 1.5; color: #ffd0d0; }
+.status { min-height: 20px; font-size: 14px; }
+body.suspicious { background: radial-gradient(circle at 50% 0%, #b45a10 0%, #7a3a0a 60%, #5c2b07 100%); }
+body.suspicious .primary { color: #7a3a0a; }

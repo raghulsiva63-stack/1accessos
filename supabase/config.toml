@@ -53,3 +53,13 @@ verify_jwt = false
 
 [functions.org-api]
 verify_jwt = false
+
+# Passkey-X Guard: threat list sync (pg_cron, one-time token), device list download and prefix confirmation.
+[functions.threat-sync]
+verify_jwt = false
+
+[functions.threat-intel]
+verify_jwt = true
+
+[functions.threat-check]
+verify_jwt = true

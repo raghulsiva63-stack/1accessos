@@ -8,6 +8,7 @@ import {
   biometricLabel, DEFAULT_DESKTOP_SETTINGS, desktop, desktopPolicy, type DesktopInfo, type DesktopPolicy, type DesktopSettings, profileFingerprint, UNMANAGED_POLICY,
 } from "@/lib/desktop/bridge";
 import { BrowserPairingsList } from "@/components/desktop/browser-link";
+import { SecurityCheckPanel } from "@/components/desktop/security-check";
 import { removeAllPairings } from "@/lib/desktop/browser-link";
 import { configureOfflineCache } from "@/lib/desktop/offline-cache";
 import { toBase64Url } from "@/lib/crypto/vault";
@@ -79,7 +80,7 @@ export function DesktopSettingsPanel({ profile, rootKey }: { profile: CryptoProf
   const label = biometricLabel(info.biometric);
   const enforced = (value: boolean | number | null) => value !== null;
   const managedHint = <small className="managed-hint">Set by {policy.organizationName ?? "your organization"}</small>;
-  return <section className="desktop-settings" aria-labelledby="desktop-settings-title">
+  return <><section className="desktop-settings" aria-labelledby="desktop-settings-title">
     <h3 id="desktop-settings-title"><Laptop /> This computer</h3>
     <p className="field-hint">Passkey-X {info.version} for {info.os === "macos" ? "macOS" : info.os === "windows" ? "Windows" : "Linux"}. These settings apply to this app only.</p>
     {policy.managed && <p className="desktop-managed-note" role="note"><Building2 aria-hidden="true" /><span>{policy.organizationName ?? "Your organization"} manages this computer. Some settings are fixed by IT.{policy.supportUrl ? <> <a href={policy.supportUrl} target="_blank" rel="noreferrer">Get help</a></> : null}</span></p>}
@@ -142,5 +143,7 @@ export function DesktopSettingsPanel({ profile, rootKey }: { profile: CryptoProf
       </li>
     </ul>
     {message && <p className="form-message" role="status">{message}</p>}
-  </section>;
+  </section>
+  <SecurityCheckPanel />
+  </>;
 }

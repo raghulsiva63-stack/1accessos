@@ -80,3 +80,26 @@ html[data-theme="dark"] .vault-app .si-priority.p3 { background: #33300f; color:
   .si-print .no-print { display: none !important; }
 }
 .inline-icon { width: 1rem; height: 1rem; vertical-align: -3px; }
+
+/* Guard: Threat Center */
+.guard-heading { margin: .25rem 0 .5rem; font-size: .95rem; }
+.guard-coverage { display: grid; grid-template-columns: 1.2rem 9rem 1fr auto; align-items: center; gap: .6rem; padding: .3rem 0; font-size: .88rem; }
+.guard-coverage svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.guard-filters { display: flex; flex-wrap: wrap; gap: .6rem; }
+.guard-badges { display: flex; flex-wrap: wrap; gap: .25rem; }
+.guard-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.guard-field { display: grid; gap: .35rem; }
+.guard-field textarea { width: 100%; min-height: 6rem; padding: .5rem .6rem; border: 1px solid var(--border); border-radius: .6rem; background: var(--background); color: var(--foreground); font: .86rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+.guard-fieldset { display: grid; gap: .6rem; margin: 0; padding: .9rem 1rem; border: 1px solid var(--border); border-radius: .85rem; }
+.guard-fieldset legend { padding: 0 .3rem; font-weight: 700; }
+.guard-choice { display: flex; gap: .6rem; align-items: flex-start; font-size: .9rem; cursor: pointer; }
+.guard-choice input { margin-top: .2rem; }
+.guard-choice span { display: grid; gap: .1rem; }
+.guard-choice small { color: var(--muted-foreground); font-size: .8rem; }
+.guard-code { margin: 0; padding: .8rem 1rem; overflow-x: auto; border-radius: .7rem; background: var(--muted, #eef2f8); font-size: .8rem; line-height: 1.5; }
+.guard-deploy p { margin: 0; }
+.link-button { padding: 0; border: 0; background: none; color: var(--primary); font: inherit; text-decoration: underline; cursor: pointer; }
+button.si-kpi { text-align: left; font: inherit; color: inherit; background: var(--card); cursor: pointer; }
+@media (max-width: 720px) { .guard-coverage { grid-template-columns: 1.2rem 1fr auto; } .guard-coverage .si-bar { display: none; } }
+.link-check-form { display: flex; gap: .6rem; }
+.link-check-form input { flex: 1; min-width: 0; }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { MyProtectionCard } from "@/components/security/my-protection";
+import { LinkCheckCard } from "@/components/security/link-check";
 import {
   TriangleAlert, ChevronRight, FileWarning, Fingerprint, KeyRound, Link2Off, LoaderCircle, RefreshCw,
   Repeat2, ShieldAlert, ShieldCheck, Timer, Zap,
@@ -117,6 +119,10 @@ export function SecurityCenter({
       breached: report.breachChecked ? report.breached.length : -1, insecure_sites: report.insecureUrl.length,
       missing_two_step: report.missingTotp.length, passkeys: report.passkeyCount,
     }} />
+
+    <LinkCheckCard savedUrls={items.map((item) => item.payload.url ?? "").filter(Boolean)} />
+
+    <MyProtectionCard />
 
     <LookalikeCard pairs={report.lookalikes} items={items} onOpen={onOpen} />
 

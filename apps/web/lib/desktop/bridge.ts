@@ -1,3 +1,5 @@
+import type { BrowserProtection, Posture, Program } from "@/lib/security/endpoint-guard";
+
 /**
  * Bridge to the Passkey-X desktop app (Tauri). Every call goes to a fixed list of native
  * commands that the app only exposes to its own bundled pages; websites cannot reach them.
@@ -102,6 +104,8 @@ export function webUrl(path: string) {
   return isDesktopApp() ? `${WEB_ORIGIN}${path}` : path;
 }
 
+export type GuardAlert = { level: "dangerous" | "suspicious"; title: string; detail: string; site: string };
+
 export const desktop = {
   info: () => call<DesktopInfo>("desktop_info"),
   policy: () => call<DesktopPolicy>("desktop_policy"),
@@ -120,6 +124,19 @@ export const desktop = {
     get: (key: string) => call<string | null>("secure_get", { key }),
     set: (key: string, value: string) => call<void>("secure_set", { key, value }),
     remove: (key: string) => call<void>("secure_remove", { key }),
+  },
+  /** Endpoint Guard: facts about this computer (the software list never leaves it). */
+  endpoint: {
+    programs: () => call<Program[]>("endpoint_inventory"),
+    posture: () => call<Posture>("endpoint_posture"),
+    browsers: () => call<BrowserProtection[]>("endpoint_browsers"),
+    /** Shows the always-on-top emergency alert window. */
+    alert: (alert: GuardAlert) => call<void>("guard_alert", { alert }),
+  },
+  /** Only from the alert window. */
+  alertWindow: {
+    dismiss: () => call<void>("alert_dismiss"),
+    openMain: () => call<void>("alert_open_main"),
   },
   biometric: {
     enrolled: (account: string, fingerprint: string) => call<boolean>("biometric_enrolled", { account, fingerprint }),

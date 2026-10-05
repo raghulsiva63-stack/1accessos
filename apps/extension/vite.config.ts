@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
     rollupOptions: {
       input: {
         popup: resolve(import.meta.dirname, "popup.html"),
+        warning: resolve(import.meta.dirname, "warning.html"),
         background: resolve(import.meta.dirname, "src/background.ts"),
         content: resolve(import.meta.dirname, "src/content.ts"),
       },

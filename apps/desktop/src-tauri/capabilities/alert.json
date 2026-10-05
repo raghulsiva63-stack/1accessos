@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "guard-alert",
+  "description": "The emergency alert window (a bundled page) can only close itself or open the security check in the main window.",
+  "windows": [
+    "alert"
+  ],
+  "permissions": [
+    "allow-alert-dismiss",
+    "allow-alert-open-main"
+  ]
+}

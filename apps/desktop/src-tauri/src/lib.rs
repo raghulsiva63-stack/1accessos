@@ -13,13 +13,16 @@
 //! * signed automatic updates (when built with a signing key);
 //! * settings an organization enforces on managed computers (see managed.rs);
 //! * start at sign-in, hidden in the tray;
-//! * pairing with the Passkey-X browser extension (see browser_link.rs).
+//! * pairing with the Passkey-X browser extension (see browser_link.rs);
+//! * Endpoint Guard: software, device settings and browser protection checks (see endpoint.rs),
+//!   and the emergency alert window for dangerous sites and findings.
 
 mod autostart;
 mod biometric;
 mod browser_link;
 mod clipboard;
 mod crypto;
+mod endpoint;
 mod guard;
 mod loopback;
 mod managed;
@@ -43,6 +46,8 @@ const DOWNLOADS: &str = "https://passkey-x.com/download";
 const LOCK: &str = "window.dispatchEvent(new Event('passkey-x:lock'));";
 const QUICK: &str = "window.dispatchEvent(new Event('passkey-x:open-quick-access'));";
 const ADD: &str = "window.dispatchEvent(new Event('passkey-x:add-login'));";
+const OPEN_GUARD: &str = "window.dispatchEvent(new Event('passkey-x:open-guard'));";
+const ALERT: &str = "alert";
 
 pub struct AppState {
     settings: settings::SettingsStore,
@@ -239,6 +244,96 @@ fn browser_link_send(state: State<'_, AppState>, connection: u64, message: Value
     state.browser.send(connection, &message)
 }
 
+// ---------------------------------------------------------------------------
+// Endpoint Guard
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+async fn endpoint_inventory() -> Result<Vec<endpoint::Program>, String> {
+    tauri::async_runtime::spawn_blocking(endpoint::programs).await.map_err(|_| "unavailable".to_string())
+}
+
+#[tauri::command]
+async fn endpoint_posture() -> Result<endpoint::Posture, String> {
+    tauri::async_runtime::spawn_blocking(endpoint::posture).await.map_err(|_| "unavailable".to_string())
+}
+
+#[tauri::command]
+async fn endpoint_browsers(state: State<'_, AppState>) -> Result<Vec<endpoint::BrowserProtection>, String> {
+    let ids = browser_link::allowed_ids(&state.settings.policy().extension_ids);
+    tauri::async_runtime::spawn_blocking(move || endpoint::browsers(&ids)).await.map_err(|_| "unavailable".to_string())
+}
+
+/// Shows the emergency alert window (from the vault pages, for a security-check finding).
+#[tauri::command]
+fn guard_alert(app: AppHandle, alert: Value) -> Result<(), String> {
+    if !alert.is_object() {
+        return Err("invalid".into());
+    }
+    show_alert(&app, &alert);
+    Ok(())
+}
+
+/// Alert window only (capabilities/alert.json): close it.
+#[tauri::command]
+fn alert_dismiss(window: tauri::WebviewWindow) {
+    if window.label() == ALERT {
+        let _ = window.close();
+    }
+}
+
+/// Alert window only: open the security check in the main window.
+#[tauri::command]
+fn alert_open_main(app: AppHandle, window: tauri::WebviewWindow) {
+    show(&app, Some(false));
+    eval(&app, OPEN_GUARD);
+    if window.label() == ALERT {
+        let _ = window.close();
+    }
+}
+
+/// Only plain text fields, bounded, reach the alert page.
+fn alert_payload(alert: &Value) -> Value {
+    let text = |key: &str, limit: usize| alert.get(key).and_then(Value::as_str).map(|s| s.chars().filter(|c| !c.is_control()).take(limit).collect::<String>()).unwrap_or_default();
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+    serde_json::json!({
+        "level": if text("level", 20) == "dangerous" { "dangerous" } else { "suspicious" },
+        "title": text("title", 160),
+        "detail": text("detail", 400),
+        "site": text("site", 200),
+        "at": at,
+    })
+}
+
+fn show_alert(app: &AppHandle, alert: &Value) {
+    let payload = alert_payload(alert);
+    if payload["title"].as_str().unwrap_or("").is_empty() {
+        return;
+    }
+    if let Some(window) = app.get_webview_window(ALERT) {
+        let _ = window.eval(&format!("window.dispatchEvent(new CustomEvent('passkey-x:alert',{{detail:{payload}}}));"));
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
+        return;
+    }
+    // The page reads the queued alerts when it loads; later ones arrive as events.
+    let script = format!("window.__PX_ALERTS__=(window.__PX_ALERTS__||[]);window.__PX_ALERTS__.push({payload});");
+    let built = WebviewWindowBuilder::new(app, ALERT, WebviewUrl::App("desktop-alert.html".into()))
+        .title("Passkey-X security alert")
+        .inner_size(500.0, 460.0)
+        .resizable(false)
+        .always_on_top(true)
+        .center()
+        .focused(true)
+        .initialization_script(&script)
+        .on_navigation(|url| local(url))
+        .build();
+    if let Ok(window) = built {
+        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
+    }
+}
+
 #[tauri::command]
 async fn secure_get(state: State<'_, AppState>, key: String) -> Result<Option<String>, String> {
     Ok(state.store.get(&key))
@@ -349,19 +444,30 @@ async fn biometric_remove(state: State<'_, AppState>, account: String) -> Result
 // Browser extension pairing
 // ---------------------------------------------------------------------------
 
-/// Registers the native messaging host with the browsers and starts (or stops) the relay.
-/// Every message is handed to the vault pages, which decide what (if anything) to answer.
-fn apply_browser_link(app: &AppHandle, enabled: bool) -> Result<(), String> {
+/// Registers the native messaging host with the browsers and starts the relay. The relay always
+/// runs so the extension's Web Guard can raise emergency alerts here; vault messages (pairing,
+/// unlock) are handed to the vault pages only while "Browser extension" is on.
+fn apply_browser_link(app: &AppHandle, _pairing_enabled: bool) -> Result<(), String> {
     let state = app.state::<AppState>();
     let ids = browser_link::allowed_ids(&state.settings.policy().extension_ids);
-    browser_link::register(enabled, &ids)?;
-    if !enabled {
-        state.browser.disable();
-        return Ok(());
-    }
+    browser_link::register(true, &ids)?;
     let relay_app = app.clone();
+    let relay = state.browser.clone();
     state.browser.enable(ids, move |connection, origin, message| {
-        let pairing = message.get("type").and_then(Value::as_str) == Some("pair");
+        let kind = message.get("type").and_then(Value::as_str).unwrap_or("");
+        if kind == "guard-alert" {
+            let target = relay_app.clone();
+            let _ = relay_app.run_on_main_thread(move || show_alert(&target, &message));
+            return;
+        }
+        if !relay_app.state::<AppState>().settings.get().browser_integration {
+            if kind != "disconnected" {
+                let id = message.get("id").cloned().unwrap_or(Value::Null);
+                let _ = relay.send(connection, &serde_json::json!({ "type": "error", "id": id, "error": "browser_integration_off" }));
+            }
+            return;
+        }
+        let pairing = kind == "pair";
         let detail = serde_json::json!({ "connection": connection, "origin": origin, "message": message });
         let target = relay_app.clone();
         let _ = relay_app.run_on_main_thread(move || {
@@ -470,6 +576,12 @@ pub fn run() {
         biometric_unlock,
         biometric_remove,
         browser_link_send,
+        endpoint_inventory,
+        endpoint_posture,
+        endpoint_browsers,
+        guard_alert,
+        alert_dismiss,
+        alert_open_main,
     ]);
 
     builder
@@ -620,10 +732,8 @@ pub fn run() {
             // or remove it when turned off (also when the organization turned it off).
             let _ = autostart::set(effective.auto_start);
 
-            // Browser extension pairing.
-            if effective.browser_integration {
-                let _ = apply_browser_link(&handle, true);
-            }
+            // Browser extension relay: Web Guard alerts always, pairing when turned on.
+            let _ = apply_browser_link(&handle, effective.browser_integration);
 
             // Background update check shortly after start (not when IT deploys updates).
             #[cfg(feature = "updater")]
