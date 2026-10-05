@@ -32,6 +32,8 @@
 			<true/>
 			<key>browserIntegration</key>
 			<true/>
+			<key>downloadProtection</key>
+			<true/>
 		</dict>
 	</array>
 	<key>PayloadDisplayName</key>
