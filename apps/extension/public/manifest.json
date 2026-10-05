@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Passkey-X",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "minimum_chrome_version": "127",
-  "description": "Automatic save prompts and explicit, encrypted login fill for your Passkey-X vault.",
+  "description": "Passkey-X Guard and password manager: warns about phishing and dangerous sites, saves and fills logins from your encrypted vault.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Open Passkey-X",
