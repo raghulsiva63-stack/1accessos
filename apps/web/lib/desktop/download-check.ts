@@ -9,7 +9,8 @@ const CONTAINER = new Set(["dmg", "iso", "img", "vhd", "vhdx", "zip", "rar", "7z
 const MACRO = new Set(["docm", "xlsm", "pptm", "dotm", "xlam", "one"]);
 const DECOY = new Set(["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "csv", "jpg", "jpeg", "png", "gif", "bmp", "heic", "mp3", "mp4", "mov", "avi", "wav", "html", "htm", "eml", "invoice"]);
 // Bidirectional overrides that flip how a name is shown (an RTL override makes "invoice[RLO]fdp.exe" look like "invoiceexe.pdf").
-const BIDI = /[‪-‮⁦-⁩‎‏]/u;
+const BIDI_CODES = new Set([0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069]);
+const isBidi = (char: string) => BIDI_CODES.has(char.codePointAt(0) ?? 0);
 
 export type FileThreat = { sha256: string; signature: string | null; source: string };
 export type DownloadAssessment = {
@@ -32,8 +33,8 @@ export function fileType(name: string): "program" | "container" | "macro" | "oth
 /** Name tricks: hidden direction characters and "report.pdf.exe" style double extensions. */
 export function nameTricks(name: string): string[] {
   const reasons: string[] = [];
-  if (BIDI.test(name)) reasons.push("The file name contains hidden characters that disguise its real type.");
-  const parts = name.replace(/[‪-‮⁦-⁩‎‏]/gu, "").toLowerCase().split(".");
+  if ([...name].some(isBidi)) reasons.push("The file name contains hidden characters that disguise its real type.");
+  const parts = [...name].filter((char) => !isBidi(char)).join("").toLowerCase().split(".");
   if (parts.length >= 3) {
     const last = parts[parts.length - 1];
     const before = parts[parts.length - 2];
