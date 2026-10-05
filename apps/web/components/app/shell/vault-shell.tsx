@@ -48,6 +48,7 @@ import { reportSignInContext } from "@/lib/security/client";
 import { syncKeyGrants } from "@/lib/enterprise/key-sharing";
 import { setBrowserLinkVault } from "@/lib/desktop/browser-link";
 import { clearOfflineCache, isOffline, onOfflineChange } from "@/lib/desktop/offline-cache";
+import { receiveSharedLink, runMobileGuard } from "@/lib/browser/mobile-guard";
 
 export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts, onPasswordFacts, onProfileChange, onLock }: { clientMode: ClientMode; email: string; profile: CryptoProfile; rootKey: Uint8Array; passwordFacts: VaultPasswordFacts; onPasswordFacts: (facts: VaultPasswordFacts) => void; onProfileChange: (profile: CryptoProfile) => void; onLock: () => void }) {
   const [view, setView] = useState<View>(() => readPlanSelection() || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("billing")) ? "billing" : viewFromUrl() ?? "home");
@@ -83,6 +84,15 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
     setBrowserLinkVault({ identityId: profile.identity_id, rootKey });
     return () => setBrowserLinkVault(null);
   }, [profile.identity_id, rootKey]);
+
+  // Android: check the phone's security settings and open the link check for shared links.
+  useEffect(() => {
+    if (clientMode !== "android") return;
+    const shared = () => { void receiveSharedLink().then((received) => { if (received) { setView("security"); setSelected(null); } }); };
+    const timer = setTimeout(() => { shared(); void runMobileGuard().catch(() => undefined); }, 1500);
+    window.addEventListener("passkey-x:pending-link", shared);
+    return () => { clearTimeout(timer); window.removeEventListener("passkey-x:pending-link", shared); };
+  }, [clientMode]);
 
   async function refresh(openVault: WorkspaceVault) {
     const ticket = requests.current.issue(openVault.workspaceId, "items");
@@ -219,10 +229,13 @@ export function VaultShell({ clientMode, email, profile, rootKey, passwordFacts,
       if (event.key.toLowerCase() === "n" && event.shiftKey) { event.preventDefault(); addFromShortcut(); }
       if (event.key.toLowerCase() === "l") { event.preventDefault(); autoLock(); }
     };
+    // Desktop alert window: "Open security check".
+    const guard = () => { setView("settings"); setSelected(null); requestAnimationFrame(() => document.getElementById("security-check")?.scrollIntoView({ block: "start" })); };
     window.addEventListener("passkey-x:open-quick-access", open);
     window.addEventListener("passkey-x:add-login", add);
+    window.addEventListener("passkey-x:open-guard", guard);
     document.addEventListener("keydown", keydown);
-    return () => { window.removeEventListener("passkey-x:open-quick-access", open); window.removeEventListener("passkey-x:add-login", add); document.removeEventListener("keydown", keydown); };
+    return () => { window.removeEventListener("passkey-x:open-quick-access", open); window.removeEventListener("passkey-x:add-login", add); window.removeEventListener("passkey-x:open-guard", guard); document.removeEventListener("keydown", keydown); };
   }, [companion]);
   const planLabel = entitlement.plan_code[0].toUpperCase() + entitlement.plan_code.slice(1);
   return <EnterpriseProvider tenantId={vault?.tenantId ?? null} identityId={profile.identity_id} workspaceId={vault?.workspaceId ?? null} currentItemId={selected?.id ?? null}><PolicyLifecycle tenantId={vault?.tenantId ?? null} onLock={lockVault} /><RevealAudit revealed={revealed} itemId={selected?.id ?? null} /><main className={`vault-app client-${clientMode}`}>
