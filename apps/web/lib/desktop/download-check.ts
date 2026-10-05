@@ -49,9 +49,10 @@ export function assessDownload(file: { name: string; sourceUrl: string | null },
   const reasons: string[] = [];
   const type = fileType(file.name);
   const risky = type !== "other";
-  let level: DownloadAssessment["level"] = "safe";
+  const RANK: Record<DownloadAssessment["level"], number> = { safe: 0, suspicious: 1, dangerous: 2 };
+  let level = "safe" as DownloadAssessment["level"];
   const raise = (next: DownloadAssessment["level"]) => {
-    if (next === "dangerous" || (next === "suspicious" && level === "safe")) level = next;
+    if (RANK[next] > RANK[level]) level = next;
   };
   if (threat) {
     reasons.push(`It is known malware${threat.signature ? ` (${threat.signature})` : ""}, reported by ${threat.source}.`);

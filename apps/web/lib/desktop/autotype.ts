@@ -216,9 +216,9 @@ export function autoTypeErrorMessage(code: string): string {
     case "target_changed": return "Typing stopped because another window came to the front.";
     case "expired": return "The auto-type request expired. Press the shortcut again.";
     case "no_window": return "No window was in front when you pressed the shortcut.";
-    case "accessibility": return "Allow Passkey-X in System Settings › Privacy & Security › Accessibility, then try again.";
-    case "xdotool": return "Install xdotool to use auto-type on Linux (for example: sudo apt install xdotool).";
-    case "wayland": return "Auto-type works in X11 sessions only. On Wayland, use copy and paste instead.";
+    case "accessibility": case "accessibility_required": return "Allow Passkey-X in System Settings › Privacy & Security › Accessibility, then try again.";
+    case "xdotool": case "xdotool_required": return "Install xdotool to use auto-type on Linux (for example: sudo apt install xdotool).";
+    case "wayland": case "wayland_unsupported": return "Auto-type works in X11 sessions only. On Wayland, use copy and paste instead.";
     case "typing_blocked": return "The system blocked typing into that window (it may run as administrator).";
     case "disabled": return "Auto-type is turned off in Settings › This computer.";
     default: return "Auto-type didn't work. Try again, or copy and paste instead.";
