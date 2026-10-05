@@ -6,6 +6,7 @@ const COMMANDS: &[&str] = &[
     "clipboard_copy", "clipboard_clear", "quick_hide", "sign_in_listen", "update_check",
     "biometric_enrolled", "biometric_enroll", "biometric_unlock", "biometric_remove",
     "desktop_policy", "browser_link_send",
+    "endpoint_inventory", "endpoint_posture", "endpoint_browsers", "guard_alert", "alert_dismiss", "alert_open_main",
 ];
 
 fn main() {
