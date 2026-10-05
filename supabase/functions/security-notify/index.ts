@@ -6,7 +6,8 @@ import { sendSent, tenantSmsCredential } from "../_shared/sms-delivery.ts";
 /**
  * Security notification worker. pg_cron wakes it every minute (only when there is work) with a
  * one-time token, which it trades for a batch of queued notifications. Email goes out through
- * Resend (RESEND_API_KEY, NOTIFY_FROM_EMAIL); SMS through the organization's own verified Sent.dm
+ * ZeptoMail (ZEPTOMAIL_TOKEN, optional ZEPTOMAIL_API_HOST such as api.zeptomail.in) or Resend
+ * (RESEND_API_KEY), from NOTIFY_FROM_EMAIL; SMS through the organization's own verified Sent.dm
  * credential when the organization and the person turned SMS on for that event.
  * Called without a Supabase JWT (verify_jwt = false); the token is the credential.
  */
@@ -20,19 +21,58 @@ function reply(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 }
 
+/** "Name <address>" or a bare address. */
+export function parseSender(value: string): { name: string; address: string } {
+  const match = /^\s*(.*?)\s*<([^<>\s]+@[^<>\s]+)>\s*$/u.exec(value);
+  if (match) return { name: match[1].replace(/^"|"$/gu, "").trim(), address: match[2] };
+  return { name: "Passkey-X Security", address: value.trim() };
+}
+
+// ZeptoMail (Zoho) data centres. The Send Mail token is the same one used as the SMTP password.
+const ZEPTO_HOSTS = new Set(["api.zeptomail.com", "api.zeptomail.in", "api.zeptomail.eu", "api.zeptomail.com.au", "api.zeptomail.jp", "api.zeptomail.ca", "api.zeptomail.sa", "api.zeptomail.com.cn"]);
+
+/** Which email service is configured: ZeptoMail (ZEPTOMAIL_TOKEN) first, then Resend (RESEND_API_KEY). */
+export function emailProvider(): "zeptomail" | "resend" | null {
+  if (Deno.env.get("ZEPTOMAIL_TOKEN")?.trim()) return "zeptomail";
+  if (Deno.env.get("RESEND_API_KEY")?.trim()) return "resend";
+  return null;
+}
+
 async function sendEmail(to: string, subject: string, html: string, text: string, idempotencyKey: string) {
-  const key = Deno.env.get("RESEND_API_KEY")?.trim();
   const from = Deno.env.get("NOTIFY_FROM_EMAIL")?.trim() || "Passkey-X Security <security@passkey-x.com>";
-  if (!key) throw new Error("EMAIL_NOT_CONFIGURED");
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify({ from, to: [to], subject, html, text }),
-    signal: AbortSignal.timeout(8_000),
-  });
-  const payload = await response.json().catch(() => ({})) as { id?: string };
-  if (!response.ok || !payload.id) throw new Error(response.status === 429 ? "EMAIL_RATE_LIMITED" : "EMAIL_SEND_FAILED");
-  return payload.id;
+  const provider = emailProvider();
+  if (provider === "zeptomail") {
+    const token = Deno.env.get("ZEPTOMAIL_TOKEN")!.trim().replace(/^Zoho-enczapikey\s+/iu, "");
+    const host = (Deno.env.get("ZEPTOMAIL_API_HOST")?.trim() || "api.zeptomail.com").toLowerCase();
+    if (!ZEPTO_HOSTS.has(host)) throw new Error("EMAIL_NOT_CONFIGURED");
+    const sender = parseSender(from);
+    const response = await fetch(`https://${host}/v1.1/email`, {
+      method: "POST",
+      headers: { "Authorization": `Zoho-enczapikey ${token}`, "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        from: { address: sender.address, name: sender.name },
+        to: [{ email_address: { address: to } }],
+        subject, htmlbody: html, textbody: text, client_reference: idempotencyKey,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const payload = await response.json().catch(() => ({})) as { request_id?: string };
+    if (!response.ok) throw new Error(response.status === 429 ? "EMAIL_RATE_LIMITED" : "EMAIL_SEND_FAILED");
+    return { provider, id: payload.request_id ?? idempotencyKey };
+  }
+  if (provider === "resend") {
+    const key = Deno.env.get("RESEND_API_KEY")!.trim();
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ from, to: [to], subject, html, text }),
+      signal: AbortSignal.timeout(8_000),
+    });
+    const payload = await response.json().catch(() => ({})) as { id?: string };
+    if (!response.ok || !payload.id) throw new Error(response.status === 429 ? "EMAIL_RATE_LIMITED" : "EMAIL_SEND_FAILED");
+    return { provider, id: payload.id };
+  }
+  throw new Error("EMAIL_NOT_CONFIGURED");
 }
 
 type Admin = ReturnType<typeof adminSupabase>;
@@ -74,12 +114,12 @@ async function deliver(admin: Admin, row: Claimed, appUrl: string): Promise<{ st
 
   if (row.email) {
     try {
-      const id = await sendEmail(row.email, message.subject, message.html, message.text, `px-outbox-${row.id}`);
-      await track(admin, row, "email", "resend", "accepted", id, null);
+      const sent = await sendEmail(row.email, message.subject, message.html, message.text, `px-outbox-${row.id}`);
+      await track(admin, row, "email", sent.provider, "accepted", sent.id, null);
       delivered = true;
     } catch (reason) {
       lastError = reason instanceof Error && /^[A-Z_]{3,40}$/u.test(reason.message) ? reason.message : "EMAIL_SEND_FAILED";
-      if (lastError !== "EMAIL_NOT_CONFIGURED") await track(admin, row, "email", "resend", "failed", null, lastError);
+      if (lastError !== "EMAIL_NOT_CONFIGURED") await track(admin, row, "email", emailProvider() ?? "resend", "failed", null, lastError);
     }
   }
 
