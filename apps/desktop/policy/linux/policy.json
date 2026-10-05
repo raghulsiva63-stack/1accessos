@@ -10,5 +10,9 @@
   "autoStart": true,
   "offlineAccess": true,
   "browserIntegration": true,
-  "disableUpdates": false
+  "disableUpdates": false,
+  "autoType": true,
+  "sshAgent": true,
+  "commandLine": false,
+  "downloadProtection": true
 }

@@ -23,7 +23,7 @@ export function normalizeLink(input: string): string | null {
   } catch { return null; }
 }
 
-async function remoteMatches(url: string): Promise<ThreatMatch[] | null> {
+export async function remoteMatches(url: string): Promise<ThreatMatch[] | null> {
   if (!supabase || !(await hasSession())) return null;
   const expressions = await hashedExpressions(url);
   const prefixes = [...new Set(expressions.map((entry) => toBase64(prefixBytes(entry.prefix))))].slice(0, 32);

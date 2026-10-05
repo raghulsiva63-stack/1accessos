@@ -9,6 +9,7 @@
   <supportedOn>
     <definitions>
       <definition name="SUPPORTED_1_1" displayName="$(string.SUPPORTED_1_1)" />
+      <definition name="SUPPORTED_1_2" displayName="$(string.SUPPORTED_1_2)" />
     </definitions>
   </supportedOn>
   <categories>
@@ -92,6 +93,30 @@
       <parentCategory ref="PasskeyX" />
       <supportedOn ref="SUPPORTED_1_1" />
       <elements><text id="extensionIds" valueName="extensionIds" maxLength="1024" /></elements>
+    </policy>
+    <policy name="autoType" class="Machine" displayName="$(string.autoType)" explainText="$(string.autoType_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="autoType">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_2" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="sshAgent" class="Machine" displayName="$(string.sshAgent)" explainText="$(string.sshAgent_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="sshAgent">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_2" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="commandLine" class="Machine" displayName="$(string.commandLine)" explainText="$(string.commandLine_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="commandLine">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_2" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="downloadProtection" class="Machine" displayName="$(string.downloadProtection)" explainText="$(string.downloadProtection_Help)" key="SOFTWARE\Policies\Vlightsoft\Passkey-X" valueName="downloadProtection">
+      <parentCategory ref="PasskeyX" />
+      <supportedOn ref="SUPPORTED_1_2" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
     </policy>
   </policies>
 </policyDefinitions>

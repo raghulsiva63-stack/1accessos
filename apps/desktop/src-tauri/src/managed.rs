@@ -29,6 +29,10 @@ pub const FIELDS: &[(&str, Kind)] = &[
     ("offlineAccess", Kind::Flag),
     ("browserIntegration", Kind::Flag),
     ("extensionIds", Kind::List),
+    ("autoType", Kind::Flag),
+    ("sshAgent", Kind::Flag),
+    ("commandLine", Kind::Flag),
+    ("downloadProtection", Kind::Flag),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -66,6 +70,14 @@ pub struct Policy {
     pub browser_integration: Option<bool>,
     /// Additional Chromium extension IDs allowed to pair (e.g. an internally published build).
     pub extension_ids: Vec<String>,
+    /// Allow the auto-type shortcut (typing logins into other programs).
+    pub auto_type: Option<bool>,
+    /// Allow the Passkey-X SSH agent.
+    pub ssh_agent: Option<bool>,
+    /// Allow the `pkx` command-line tool.
+    pub command_line: Option<bool>,
+    /// Check new downloads (true forces it on).
+    pub download_protection: Option<bool>,
 }
 
 fn flag(value: &Value) -> Option<bool> {
@@ -141,6 +153,10 @@ impl Policy {
             offline_access: get("offlineAccess").and_then(flag),
             browser_integration: get("browserIntegration").and_then(flag),
             extension_ids: get("extensionIds").map(list).unwrap_or_default().into_iter().filter(|id| valid_extension_id(id)).collect(),
+            auto_type: get("autoType").and_then(flag),
+            ssh_agent: get("sshAgent").and_then(flag),
+            command_line: get("commandLine").and_then(flag),
+            download_protection: get("downloadProtection").and_then(flag),
             ..Policy::default()
         };
         policy.managed = FIELDS.iter().any(|(name, _)| get(name).is_some());

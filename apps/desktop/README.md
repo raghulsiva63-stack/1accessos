@@ -1,4 +1,4 @@
-# Passkey-X desktop 1.1
+# Passkey-X desktop 1.2
 
 A self-contained desktop app for Windows, macOS and Linux (Tauri 2).
 
@@ -55,6 +55,10 @@ npm run build   # builds dist/ (web app) then the installer
 - Signed automatic updates are included only when `updater.pub` is committed and `TAURI_SIGNING_PRIVATE_KEY` is set (`scripts/tauri-build.mjs`).
 - Linux uses `.deb` packages, which the Tauri updater cannot update. Linux users download new versions.
 
+## Desktop 1.2 power tools
+
+Auto-type (Ctrl+Alt+A / ⌘⌥A), the SSH agent, the `pkx` command-line tool, download protection, presentation mode and the secret finder are described in [docs/desktop/power-tools.md](../../docs/desktop/power-tools.md). The `pkx` binary is built from `src-tauri/src/bin/pkx.rs` and installed next to the app.
+
 ## Owner actions
 
 1. **Updater signing key.**
@@ -68,6 +72,6 @@ npm run build   # builds dist/ (web app) then the installer
    - Until then, Windows SmartScreen and macOS Gatekeeper warn on install.
 3. **Publish a release.**
    - Download the three installers from the workflow run.
-   - Add them under `releases/desktop/1.1.0/` (see `scripts/prepare-desktop-downloads.mjs`).
-   - Set `"desktop": "1.1.0"` in `apps/web/lib/client-releases.json`.
+   - Add them under `releases/desktop/1.2.0/` (see `scripts/prepare-desktop-downloads.mjs`).
+   - Set `"desktop": "1.2.0"` in `apps/web/lib/client-releases.json`.
    - With the updater on, also publish `latest.json`.

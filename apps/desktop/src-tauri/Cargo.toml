@@ -1,14 +1,24 @@
 [package]
 name = "passkey-x"
-version = "1.1.0"
+version = "1.2.0"
 description = "Passkey-X zero-knowledge password vault"
 authors = ["Vlightsoft"]
 edition = "2021"
 rust-version = "1.77.2"
+default-run = "passkey-x"
 
 [lib]
 name = "passkey_x_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "passkey-x"
+path = "src/main.rs"
+
+# `pkx`: the command-line tool (installed next to the app).
+[[bin]]
+name = "pkx"
+path = "src/bin/pkx.rs"
 
 [features]
 # Signed automatic updates. Enabled by scripts/tauri-build.mjs only when a signing key is available.
@@ -32,6 +42,10 @@ base64 = "0.22"
 zeroize = "1"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 arboard = { version = "3", default-features = false }
+ed25519-dalek = "2"
+regex = "1"
+trash = "5"
+tokio = { version = "1", features = ["net", "io-util", "macros", "rt", "sync", "time"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
@@ -49,4 +63,9 @@ windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_System_Registry",
   "Win32_System_StationsAndDesktops",
+  "Win32_System_Threading",
+  "Win32_System_Pipes",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
 ] }

@@ -35,7 +35,7 @@ export const scanInProgress = () => running !== null;
 export function subscribeScan(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
 const notify = () => listeners.forEach((listener) => listener());
 
-async function installId(): Promise<string> {
+export async function installId(): Promise<string> {
   const stored = await desktop.record.get(INSTALL_RECORD).catch(() => null);
   if (stored && /^[0-9a-f-]{36}$/u.test(stored)) return stored;
   const id = crypto.randomUUID();

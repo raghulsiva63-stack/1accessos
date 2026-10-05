@@ -6,6 +6,7 @@
     <stringTable>
       <string id="PasskeyX">Passkey-X</string>
       <string id="SUPPORTED_1_1">Passkey-X desktop 1.1 or later</string>
+      <string id="SUPPORTED_1_2">Passkey-X desktop 1.2 or later</string>
       <string id="lockOnBlur">Lock when switching apps</string>
       <string id="lockOnBlur_Help">Locks the vault whenever Passkey-X loses focus. Enabled: always on. Disabled: always off. Not configured: people choose.</string>
       <string id="lockOnHide">Lock when the window is hidden</string>
@@ -34,6 +35,14 @@
       <string id="allowedEmailDomains_Help">Only accounts with these email domains may sign in on this computer. Separate several domains with commas, for example: acme.com, acme.co.uk</string>
       <string id="extensionIds">Additional extension IDs</string>
       <string id="extensionIds_Help">IDs of internally published builds of the Passkey-X browser extension that may pair (comma-separated). Store versions are already allowed.</string>
+      <string id="autoType">Auto-type</string>
+      <string id="autoType_Help">Enabled: people may type a login into another app with the auto-type shortcut (Ctrl+Alt+A). Disabled: auto-type is off.</string>
+      <string id="sshAgent">SSH agent</string>
+      <string id="sshAgent_Help">Enabled: people may use SSH keys stored in the vault through the Passkey-X SSH agent; every signature is approved in the app. Disabled: the agent is off.</string>
+      <string id="commandLine">Command-line tool (pkx)</string>
+      <string id="commandLine_Help">Enabled: people may give secrets to scripts and developer tools with pkx; every request is approved in the app. Disabled: pkx cannot reach the vault.</string>
+      <string id="downloadProtection">Download protection</string>
+      <string id="downloadProtection_Help">Enabled: new downloads are checked against Passkey-X Guard rules and threat lists, and dangerous files are reported. Disabled: downloads are not checked.</string>
     </stringTable>
     <presentationTable>
       <presentation id="maxClipboardSeconds"><decimalTextBox refId="maxClipboardSeconds" defaultValue="10">Longest clipboard time</decimalTextBox></presentation>

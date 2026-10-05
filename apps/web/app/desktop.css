@@ -52,3 +52,48 @@ html[data-theme="dark"] .guard-summary.bad { background: #2b1212; color: #f5b5b5
 .guard-alert-actions { display: flex; gap: 10px; margin-top: 6px; }
 .guard-alert-actions button { min-height: 40px; padding: 0 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,.6); background: transparent; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 .guard-alert-actions button.primary { background: #fff; color: #8f1d1d; border-color: #fff; }
+
+/* Desktop 1.2: This computer tools, auto-type picker, approvals, presentation mode */
+.desktop-tools { display: grid; gap: 1rem; }
+.desktop-tools-tabs { display: flex; flex-wrap: wrap; gap: .4rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+.desktop-tools-tabs button { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .8rem; border: 1px solid transparent; border-radius: .6rem; background: none; color: var(--muted-foreground); font: inherit; font-size: .9rem; cursor: pointer; }
+.desktop-tools-tabs button svg { width: 1rem; height: 1rem; }
+.desktop-tools-tabs button.active { border-color: var(--border); background: var(--muted); color: var(--foreground); font-weight: 600; }
+.desktop-tool-card { display: grid; gap: .7rem; padding: 1.1rem; border: 1px solid var(--border); border-radius: .9rem; background: var(--card); margin-bottom: 1rem; }
+.desktop-tool-card h3 { display: flex; align-items: center; gap: .5rem; margin: 0; font-size: 1.05rem; }
+.desktop-tool-card h3 svg { width: 1.15rem; height: 1.15rem; }
+.desktop-tool-card h4 { margin: .4rem 0 0; font-size: .92rem; }
+.desktop-tool-card p { margin: 0; color: var(--muted-foreground); font-size: .9rem; }
+.desktop-tool-card code, .copy-line code { font-size: .82rem; overflow-wrap: anywhere; }
+.desktop-tool-card kbd { padding: .1rem .4rem; border: 1px solid var(--border); border-radius: .4rem; background: var(--muted); font-size: .8rem; font-weight: 600; }
+.desktop-tool-card textarea, .desktop-tool-card select, .desktop-tool-form input, .autotype-search { width: 100%; font: inherit; padding: .5rem .65rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--background); color: var(--foreground); }
+.desktop-tool-card textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; margin: .5rem 0; }
+.desktop-tool-card details > summary { cursor: pointer; font-size: .9rem; }
+.desktop-tool-form { display: flex; flex-wrap: wrap; gap: .5rem; }
+.desktop-tool-form input { flex: 1; min-width: 200px; width: auto; }
+.desktop-tool-points { margin: 0; padding-left: 1.2rem; display: grid; gap: .3rem; color: var(--muted-foreground); font-size: .88rem; }
+.desktop-tool-setup { display: grid; gap: .4rem; }
+.desktop-tool-setup small { color: var(--muted-foreground); }
+.copy-line { display: flex; align-items: center; gap: .4rem; padding: .35rem .5rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--muted); white-space: pre-wrap; }
+.copy-line code { flex: 1; }
+.desktop-tool-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.desktop-tool-list li { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .6rem 0; }
+.desktop-tool-list li + li { border-top: 1px solid var(--border); }
+.desktop-tool-list li > div { flex: 1; min-width: 200px; display: grid; gap: .15rem; }
+.desktop-tool-list small { color: var(--muted-foreground); font-size: .8rem; overflow-wrap: anywhere; }
+.desktop-tool-list small.reason { color: var(--foreground); }
+.desktop-tool-level svg { width: 1.1rem; height: 1.1rem; }
+.desktop-tool-list .level-dangerous .desktop-tool-level, .desktop-tool-list .severity-critical .desktop-tool-level, .desktop-tool-list .severity-high .desktop-tool-level { color: var(--destructive); }
+.desktop-tool-list .level-suspicious .desktop-tool-level, .desktop-tool-list .severity-medium .desktop-tool-level { color: #b45309; }
+.desktop-tool-list .level-safe .desktop-tool-level { color: #15803d; }
+.desktop-tools-warn, .autotype-warning { display: flex; align-items: flex-start; gap: .45rem; padding: .55rem .7rem; border-radius: .6rem; background: color-mix(in srgb, #f59e0b 14%, transparent); color: var(--foreground) !important; font-size: .88rem; }
+.desktop-tools-warn svg, .autotype-warning svg { flex: none; width: 1rem; height: 1rem; margin-top: .15rem; }
+.desktop-tools-off { padding: .6rem .8rem; border-radius: .6rem; background: var(--muted); }
+.autotype-list { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow-y: auto; display: grid; gap: .25rem; }
+.autotype-list button { width: 100%; display: grid; gap: .1rem; text-align: left; padding: .5rem .65rem; border: 1px solid var(--border); border-radius: .55rem; background: var(--background); color: var(--foreground); font: inherit; cursor: pointer; }
+.autotype-list button:hover, .autotype-list button:focus-visible { border-color: var(--primary); }
+.autotype-list small { color: var(--muted-foreground); font-size: .8rem; }
+.cli-command { margin: 0; padding: .6rem .75rem; border-radius: .55rem; background: var(--muted); font-size: .82rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cli-refs { margin: 0; padding-left: 1.2rem; display: grid; gap: .2rem; font-size: .9rem; }
+.cli-refs li.missing { color: var(--destructive); }
+.presentation-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: 1rem; padding: .7rem 1rem; border-radius: .75rem; background: color-mix(in srgb, #6366f1 14%, transparent); font-size: .9rem; }

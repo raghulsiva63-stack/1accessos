@@ -22,6 +22,16 @@ pub struct Settings {
     pub offline_access: bool,
     /// Let the Passkey-X browser extension pair with this app and unlock from it.
     pub browser_integration: bool,
+    /// Auto-type shortcut: type a login into any program.
+    pub auto_type: bool,
+    /// Serve the vault's SSH keys through the Passkey-X SSH agent.
+    pub ssh_agent: bool,
+    /// Answer the `pkx` command-line tool (each request is still approved).
+    pub command_line: bool,
+    /// Check new files in the Downloads folder.
+    pub download_protection: bool,
+    /// Hide passwords automatically while the screen is shared or recorded.
+    pub presentation_auto: bool,
 }
 
 impl Default for Settings {
@@ -34,6 +44,11 @@ impl Default for Settings {
             auto_start: false,
             offline_access: true,
             browser_integration: false,
+            auto_type: true,
+            ssh_agent: false,
+            command_line: false,
+            download_protection: true,
+            presentation_auto: true,
         }
     }
 }
@@ -54,6 +69,10 @@ impl Settings {
         if let Some(value) = policy.auto_start { self.auto_start = value; }
         if let Some(value) = policy.offline_access { self.offline_access = value; }
         if let Some(value) = policy.browser_integration { self.browser_integration = value; }
+        if let Some(value) = policy.auto_type { self.auto_type = value; }
+        if let Some(value) = policy.ssh_agent { self.ssh_agent = value; }
+        if let Some(value) = policy.command_line { self.command_line = value; }
+        if let Some(value) = policy.download_protection { self.download_protection = value; }
         self
     }
 }

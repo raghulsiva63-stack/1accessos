@@ -63,3 +63,6 @@ verify_jwt = true
 
 [functions.threat-check]
 verify_jwt = true
+
+[functions.file-check]
+verify_jwt = true

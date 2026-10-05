@@ -15,12 +15,13 @@ import { VaultShell } from "@/components/app/shell/vault-shell";
 import { DesktopFinishSetup, DesktopSignIn } from "@/components/desktop/desktop-sign-in";
 import { DesktopBrowserLink } from "@/components/desktop/browser-link";
 import { DesktopGuardRunner } from "@/components/desktop/security-check";
+import { DesktopRequestsHost } from "@/components/desktop/desktop-requests";
 import { desktop, desktopPolicy, isDesktopApp, policyAllowsEmail } from "@/lib/desktop/bridge";
 import { isNetworkError, lastOfflineProfile, saveOfflineProfile, serverReachable, configureOfflineCache, type OfflineProfile } from "@/lib/desktop/offline-cache";
 import { parsePendingLink, PENDING_LINK_KEY } from "@/lib/desktop/handoff";
 
 export default function Home() {
-  return <><DesktopBrowserLink /><DesktopGuardRunner /><HomeScreen /></>;
+  return <><DesktopBrowserLink /><DesktopGuardRunner /><DesktopRequestsHost /><HomeScreen /></>;
 }
 
 function HomeScreen() {

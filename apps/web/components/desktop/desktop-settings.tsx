@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, CloudOff, Fingerprint, Keyboard, Laptop, Link2, MonitorOff, Power, RefreshCw, ShieldCheck } from "lucide-react";
+import { Building2, CloudOff, Download, Fingerprint, Keyboard, KeyRound, Laptop, Link2, MonitorOff, MonitorX, Power, RefreshCw, ShieldCheck, Terminal, TextCursorInput } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CryptoProfile } from "@/components/app/shell/shared";
 import {
@@ -135,6 +135,40 @@ export function DesktopSettingsPanel({ profile, rootKey }: { profile: CryptoProf
           {settings.browserIntegration && <BrowserPairingsList />}</div>
         <label className="switch-row"><input type="checkbox" checked={settings.browserIntegration} disabled={enforced(policy.browserIntegration)} onChange={(event) => void save({ ...settings, browserIntegration: event.target.checked })} /> On</label>
         {enforced(policy.browserIntegration) && managedHint}
+      </li>
+      <li>
+        <span className="desktop-settings-icon"><TextCursorInput /></span>
+        <div><strong>Auto-type</strong>
+          <p>Press the auto-type shortcut in any program&apos;s sign-in box and Passkey-X types the login for you. See This computer › Auto-type.</p></div>
+        <label className="switch-row"><input type="checkbox" checked={settings.autoType} disabled={enforced(policy.autoType)} onChange={(event) => void save({ ...settings, autoType: event.target.checked })} /> On</label>
+        {enforced(policy.autoType) && managedHint}
+      </li>
+      <li>
+        <span className="desktop-settings-icon"><KeyRound /></span>
+        <div><strong>SSH agent</strong>
+          <p>Use SSH keys stored in the vault with ssh, git and IDEs. You approve every use.</p></div>
+        <label className="switch-row"><input type="checkbox" checked={settings.sshAgent} disabled={enforced(policy.sshAgent)} onChange={(event) => void save({ ...settings, sshAgent: event.target.checked })} /> On</label>
+        {enforced(policy.sshAgent) && managedHint}
+      </li>
+      <li>
+        <span className="desktop-settings-icon"><Terminal /></span>
+        <div><strong>Command-line tool</strong>
+          <p>Let <code>pkx</code> give secrets to scripts and developer tools, after you approve each request.</p></div>
+        <label className="switch-row"><input type="checkbox" checked={settings.commandLine} disabled={enforced(policy.commandLine)} onChange={(event) => void save({ ...settings, commandLine: event.target.checked })} /> On</label>
+        {enforced(policy.commandLine) && managedHint}
+      </li>
+      <li>
+        <span className="desktop-settings-icon"><Download /></span>
+        <div><strong>Download protection</strong>
+          <p>Check new files in your Downloads folder for disguised programs, dangerous sources and known malware. Files are never uploaded.</p></div>
+        <label className="switch-row"><input type="checkbox" checked={settings.downloadProtection} disabled={enforced(policy.downloadProtection)} onChange={(event) => void save({ ...settings, downloadProtection: event.target.checked })} /> On</label>
+        {enforced(policy.downloadProtection) && managedHint}
+      </li>
+      <li>
+        <span className="desktop-settings-icon"><MonitorX /></span>
+        <div><strong>Hide passwords while sharing my screen</strong>
+          <p>Switch on presentation mode by itself when Zoom sharing, OBS or another recorder is running.</p></div>
+        <label className="switch-row"><input type="checkbox" checked={settings.presentationAuto} onChange={(event) => void save({ ...settings, presentationAuto: event.target.checked })} /> On</label>
       </li>
       <li>
         <span className="desktop-settings-icon"><RefreshCw /></span>

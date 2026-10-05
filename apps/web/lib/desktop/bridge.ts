@@ -42,12 +42,16 @@ export type DesktopPolicy = {
   offlineAccess: boolean | null;
   browserIntegration: boolean | null;
   extensionIds: string[];
+  autoType: boolean | null;
+  sshAgent: boolean | null;
+  commandLine: boolean | null;
+  downloadProtection: boolean | null;
 };
 
 export const UNMANAGED_POLICY: DesktopPolicy = {
   managed: false, source: null, organizationName: null, supportUrl: null, allowedEmailDomains: [], lockOnBlur: null, lockOnHide: null,
   hotkeyEnabled: null, maxClipboardSeconds: null, idleLockMinutes: null, disableBiometric: false, disableUpdates: false, autoStart: null,
-  offlineAccess: null, browserIntegration: null, extensionIds: [],
+  offlineAccess: null, browserIntegration: null, extensionIds: [], autoType: null, sshAgent: null, commandLine: null, downloadProtection: null,
 };
 
 /** True when this email may sign in on a computer with this policy. */
@@ -68,11 +72,37 @@ export type DesktopSettings = {
   offlineAccess: boolean;
   /** Let the Passkey-X browser extension pair with this app. */
   browserIntegration: boolean;
+  /** Auto-type shortcut: type a login into any program. */
+  autoType: boolean;
+  /** Serve the vault's SSH keys through the Passkey-X SSH agent. */
+  sshAgent: boolean;
+  /** Answer the `pkx` command-line tool (each request is approved). */
+  commandLine: boolean;
+  /** Check new files in the Downloads folder. */
+  downloadProtection: boolean;
+  /** Hide passwords automatically while the screen is shared or recorded. */
+  presentationAuto: boolean;
 };
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   lockOnBlur: false, lockOnHide: false, hotkeyEnabled: true, clipboardSeconds: 30, autoStart: false, offlineAccess: true, browserIntegration: false,
+  autoType: true, sshAgent: false, commandLine: false, downloadProtection: true, presentationAuto: true,
 };
+
+/** One auto-type step; text is typed as characters, keys are Tab and Enter only. */
+export type AutoTypeStep = { type: "text"; value: string } | { type: "key"; key: "tab" | "enter" } | { type: "delay"; ms: number };
+export type AutoTypeTarget = { token: string; title: string; app: string };
+export type AutoTypeInfo = { enabled: boolean; active: boolean; shortcut: string; requirement: "" | "accessibility" | "xdotool" | "wayland" };
+export type SshKeyStatus = { id: string; name: string; publicKey: string; fingerprint: string; unlocked: boolean };
+export type SshAgentStatus = { enabled: boolean; running: boolean; endpoint: string | null; keys: SshKeyStatus[] };
+export type SshLoadResult = { id: string; ok: boolean; publicKey?: string; fingerprint?: string; error?: string };
+export type SshRequest = { id: string; keyId: string; keyName: string; fingerprint: string; client: string; locked: boolean };
+export type CliRequest = { id: string; refs: string[]; command: string; cwd: string; client: string };
+export type CliInfo = { enabled: boolean; endpoint: boolean; path: string | null; installed: boolean; onPath: boolean };
+export type DownloadFile = { path: string; name: string; size: number; modifiedMs: number; sha256: string | null; sourceUrl: string | null; referrerUrl: string | null };
+export type Presentation = { sharing: boolean; reasons: string[] };
+export type SprawlFinding = { path: string; line: number; rule: string; label: string; severity: "critical" | "high" | "medium" | "low"; preview: string };
+export type SprawlReport = { findings: SprawlFinding[]; filesScanned: number; roots: string[]; truncated: boolean };
 
 function internals(): TauriInternals | null {
   if (typeof window === "undefined") return null;
@@ -138,6 +168,38 @@ export const desktop = {
     dismiss: () => call<void>("alert_dismiss"),
     openMain: () => call<void>("alert_open_main"),
   },
+  autoType: {
+    info: () => call<AutoTypeInfo>("auto_type_info"),
+    /** Shows the compact picker on top of other windows. */
+    present: () => call<void>("auto_type_present"),
+    perform: (token: string, steps: AutoTypeStep[]) => call<void>("auto_type_perform", { token, steps }),
+  },
+  ssh: {
+    load: (keys: { id: string; name: string; privateKey: string }[]) => call<SshLoadResult[]>("ssh_agent_load", { keys }),
+    status: () => call<SshAgentStatus>("ssh_agent_status"),
+    reply: (id: string, allow: boolean, rememberMinutes: number) => call<void>("ssh_agent_reply", { id, allow, rememberMinutes }),
+    forget: () => call<void>("ssh_agent_forget"),
+    generate: (seed: string, comment: string) => call<{ privateKey: string; publicKey: string; fingerprint: string }>("ssh_key_generate", { seed, comment }),
+    inspect: (privateKey: string) => call<{ publicKey: string; fingerprint: string; comment: string }>("ssh_key_inspect", { privateKey }),
+  },
+  cli: {
+    info: () => call<CliInfo>("cli_info"),
+    reply: (id: string, answer: { values: Record<string, string> } | { error: string }) => call<void>("cli_reply", { id, answer }),
+    installPath: () => call<void>("cli_install_path"),
+  },
+  downloads: {
+    recent: (sinceMs: number) => call<DownloadFile[]>("downloads_recent", { sinceMs }),
+    quarantine: (path: string) => call<string>("download_quarantine", { path }),
+  },
+  presentation: () => call<Presentation>("presentation_check"),
+  sprawl: {
+    scan: (roots?: string[]) => call<SprawlReport>("sprawl_scan", { roots: roots ?? null }),
+    extract: (path: string, line: number, rule: string) => call<string>("sprawl_extract", { path, line, rule }),
+    readExport: (path: string) => call<string>("sprawl_read_export", { path }),
+    trash: (path: string) => call<void>("sprawl_trash", { path }),
+  },
+  /** Shows a file in Finder / Explorer (files in the home folder only). */
+  revealPath: (path: string) => call<void>("reveal_path", { path }),
   biometric: {
     enrolled: (account: string, fingerprint: string) => call<boolean>("biometric_enrolled", { account, fingerprint }),
     enroll: (account: string, secret: string, fingerprint: string) => call<void>("biometric_enroll", { account, secret, fingerprint }),
