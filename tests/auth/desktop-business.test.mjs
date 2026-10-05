@@ -81,7 +81,7 @@ test("desktop native boundary: new commands are allow-listed and policies match 
   assert.match(lib, /\.visible\(!\(hidden && has_tray\)\)/u);
   const managed = await read("apps/desktop/src-tauri/src/managed.rs");
   const names = [...managed.matchAll(/^\s+\("([a-zA-Z]+)", Kind::/gmu)].map((match) => match[1]);
-  assert.equal(names.length, 14);
+  assert.equal(names.length, 18);
   const admx = await read("apps/desktop/policy/windows/PasskeyX.admx");
   const mobileconfig = await read("apps/desktop/policy/macos/com.vlightsoft.passkeyx.mobileconfig");
   for (const name of names) {
