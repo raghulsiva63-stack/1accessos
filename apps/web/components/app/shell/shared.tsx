@@ -6,7 +6,7 @@ import {
   Bell, Bot, LayoutDashboard, Braces, BriefcaseBusiness, CircleGauge, CreditCard, Database, FileKey,
   FileText, Fingerprint, FolderKanban, IdCard, Inbox, KeyRound, Laptop, Radio, Send, Settings,
   Share2, ShieldAlert, ShieldCheck, Sparkles, UserRound, Users, Vault, WandSparkles, Waypoints, Wifi,
-  LifeBuoy, CircleHelp,
+  LifeBuoy, CircleHelp, HardDrive,
 } from "lucide-react";
 import { fromBase64Url } from "@/lib/crypto/vault";
 import type { ItemKind } from "@/lib/vault/items";
@@ -23,7 +23,7 @@ export type CryptoProfile = {
   recovery_verifier: string | null;
 };
 
-export type View = "home" | "vault" | "workspaces" | "organization" | "admin" | "send" | "saas-ai" | "runtime" | "notifications" | "missions" | "sharing" | "inbox" | "security" | "emergency" | "account-security" | "generator" | "automations" | "devices" | "billing" | "help" | "settings";
+export type View = "home" | "desktop" | "vault" | "workspaces" | "organization" | "admin" | "send" | "saas-ai" | "runtime" | "notifications" | "missions" | "sharing" | "inbox" | "security" | "emergency" | "account-security" | "generator" | "automations" | "devices" | "billing" | "help" | "settings";
 
 export type VaultFilter = ItemKind | "all" | "favorites" | "archive" | "trash";
 
@@ -66,6 +66,7 @@ export const NAV: { id: View; label: string; icon: typeof Vault }[] = [
   { id: "generator", label: "Generator", icon: WandSparkles },
   { id: "automations", label: "Automations", icon: Bot },
   { id: "devices", label: "Devices", icon: Laptop },
+  { id: "desktop", label: "This computer", icon: HardDrive },
   { id: "billing", label: "Plans & billing", icon: CreditCard },
   { id: "settings", label: "Settings", icon: Settings },
   { id: "help", label: "Help & guides", icon: CircleHelp },
@@ -74,7 +75,7 @@ export const NAV: { id: View; label: string; icon: typeof Vault }[] = [
 export const NAV_SECTIONS: { label: string; views: View[] }[] = [
   { label: "Workspace", views: ["home", "vault", "workspaces"] },
   { label: "Access", views: ["missions", "sharing", "send", "inbox"] },
-  { label: "Protect", views: ["security", "emergency", "account-security", "notifications", "generator", "devices"] },
+  { label: "Protect", views: ["security", "emergency", "account-security", "notifications", "generator", "devices", "desktop"] },
   { label: "Manage", views: ["admin", "saas-ai", "runtime", "automations", "billing", "settings", "help"] },
 ];
 
@@ -82,7 +83,7 @@ export const NAV_SECTIONS: { label: string; views: View[] }[] = [
 export function viewFromUrl(): View | null {
   if (typeof window === "undefined") return null;
   const requested = new URLSearchParams(window.location.search).get("view");
-  return NAV.some((entry) => entry.id === requested) ? requested as View : null;
+  return NAV.some((entry) => entry.id === requested) && requested !== "desktop" ? requested as View : null;
 }
 
 export function Brand({ compact = false }: { compact?: boolean }) {
