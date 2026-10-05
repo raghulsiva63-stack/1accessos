@@ -33,6 +33,10 @@ Policies only restrict or preconfigure the app. They never give anyone, includin
 | `offlineAccess` | on/off | Keep an encrypted copy of the vault for use without internet. Off also deletes existing copies. |
 | `browserIntegration` | on/off | Allow pairing the Passkey-X browser extension. |
 | `extensionIds` | text, comma-separated | Extra Chromium extension IDs allowed to pair (internal builds). The store versions are always allowed. |
+| `autoType` | on/off | Auto-type a login into another app (Ctrl+Alt+A / ⌘⌥A). Desktop 1.2+. |
+| `sshAgent` | on/off | SSH agent for Ed25519 keys stored in the vault; each signature is approved in the app. Desktop 1.2+. |
+| `commandLine` | on/off | `pkx` command-line tool for scripts and developer tools; each request is approved in the app. Desktop 1.2+. |
+| `downloadProtection` | on/off | Check new downloads against Guard rules and threat lists. Desktop 1.2+. |
 
 On/off settings that you do not configure stay under the person's control. Settings you configure appear as "Set by <organization>" in the app.
 
