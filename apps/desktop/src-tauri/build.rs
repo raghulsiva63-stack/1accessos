@@ -7,6 +7,11 @@ const COMMANDS: &[&str] = &[
     "biometric_enrolled", "biometric_enroll", "biometric_unlock", "biometric_remove",
     "desktop_policy", "browser_link_send",
     "endpoint_inventory", "endpoint_posture", "endpoint_browsers", "guard_alert", "alert_dismiss", "alert_open_main",
+    "auto_type_info", "auto_type_present", "auto_type_perform",
+    "ssh_agent_load", "ssh_agent_status", "ssh_agent_reply", "ssh_agent_forget", "ssh_key_generate", "ssh_key_inspect",
+    "cli_reply", "cli_info", "cli_install_path",
+    "downloads_recent", "download_quarantine", "reveal_path", "presentation_check",
+    "sprawl_scan", "sprawl_extract", "sprawl_read_export", "sprawl_trash",
 ];
 
 fn main() {

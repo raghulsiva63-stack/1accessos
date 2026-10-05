@@ -26,6 +26,26 @@
     "allow-endpoint-inventory",
     "allow-endpoint-posture",
     "allow-endpoint-browsers",
-    "allow-guard-alert"
+    "allow-guard-alert",
+    "allow-auto-type-info",
+    "allow-auto-type-present",
+    "allow-auto-type-perform",
+    "allow-ssh-agent-load",
+    "allow-ssh-agent-status",
+    "allow-ssh-agent-reply",
+    "allow-ssh-agent-forget",
+    "allow-ssh-key-generate",
+    "allow-ssh-key-inspect",
+    "allow-cli-reply",
+    "allow-cli-info",
+    "allow-cli-install-path",
+    "allow-downloads-recent",
+    "allow-download-quarantine",
+    "allow-reveal-path",
+    "allow-presentation-check",
+    "allow-sprawl-scan",
+    "allow-sprawl-extract",
+    "allow-sprawl-read-export",
+    "allow-sprawl-trash"
   ]
 }
