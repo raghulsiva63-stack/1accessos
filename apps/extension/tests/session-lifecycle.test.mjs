@@ -38,6 +38,11 @@ function harness({ initial = {}, signOutFails = false, rejectUser = false, requi
     if(name==='./session-storage')return {sessionStorageAdapter};
     if(name==='@supabase/supabase-js')return {createClient:(_url,_key,config)=>{options=config;return{auth};}};
     if(name==='hash-wasm')return {};
+    // Phishing checks, desktop pairing and Web Guard have their own tests.
+    if(name==='../../web/lib/security/phishing')return {assessSite:()=>({kind:'unknown',domain:null})};
+    if(name==='../../web/lib/security/web-guard')return {passwordReuseSite:()=>null};
+    if(name==='./desktop-link')return {desktopState:async()=>({available:false,paired:false,pendingCode:null,unlocked:null}),forgetPairing:async()=>{},notifyDesktop:async()=>{},rootKeyFromDesktop:async()=>{throw new Error('not paired');},startPairing:async()=>{throw new Error('not paired');},whenDesktopLocks:()=>{}};
+    if(name==='./web-guard')return {allowForSession:async()=>{},checkPage:async()=>({action:'none',verdict:{level:'safe',domain:null,reasons:[]},title:'',reasons:[],organizationName:null}),configureGuard:()=>{},currentPolicy:()=>({webMode:'warn',organizationName:null}),flush:async()=>{},recordDispute:()=>{},recordPage:()=>{},recordPasswordReuse:()=>{},refreshIntel:async()=>{},reportPhishing:async()=>false,warningPageUrl:()=>''};
     throw new Error('Unexpected import '+name);
   },chrome,crypto:webcrypto,TextEncoder,TextDecoder,URL,Uint8Array,Map,Set,Date,Error,Number,String,Boolean,JSON,clearTimeout,setTimeout:(callback,ms)=>{const timer=setTimeout(callback,ms);timer.unref();return timer;}});
   const send = (name,message,sender) => new Promise(resolve=>events[name](message,sender,resolve));

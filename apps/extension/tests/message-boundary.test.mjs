@@ -59,3 +59,29 @@ test('pairing rejects lookalike hosts, HTTP, other routes, iframes and unsolicit
   for (const change of [{frameId:1},{frameId:undefined},{tab:undefined},{tab:{id:8}}]) assert.equal(authorizedPairingMessage(pair, {...sender,...change}, id, pending, now), false);
   for (const change of [{extensionId:'attacker'}, {nonce:''}, {type:'PX_FILL'}, {accessToken:''}, {refreshToken:'x'.repeat(16385)}]) assert.equal(authorizedPairingMessage({...pair,...change}, sender, id, pending, now), false);
 });
+test('Guard: only the warning page in a tab may leave, proceed or dispute', () => {
+  const warning = `chrome-extension://${id}/warning.html`;
+  const fromWarning = { id, url: `${warning}#%7B%7D`, frameId: 0, tab: { id: 12, url: `${warning}#%7B%7D` } };
+  for (const type of ['PX_GUARD_LEAVE', 'PX_GUARD_PROCEED', 'PX_GUARD_DISPUTE']) {
+    assert.equal(allowed({ type }, fromWarning, id, popup, warning), true);
+    assert.equal(allowed({ type }, fromWarning, id, popup), false, 'no warning page configured');
+    assert.equal(allowed({ type }, { ...fromWarning, url: popup }, id, popup, warning), false);
+    assert.equal(allowed({ type }, { ...fromWarning, url: `${warning}x` }, id, popup, warning), false);
+    assert.equal(allowed({ type }, { ...fromWarning, tab: undefined }, id, popup, warning), false);
+    assert.equal(allowed({ type }, { ...fromWarning, frameId: 2 }, id, popup, warning), false);
+    assert.equal(allowed({ type }, page, id, popup, warning), false);
+    assert.equal(allowed({ type }, { id, url: popup }, id, popup, warning), false);
+  }
+});
+test('Guard: page context comes only from the top frame of the page it describes', () => {
+  const context = { type: 'PX_PAGE_CONTEXT', origin: 'https://example.test', hasPasswordField: true };
+  assert.equal(check(context), true);
+  assert.equal(check({ ...context, origin: 'https://other.test' }), false);
+  assert.equal(check({ ...context, hasPasswordField: 'yes' }), false);
+  assert.equal(check(context, { ...page, frameId: 1 }), false);
+  assert.equal(check(context, { id, url: popup }), false);
+  for (const type of ['PX_GUARD_STATUS', 'PX_REPORT_PHISHING']) {
+    assert.equal(check({ type }, { id, url: popup }), true);
+    assert.equal(check({ type }, page), false);
+  }
+});
