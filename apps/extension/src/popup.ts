@@ -117,10 +117,28 @@ get<HTMLButtonElement>("#dismiss-locked").addEventListener("click", () => void p
 get<HTMLButtonElement>("#never").addEventListener("click", () => void perform({ type: "PX_NEVER" }, "", "Passkey-X will ignore this site."));
 get<HTMLButtonElement>("#never-locked").addEventListener("click", () => void perform({ type: "PX_NEVER" }, "", "Passkey-X will ignore this site."));
 get<HTMLButtonElement>("#allow").addEventListener("click", () => void perform({ type: "PX_ALLOW" }, "", "Passkey-X can offer saves for this site again."));
+async function showGuard() {
+  const answer = await request({ type: "PX_GUARD_STATUS" }) as Status & { guard?: { mode: string; organization: string | null; level: string; title: string } };
+  const guard = answer.guard;
+  if (!answer.ok || !guard) return;
+  const box = get<HTMLElement>("#guard");
+  box.hidden = false;
+  box.className = `guard ${guard.level === "safe" ? "" : guard.level}`;
+  get<HTMLElement>("#guard-state").textContent = guard.mode === "off"
+    ? "Web protection is turned off by your organization."
+    : guard.level === "safe" ? `Web protection is on${guard.organization ? ` · ${guard.organization}` : ""}. No threats found on this page.` : guard.title;
+  get<HTMLButtonElement>("#report-phishing").hidden = !origin;
+}
+get<HTMLButtonElement>("#report-phishing").addEventListener("click", async () => {
+  if (!window.confirm("Report this page as phishing? Your organization's IT team will review it.")) return;
+  const answer = await request({ type: "PX_REPORT_PHISHING" });
+  show(answer.ok ? "Thanks. The page was reported to your IT team." : answer.error ?? "The page could not be reported.");
+});
 void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   tabId = tab?.id ?? 0;
   try { const parsed = new URL(tab?.url ?? ""); origin = ["http:", "https:"].includes(parsed.protocol) ? parsed.origin : ""; } catch { origin = ""; }
   get<HTMLElement>("#origin").textContent = origin ? new URL(origin).hostname : "Unsupported page";
   render(await request({ type: "PX_STATUS" }));
+  void showGuard();
 }).catch(() => show("Unable to read this tab. Reopen Passkey-X on a website."));
 export {};

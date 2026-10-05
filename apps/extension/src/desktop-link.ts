@@ -181,6 +181,20 @@ export async function startPairing(browser: string): Promise<{ code: string; fin
   return { code, finished };
 }
 
+/**
+ * Shows an emergency alert in Passkey-X desktop (if it is installed and browser protection is on).
+ * Carries only the site and the reason; no pairing is needed because nothing secret is sent.
+ */
+export async function notifyDesktop(alert: { level: string; title: string; detail: string; site: string }) {
+  if (!(await permitted())) return;
+  try {
+    connect().postMessage({
+      type: "guard-alert", id: crypto.randomUUID(), level: alert.level === "dangerous" ? "dangerous" : "suspicious",
+      title: alert.title.slice(0, 160), detail: alert.detail.slice(0, 400), site: alert.site.slice(0, 200),
+    });
+  } catch { /* desktop app not installed */ }
+}
+
 /** Asks the unlocked desktop app for this account's root key. The caller zeroes it after use. */
 export async function rootKeyFromDesktop(identityId: string): Promise<Uint8Array> {
   const pairing = await loadPairing();

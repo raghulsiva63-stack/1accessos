@@ -5,7 +5,9 @@ type Sender = {
   frameId?: number;
   tab?: { id?: number; url?: string };
 };
-const POPUP_COMMANDS = new Set(['PX_STATUS', 'PX_CONNECT', 'PX_UNLOCK', 'PX_LOCK', 'PX_DISCONNECT', 'PX_SAVE', 'PX_DISMISS', 'PX_NEVER', 'PX_ALLOW', 'PX_FILL', 'PX_DESKTOP_PAIR', 'PX_DESKTOP_UNLOCK', 'PX_DESKTOP_UNPAIR']);
+const POPUP_COMMANDS = new Set(['PX_STATUS', 'PX_CONNECT', 'PX_UNLOCK', 'PX_LOCK', 'PX_DISCONNECT', 'PX_SAVE', 'PX_DISMISS', 'PX_NEVER', 'PX_ALLOW', 'PX_FILL', 'PX_DESKTOP_PAIR', 'PX_DESKTOP_UNLOCK', 'PX_DESKTOP_UNPAIR', 'PX_GUARD_STATUS', 'PX_REPORT_PHISHING']);
+// Sent by the full-page warning (warning.html), which runs in the tab it protects.
+const WARNING_COMMANDS = new Set(['PX_GUARD_LEAVE', 'PX_GUARD_PROCEED', 'PX_GUARD_DISPUTE']);
 function origin(value: unknown) {
   if (typeof value !== 'string') return '';
   try {
@@ -31,7 +33,7 @@ export function authorizedPairingMessage(message: unknown, sender: Sender, exten
     && typeof request.refreshToken === 'string' && request.refreshToken.length > 0 && request.refreshToken.length <= 16384;
 }
 export function authorizedExtensionMessage(
-  message: unknown, sender: Sender, extensionId: string, popupUrl: string,
+  message: unknown, sender: Sender, extensionId: string, popupUrl: string, warningUrl = '',
 ): boolean {
   if (!message || typeof message !== 'object' || Array.isArray(message) || sender.id !== extensionId) return false;
   const request = message as Record<string, unknown>;
@@ -44,6 +46,16 @@ export function authorizedExtensionMessage(
       && typeof request.url === 'string' && request.url.length <= 8192
       && typeof request.username === 'string' && request.username.length <= 4096
       && typeof request.secret === 'string' && request.secret.length > 0 && request.secret.length <= 65536;
+  }
+  if (request.type === 'PX_PAGE_CONTEXT') {
+    const tabOrigin = origin(sender.tab?.url);
+    return sender.frameId === 0 && Number.isInteger(sender.tab?.id) && (sender.tab?.id ?? -1) >= 0
+      && Boolean(tabOrigin) && origin(sender.url) === tabOrigin && request.origin === tabOrigin
+      && typeof request.hasPasswordField === 'boolean';
+  }
+  if (typeof request.type === 'string' && WARNING_COMMANDS.has(request.type)) {
+    return Boolean(warningUrl) && typeof sender.url === 'string' && (sender.url === warningUrl || sender.url.startsWith(`${warningUrl}#`))
+      && sender.frameId === 0 && Number.isInteger(sender.tab?.id) && (sender.tab?.id ?? -1) >= 0;
   }
   return typeof request.type === 'string' && POPUP_COMMANDS.has(request.type)
     && sender.tab === undefined && sender.url === popupUrl;
