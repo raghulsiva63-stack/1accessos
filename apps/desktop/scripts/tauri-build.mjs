@@ -46,6 +46,8 @@ if (targetIndex !== -1 && args[targetIndex + 1] === 'universal-apple-darwin') {
   const out = join(targetDir, 'universal-apple-darwin', 'release');
   await mkdir(out, { recursive: true });
   execFileSync('lipo', ['-create', '-output', join(out, 'pkx'), ...parts], { stdio: 'inherit' });
+  // lipo drops the linker's ad-hoc signature; codesign of the app refuses unsigned subcomponents.
+  execFileSync('codesign', ['--force', '--sign', '-', join(out, 'pkx')], { stdio: 'inherit' });
   console.log('desktop build: universal pkx ready');
 }
 const split = args.indexOf('--');
