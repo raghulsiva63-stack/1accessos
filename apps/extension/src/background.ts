@@ -3,7 +3,9 @@ import { sessionStorageAdapter } from "./session-storage";
 import { createClient } from "@supabase/supabase-js";
 import { argon2id } from "hash-wasm";
 import { assessSite } from "../../web/lib/security/phishing";
-import { desktopState, forgetPairing, rootKeyFromDesktop, startPairing, whenDesktopLocks } from "./desktop-link";
+import { desktopState, forgetPairing, notifyDesktop, rootKeyFromDesktop, startPairing, whenDesktopLocks } from "./desktop-link";
+import { allowForSession, checkPage, configureGuard, currentPolicy, flush as flushGuard, recordDispute, recordPage, recordPasswordReuse, refreshIntel, reportPhishing, warningPageUrl, type GuardDecision } from "./web-guard";
+import { passwordReuseSite } from "../../web/lib/security/web-guard";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -13,6 +15,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: {
   storageKey: "passkeyXSession", storage: sessionStorageAdapter(chrome.storage.session),
 } });
 const encoder = new TextEncoder();
+configureGuard({
+  supabase, supabaseUrl: SUPABASE_URL, publishableKey: SUPABASE_KEY,
+  savedUrls: () => credentials.filter((credential) => credential.source === "workspace").map((credential) => credential.url),
+  onAlert: (alert) => { void notifyDesktop(alert); },
+});
 const PAIRING_KEY = "passkeyXPendingPairing";
 let pairingBusy = false;
 let locallyDisconnected = false;
@@ -373,7 +380,7 @@ async function fillCredential(tabId: number, origin: string, id: unknown) {
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
-  if (!authorizedExtensionMessage(message, sender, chrome.runtime.id, chrome.runtime.getURL("popup.html"))) {
+  if (!authorizedExtensionMessage(message, sender, chrome.runtime.id, chrome.runtime.getURL("popup.html"), chrome.runtime.getURL("warning.html"))) {
     sendResponse({ ok: false, error: "Rejected untrusted extension request." });
     return false;
   }
@@ -384,11 +391,13 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   void (async () => {
     try {
       if (vaults.length && Date.now() - lastActivity >= IDLE_MS) clearVault();
+      if (await handleGuardMessage(request, sender, sendResponse)) return;
       if (request.type === "PX_CANDIDATE") {
         const generation = vaultGeneration;
         if (sender.tab?.id === undefined || !sender.tab.url || !(await restoreSession()) || generation !== vaultGeneration) { sendResponse({ ok: true, ignored: true }); return; }
         const origin = safeOrigin(sender.tab.url);
         if (!origin || request.origin !== origin || typeof request.username !== "string" || typeof request.secret !== "string" || !request.secret) throw new Error("Rejected untrusted login candidate.");
+        await checkPasswordReuse(sender.tab.id, sender.tab.url, request.secret);
         if (await isIgnored(origin) || generation !== vaultGeneration) { sendResponse({ ok: true, ignored: true }); return; }
         if (credentials.some(item => item.source === "workspace" && sameSite(item.url, origin) && item.username === request.username && item.secret === request.secret)) { forgetCandidate(sender.tab.id); sendResponse({ ok: true, ignored: true }); return; }
         const pending = candidates.get(sender.tab.id);
@@ -468,6 +477,7 @@ chrome.runtime.onMessageExternal.addListener((message: unknown, sender, sendResp
       const { data, error } = await supabase.auth.setSession({ access_token: request.accessToken, refresh_token: request.refreshToken });
       if (error || !data.session || data.user?.id !== verified.user.id) { await disconnect().catch(() => {}); throw new Error("Unable to establish the Passkey-X session."); }
       locallyDisconnected = false;
+      void refreshIntel(true);
       sendResponse({ ok: true, email: data.user.email ?? "" });
     } catch (error) { sendResponse({ ok: false, error: error instanceof Error ? error.message : "Unable to connect Passkey-X." }); }
     finally { pairingBusy = false; }
@@ -478,8 +488,12 @@ supabase.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") clearVa
 // Paired with Passkey-X desktop: locking the desktop app locks this extension too.
 whenDesktopLocks(() => clearVault());
 chrome.runtime.onSuspend.addListener(clearVault);
-chrome.tabs.onRemoved.addListener(forgetCandidate);
+chrome.tabs.onRemoved.addListener((tabId) => { forgetCandidate(tabId); lastSafePage.delete(tabId); warnedPages.delete(tabId); allowedOnce.delete(tabId); });
+chrome.runtime.onStartup?.addListener(() => { void refreshIntel(true); });
+chrome.runtime.onInstalled?.addListener(() => { void refreshIntel(true); });
 chrome.tabs.onUpdated.addListener((tabId, change) => {
+  // Web Guard: every page the person opens is checked before they can type anything into it.
+  if (change.url) void guardNavigation(tabId, change.url);
   const candidate = candidates.get(tabId);
   if (change.url && candidate && safeOrigin(change.url) !== candidate.origin) forgetCandidate(tabId);
   else if (change.status === "complete") void offerSave(tabId);
@@ -499,3 +513,107 @@ chrome.commands.onCommand.addListener((command) => {
     } finally { vaultOperationBusy = false; }
   })();
 });
+
+// ---------------------------------------------------------------------------
+// Web Guard
+// ---------------------------------------------------------------------------
+
+const lastSafePage = new Map<number, string>();
+const warnedPages = new Map<number, { url: string; decision: GuardDecision }>();
+const allowedOnce = new Map<number, string>();
+
+async function guardNavigation(tabId: number, url: string) {
+  if (url.startsWith(chrome.runtime.getURL(""))) return;
+  if (allowedOnce.get(tabId) === url) { allowedOnce.delete(tabId); return; }
+  const decision = await checkPage(url, false);
+  if (decision.action === "warn" || decision.action === "block") {
+    // Stop the page: replace it with the warning before anything can be typed into it.
+    warnedPages.set(tabId, { url, decision });
+    await chrome.tabs.update(tabId, { url: warningPageUrl(url, decision) }).catch(() => undefined);
+    recordPage(url, decision, decision.action === "block" ? "blocked" : "warned");
+    return;
+  }
+  if (/^https?:/u.test(url)) lastSafePage.set(tabId, url);
+}
+
+/** Messages from the content script (page context), the warning page and the popup. */
+async function handleGuardMessage(request: Record<string, unknown>, sender: chrome.runtime.MessageSender, sendResponse: (value: unknown) => void): Promise<boolean> {
+  const tabId = sender.tab?.id;
+  switch (request.type) {
+    case "PX_PAGE_CONTEXT": {
+      if (tabId === undefined || !sender.tab?.url) { sendResponse({ ok: true }); return true; }
+      const url = sender.tab.url;
+      const decision = await checkPage(url, request.hasPasswordField === true);
+      if (decision.action === "warn" || decision.action === "block") {
+        warnedPages.set(tabId, { url, decision });
+        await chrome.tabs.update(tabId, { url: warningPageUrl(url, decision) }).catch(() => undefined);
+        recordPage(url, decision, decision.action === "block" ? "blocked" : "warned");
+        sendResponse({ ok: true });
+      } else if (decision.action === "notice") {
+        recordPage(url, decision, "warned");
+        sendResponse({ ok: true, notice: { level: decision.verdict.level, title: decision.title, text: decision.reasons.join(" ") } });
+      } else sendResponse({ ok: true });
+      return true;
+    }
+    case "PX_GUARD_LEAVE": {
+      if (tabId === undefined) return true;
+      warnedPages.delete(tabId);
+      await chrome.tabs.update(tabId, { url: lastSafePage.get(tabId) ?? "chrome://newtab/" }).catch(() => undefined);
+      sendResponse({ ok: true });
+      return true;
+    }
+    case "PX_GUARD_PROCEED": {
+      const warned = tabId === undefined ? undefined : warnedPages.get(tabId);
+      // Only the page this tab was warned about, and never when the organization blocks it.
+      if (tabId === undefined || !warned || warned.url !== request.url || warned.decision.action !== "warn") { sendResponse({ ok: false }); return true; }
+      warnedPages.delete(tabId);
+      try { await allowForSession(new URL(warned.url).hostname); } catch { /* data: URLs are allowed once only */ }
+      recordPage(warned.url, warned.decision, "proceeded");
+      allowedOnce.set(tabId, warned.url);
+      await chrome.tabs.update(tabId, { url: warned.url }).catch(() => undefined);
+      sendResponse({ ok: true });
+      return true;
+    }
+    case "PX_GUARD_DISPUTE": {
+      const warned = tabId === undefined ? undefined : warnedPages.get(tabId);
+      if (!warned || warned.url !== request.url) { sendResponse({ ok: false }); return true; }
+      recordDispute(warned.url, warned.decision);
+      sendResponse({ ok: true });
+      return true;
+    }
+    case "PX_REPORT_PHISHING": {
+      const tab = Number.isInteger(Number(request.tabId)) ? await chrome.tabs.get(Number(request.tabId)).catch(() => null) : null;
+      const ok = Boolean(tab?.url && /^https?:/u.test(tab.url) && await restoreSession() && await reportPhishing(tab.url));
+      sendResponse({ ok, error: ok ? undefined : "Connect Passkey-X to report sites." });
+      return true;
+    }
+    case "PX_GUARD_STATUS": {
+      const tab = Number.isInteger(Number(request.tabId)) ? await chrome.tabs.get(Number(request.tabId)).catch(() => null) : null;
+      const decision = tab?.url ? await checkPage(tab.url, false) : null;
+      const policy = currentPolicy();
+      sendResponse({ ok: true, guard: { mode: policy.webMode, organization: policy.organizationName, level: decision?.verdict.level ?? "safe", title: decision?.title ?? "" } });
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+/** A vault password typed into a different site: warn now and tell the organization. */
+async function checkPasswordReuse(tabId: number, url: string, secret: string) {
+  if (!vaults.length) return;
+  const saved = credentials.filter((credential) => credential.source === "workspace").map((credential) => ({ url: credential.url, secret: credential.secret }));
+  const savedSite = passwordReuseSite(url, secret, saved);
+  if (!savedSite) return;
+  const decision = await checkPage(url, true);
+  recordPasswordReuse(url, savedSite, decision.verdict.level);
+  void flushGuard();
+  const host = new URL(url).hostname;
+  await chrome.tabs.sendMessage(tabId, {
+    type: "PX_GUARD_BANNER", level: decision.verdict.level === "safe" ? "suspicious" : "dangerous",
+    title: `You used your ${savedSite} password here`,
+    text: decision.verdict.level === "safe"
+      ? `Using one password on several sites puts both at risk. Give ${host} its own password.`
+      : `${host} does not look like ${savedSite}. If you didn't mean to sign in to ${savedSite}, change that password now.`,
+  }, { frameId: 0 }).catch(() => undefined);
+}
